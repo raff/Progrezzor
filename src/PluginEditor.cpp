@@ -274,7 +274,7 @@ void PlayToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButton
     if (on)
         theme::drawGlow (g, bounds.reduced (5.0f, 6.0f), theme::go, 7.0f, 14.0f, 0.3f);
     const bool usable = isEnabled();
-    const auto face = theme::drawKey (g, bounds.reduced (3.0f, 0.0f), on ? theme::go : (usable ? theme::pad : theme::pad.darker (0.3f)), 14.0f, 6.0f,
+    const auto face = theme::drawKey (g, bounds, on ? theme::go : (usable ? theme::pad : theme::pad.darker (0.3f)), 14.0f, 6.0f,
                                       isButtonDown && usable, isMouseOver && usable);
 
     // The icon says what a click does: a triangle (start) while it is stopped, a square (stop) while it plays
@@ -3022,9 +3022,15 @@ void ProgrezzorEditor::resized()
     bar.setBounds (area.removeFromBottom (area.getHeight() - padHeight - 12));
     area.removeFromBottom (12);
 
-    // Seven pads side by side, over the whole width
+    // Seven pads side by side, over the whole width. A pad draws its key 5 px inside its bounds, so the bounds reach 5 px
+    // further out: then the keys themselves start and end exactly at the edges of the area, in line with the Suggest button
+    // and the card of the bar below (any odd pixels are spread over the gaps, not left at the right edge).
     const int gap = 10;
-    const int padWidth = (area.getWidth() - gap * (ProgrezzorProcessor::kNumPads - 1)) / ProgrezzorProcessor::kNumPads;
+    const float keyWidth = (float) (area.getWidth() - gap * (ProgrezzorProcessor::kNumPads - 1)) / (float) ProgrezzorProcessor::kNumPads;
     for (int i = 0; i < ProgrezzorProcessor::kNumPads; ++i)
-        pads[(size_t) i].setBounds (area.getX() + i * (padWidth + gap), area.getY(), padWidth, area.getHeight());
+    {
+        const int left = area.getX() + juce::roundToInt ((float) i * (keyWidth + (float) gap));
+        const int right = area.getX() + juce::roundToInt ((float) i * (keyWidth + (float) gap) + keyWidth);
+        pads[(size_t) i].setBounds (left - 5, area.getY(), right - left + 10, area.getHeight());
+    }
 }
