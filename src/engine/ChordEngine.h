@@ -124,6 +124,8 @@ Voicing voiceChord (const Chord& chord, int tonic, int centreNote = kCentreNote)
 
 // The general register: the whole voicing moved up or down by whole octaves (the Oct buttons), never past the ends of the
 // MIDI range. The voice leading works on the voicing before this, so the register never pulls the next chord with it.
-constexpr int kMaxGeneralOctave = 2;
+constexpr int kMaxGeneralOctave = 2; // the Oct buttons
+constexpr int kMaxHomeOctave = 2;    // where the chords usually sit (Settings), on top of the Oct buttons
+constexpr int kMaxTotalOctave = kMaxGeneralOctave + kMaxHomeOctave;
 Voicing shiftedByOctaves (Voicing voicing, int octaves);
 }

@@ -159,6 +159,13 @@ public:
     // The arp as the parameters have it now. Safe to call from any thread.
     engine::ArpSettings getArpSettings() const;
     int getGeneralOctave() const { return octaveParam->get(); }
+
+    // Where the chords usually sit (Settings): -2 to +2 octaves from middle C. It is the user's, kept in a file of its own,
+    // and the same in every project, so it is not in the project's state. The Oct buttons count from there.
+    int getHomeOctave() const { return homeOctave.load(); }
+    void setHomeOctave (int octaves); // message thread: kept and written to the settings file
+    int getTotalOctave() const { return juce::jlimit (-engine::kMaxTotalOctave, engine::kMaxTotalOctave, homeOctave.load() + octaveParam->get()); }
+    static juce::File getSettingsFile();
     engine::Mood getMood() const { return (engine::Mood) moodParam->getIndex(); }
 
 private:
@@ -244,6 +251,7 @@ private:
 
     std::atomic<unsigned> lit { 0 };
     std::atomic<int> soundingCount { 0 };
+    std::atomic<int> homeOctave { 0 };
     std::array<std::atomic<std::uint64_t>, 2> soundingMask {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProgrezzorProcessor)

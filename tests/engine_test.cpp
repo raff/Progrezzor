@@ -1074,6 +1074,23 @@ void testRomanNumerals()
     checkEqual (romanNumeral ({ 11, ChordType::Major, kAutoInversion }, ScaleId::Minor), std::string ("#VII"), "the note just under the tonic is a sharp seventh, not a flat of the tonic");
 }
 
+void testTotalOctave()
+{
+    std::printf ("the total octave\n");
+    const Key aMinor { 9, ScaleId::Minor };
+    const auto am = voiceChord (padChord (aMinor.scale, 0), aMinor.tonic);
+    bool exact = true;
+    for (int octaves = -kMaxTotalOctave; octaves <= kMaxTotalOctave; ++octaves)
+    {
+        const auto shifted = shiftedByOctaves (am, octaves);
+        for (int i = 0; i < am.count; ++i)
+            exact &= shifted.notes[(size_t) i] == am.notes[(size_t) i] + 12 * octaves;
+    }
+    check (exact, "the Oct buttons and Settings together can move the chords up to four octaves, exactly");
+    const auto beyond = shiftedByOctaves (am, 9);
+    check (beyond.notes[0] == am.notes[0] + 12 * kMaxTotalOctave, "and no further");
+}
+
 void testArp()
 {
     std::printf ("arp\n");
@@ -1169,6 +1186,7 @@ void testArp()
 
 int main()
 {
+    testTotalOctave();
     testRomanNumerals();
     testArp();
     testOctaves();

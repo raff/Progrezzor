@@ -92,8 +92,8 @@ Akkordlogik, stemmeføring, rundgange, Suggest og Quick-text er nyt. CI og relea
 - Sus4 tilbydes med låsen til kun, hvis den rene kvart findes i skalaen. Sus2 kun, hvis den store sekund findes.
 - Akkordnavne staves efter tonearten (Bb frem for A#, når tonearten bruger b).
 - Ingen automatisk stemmeføring og ingen magi (besluttet af Henrik 2026-11-07). En akkord har altid de samme toner, uanset hvad der blev spillet før: grundstilling, eller den omvending brugeren selv har valgt. Tonerne placeres omkring midten af tonelejet (midt-C).
-- En lille klaviatur i højre panel viser, hvor akkorderne ligger (det lyse felt, som flytter sig med Oct-knapperne) og lyser grønt for de toner, der spiller lige nu.
-- Toneleje: Oct- og Oct+ i højre panel flytter alt (pads, rundgang og MIDI-fil) en oktav ad gangen, -2 til +2. Panelet viser trinnet (Oct 0, Oct +1). Der er ingen Settings-menu og ingen Low/Mid/High (fjernet efter Henriks ønske 2026-11-07: det var svært at forstå).
+- En lille klaviatur i højre panel viser, hvor akkorderne ligger (det lyse felt, som flytter sig med Settings og Oct-knapperne) og viser midt-C som en blå streg med "Mid C", der altid står samme sted, uanset hvad lejet er. Tonerne, der spiller, lyser grønt for de toner, der spiller lige nu.
+- Toneleje: Oct- og Oct+ i højre panel flytter alt (pads, rundgang og MIDI-fil) en oktav ad gangen, -2 til +2, og panelet viser trinnet (Oct 0, Oct +1). Tandhjulet (Settings) vælger, hvor akkorderne som regel ligger: normalt omkring midt-C, op til to oktaver lavere eller højere. Det er brugerens eget valg, gemt i en fil for sig (settings.xml i systemets sted for programdata, eller mappen i PROGREZZOR_SETTINGS_FOLDER), ens i alle projekter og ikke en del af projektet. Oct-knapperne tæller oven i det.
 
 ## Lock to scale
 

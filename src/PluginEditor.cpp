@@ -1227,6 +1227,11 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     playButton.setTooltip ("Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
     addAndMakeVisible (playButton);
 
+    settingsButton.setTooltip ("Settings: where the chords usually sit (kept for every project)");
+    settingsButton.setComponentID ("settings");
+    settingsButton.onClick = [this] { showSettingsMenu(); };
+    addAndMakeVisible (settingsButton);
+
     octaveDownButton.setTooltip ("Lower everything by an octave: the pads, the progression and the MIDI file");
     octaveUpButton.setTooltip ("Raise everything by an octave: the pads, the progression and the MIDI file");
     octaveDownButton.setComponentID ("octave-down");
@@ -1511,8 +1516,6 @@ void ProgressionBar::updateButtons()
         lastSounding[1] = soundingNow[1];
         repaint (stripBounds);
     }
-    octaveDownButton.setEnabled (octave > -engine::kMaxGeneralOctave);
-    octaveUpButton.setEnabled (octave < engine::kMaxGeneralOctave);
     if (playOn != lastPlayOn)
     {
         lastPlayOn = playOn;
@@ -1536,6 +1539,34 @@ void ProgressionBar::captureLastChords()
 }
 
 // Suggest would throw away chords the user has made: the bar asks first, in its message line (no dialog box)
+// Settings: where the chords usually sit, from two octaves lower to two higher than around middle C. It is kept for every
+// project (a file of its own); the Oct buttons move the chords from there, in each project.
+void ProgressionBar::chooseHomeOctave (int octaves)
+{
+    processor.setHomeOctave (octaves);
+    repaint (stripBounds);
+}
+
+void ProgressionBar::showSettingsMenu()
+{
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("The chords usually sit");
+    const char* names[5] = { "Much lower  (2 octaves down)", "Lower  (1 octave down)", "Normal  (around middle C)",
+                             "Higher  (1 octave up)", "Much higher  (2 octaves up)" };
+    for (int i = 0; i < 5; ++i)
+        menu.addItem (i + 1, names[i], true, i - 2 == processor.getHomeOctave());
+    menu.addSeparator();
+    menu.addItem (100, "Kept for every project. The keyboard shows where.", false, false);
+
+    juce::Component::SafePointer<ProgressionBar> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (260),
+                        [safe] (int result)
+                        {
+                            if (safe != nullptr && result >= 1 && result <= 5)
+                                safe->chooseHomeOctave (result - 3);
+                        });
+}
+
 // The general register: everything that sounds and is exported, an octave up or down
 void ProgressionBar::shiftGeneralOctave (int steps)
 {
@@ -1805,8 +1836,8 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
         }
     }
 
-    // Where the chords sit: the centre of the chords, with room for the notes round it
-    const int centre = engine::kCentreNote + 12 * processor.getGeneralOctave();
+    // Where the chords sit: the centre of the chords, with room for the notes round it (Settings and the Oct buttons together)
+    const int centre = engine::kCentreNote + 12 * processor.getTotalOctave();
     const float left = xOf (juce::jlimit (firstNote, lastNote, centre - 9)), right = xOf (juce::jlimit (firstNote, lastNote, centre + 9));
     g.setColour (theme::accent.withAlpha (0.55f));
     g.fillRect (left, area.getY(), right - left, area.getHeight());
@@ -1822,6 +1853,22 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
             g.setColour (juce::Colours::black.withAlpha (0.5f));
             g.drawRect (xOf (note), area.getY(), std::max (2.5f, perNote), area.getHeight(), 0.8f);
         }
+
+    // Middle C: always in the same place, whatever Settings and the Oct buttons say. It is what the rest is measured from.
+    const float middleC = xOf (engine::kCentreNote) + perNote * 0.5f;
+    g.setColour (theme::chordColour (7));
+    g.fillRect (middleC - 1.0f, area.getY(), 2.0f, area.getHeight());
+    {
+        const juce::String text = "Mid C";
+        const float labelWidth = 30.0f, labelHeight = 11.0f;
+        const float labelX = juce::jlimit (area.getX(), area.getRight() - labelWidth, middleC - labelWidth * 0.5f);
+        const auto label = juce::Rectangle<float> (labelX, area.getBottom() - labelHeight, labelWidth, labelHeight);
+        g.setColour (theme::chordColour (7));
+        g.fillRoundedRectangle (label, 3.0f);
+        g.setColour (theme::onAccent);
+        g.setFont (juce::Font (juce::FontOptions (9.5f)).boldened());
+        g.drawText (text, label.toNearestInt(), juce::Justification::centred);
+    }
 
     g.setColour (juce::Colour (0xff3a3560));
     g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.2f);
@@ -2004,6 +2051,8 @@ void ProgressionBar::resized()
     area.removeFromRight (10);
     const int rowHeight = (right.getHeight() - 15) / 4;
     auto captureRow = right.removeFromTop (rowHeight);
+    settingsButton.setBounds (captureRow.removeFromRight ((right.getWidth() - 12) / 3));
+    captureRow.removeFromRight (6);
     captureButton.setBounds (captureRow);
     right.removeFromTop (5);
     auto smallRow = right.removeFromTop (rowHeight);

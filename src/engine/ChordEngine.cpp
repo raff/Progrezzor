@@ -180,7 +180,7 @@ double meanOf (const Voicing& v)
 
 Voicing shiftedByOctaves (Voicing voicing, int octaves)
 {
-    octaves = std::clamp (octaves, -kMaxGeneralOctave, kMaxGeneralOctave);
+    octaves = std::clamp (octaves, -kMaxTotalOctave, kMaxTotalOctave);
     // Fewer octaves if the top or the bottom would leave the MIDI range
     while (octaves > 0 && voicing.count > 0 && voicing.notes[(size_t) voicing.count - 1] + 12 * octaves > 127)
         --octaves;

@@ -68,6 +68,10 @@ int main (int argc, char** argv)
 {
     const juce::ScopedJuceInitialiser_GUI gui;
 
+    // The tests never touch the user's own settings file
+    const auto settingsFolder = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("progrezzor-test-settings-" + juce::String (juce::Time::currentTimeMillis()));
+    setenv ("PROGREZZOR_SETTINGS_FOLDER", settingsFolder.getFullPathName().toRawUTF8(), 1);
+
     ProgrezzorProcessor processor;
     processor.setPlayConfigDetails (0, 2, 48000.0, 512);
     processor.prepareToPlay (48000.0, 512);
@@ -981,6 +985,40 @@ int main (int argc, char** argv)
             settle (30);
         }
         check (processor.getGeneralOctave() == -2 && ! barRef.getOctaveDownButton().isEnabled(), "it stops at two octaves down");
+        // Settings: where the chords usually sit. It is added to the Oct buttons, kept in a file of its own, and the same in every project.
+        *processor.octaveParam = 0;
+        processor.setHomeOctave (0);
+        const auto homeZero = padNotes (0);
+        processor.setHomeOctave (1);
+        const auto homeOne = padNotes (0);
+        *processor.octaveParam = 1;
+        const auto homeOnePlusOne = padNotes (0);
+        *processor.octaveParam = 0;
+        bool homeOk = homeZero.size() == 3 && homeOne.size() == 3 && homeOnePlusOne.size() == 3;
+        for (size_t i = 0; homeOk && i < 3; ++i)
+            homeOk = homeOne[i] == homeZero[i] + 12 && homeOnePlusOne[i] == homeZero[i] + 24;
+        check (homeOk, "Settings: one octave higher moves the pads an octave, and the Oct buttons count on top of it");
+        {
+            ProgrezzorProcessor another; // another project, later
+            check (another.getHomeOctave() == 1, "the setting is kept for every project (it is in a file of its own)");
+            another.setHomeOctave (5);
+            check (another.getHomeOctave() == 2, "and it stops at two octaves");
+        }
+        processor.setHomeOctave (-2);
+        const auto homeDown = padNotes (0);
+        bool downOk = homeDown.size() == 3;
+        for (size_t i = 0; downOk && i < 3; ++i)
+            downOk = homeDown[i] == homeZero[i] - 24;
+        check (downOk, "two octaves lower is 24 semitones down");
+        // The file has the same notes as the pads
+        {
+            processor.setProgression ({ { { 0, engine::ChordType::Minor, engine::kAutoInversion }, 4.0, false } });
+            const auto exportedForHome = engine::exportNotes (processor.getProgression(), 9, engine::ScaleId::Minor, true, processor.getTotalOctave());
+            check (exportedForHome.size() == 3 && exportedForHome[0].note == homeZero[0] - 24, "the MIDI file follows the setting too");
+            processor.setProgression ({});
+        }
+        processor.setHomeOctave (0);
+
         // The same pad is always the same notes, whatever was clicked before
         *processor.octaveParam = 0;
         const auto padTwoBefore = padNotes (2);

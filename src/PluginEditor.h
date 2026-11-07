@@ -244,6 +244,7 @@ public:
     int numBlocks() const { return blocks.size(); }
     BlockButton* getBlock (int i) { return blocks[i]; }
     void shiftGeneralOctave (int steps);
+    void showSettingsMenu();
     void showArpPanel();
     std::unique_ptr<juce::Component> makeArpPanel(); // the panel behind the Arp button (also for the tests)
     void toggleArp();
@@ -253,6 +254,8 @@ public:
     void cancelAsk();
     juce::Rectangle<int> getTrayBounds() const { return trayBounds; }
     ArpToggle& getArpButton() { return arpButton; }
+    BarButton& getSettingsButton() { return settingsButton; }
+    void chooseHomeOctave (int octaves); // Settings: where the chords usually sit, kept for every project
     BarButton& getOctaveUpButton() { return octaveUpButton; }
     BarButton& getOctaveDownButton() { return octaveDownButton; }
     const juce::String& getOctaveLabel() const { return octaveLabel; }
@@ -281,6 +284,7 @@ private:
     BarButton captureButton { "Capture", BarButton::Icon::None };
     BarButton quickTextButton { "Text", BarButton::Icon::Pencil };
     BarButton allowButton { "Allow", BarButton::Icon::None };
+    BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     ArpToggle arpButton;
     BarButton arpOptionsButton { "Arp options", BarButton::Icon::Dots };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };

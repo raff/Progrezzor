@@ -21,7 +21,7 @@ retter de gamle linjer om mulighed A og B. Branchen merges ikke før du siger de
 ## 2. Ny oktav-styring (2026-11-07)
 
 - [ ] Oct- og Oct+ i bjælkens højre side: hæver og sænker alt (pads, rundgang, MIDI-fil) en oktav ad gangen, -2 til +2.
-- [ ] Mærket mellem knapperne viser, hvilket leje vi står i ("Oct 0", "Oct +1", "Oct -2"). Orange, når det ikke er 0. (Settings og Low/Mid/High er fjernet.)
+- [ ] Mærket mellem knapperne viser, hvilket leje vi står i ("Oct 0", "Oct +1", "Oct -2"). Orange, når det ikke er 0. 
 - [ ] Klik rundt på padsene i lang tid og i tilfældig rækkefølge: hver pad lyder HELT ens hver gang. Ingen automatisk
       stemmeføring og ingen drift. (Før: op til ca. 4 oktaver forskel mellem samme pad.)
 - [ ] Hold en pad nede, tryk Oct+/Oct- og slip: ingen hængende noter.
@@ -48,6 +48,13 @@ retter de gamle linjer om mulighed A og B. Branchen merges ikke før du siger de
 - [ ] Padsene og blokkene viser romertal (I, ii, III ...). Er de til at læse, og er de i vejen? Prøv også en anden toneart og skala (C Major: I ii iii IV V vi vii°).
 - [ ] Den lille klaviatur i højre panel: det lyse felt flytter sig, når du trykker Oct+/Oct-.
 - [ ] Tonerne, der spiller, lyser grønt på klaviaturet (akkorder og arp).
+
+## 2d. Midt-C og Settings (2026-11-07)
+
+- [ ] Klaviaturet har en blå streg med "Mid C", som står samme sted, uanset hvad du sætter Oct til. Det orange felt flytter sig i forhold til den.
+- [ ] Tandhjulet (Settings) i højre panel: vælg, hvor akkorderne som regel ligger (2 oktaver lavere til 2 højere end omkring midt-C).
+- [ ] Settings huskes, når du lukker og åbner DAW'en, og er ens i alle projekter. (Filen ligger i ~/.config/Progrezzor/settings.xml.)
+- [ ] Oct-knapperne tæller oven i Settings, og MIDI-filen har de samme toner, som du hører.
 
 ## 3. Tidligere ting, der stadig venter
 

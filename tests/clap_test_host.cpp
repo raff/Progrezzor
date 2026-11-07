@@ -468,6 +468,8 @@ void waitForSilence (Session& s)
 
 int main (int argc, char** argv)
 {
+    // The plug-in never reads the user's own settings file in the tests
+    setenv ("PROGREZZOR_SETTINGS_FOLDER", "/tmp/progrezzor-test-settings-clap", 1);
     if (argc != 2)
     {
         std::fprintf (stderr, "usage: %s <plugin.clap>\n", argv[0]);

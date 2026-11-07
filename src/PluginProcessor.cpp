@@ -57,6 +57,10 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     addParameter (arpRotationParam = new juce::AudioParameterInt ({ "arpRotation", 1 }, "Arp Rotation", 0, engine::kMaxArpSteps - 1, 0));
     addParameter (octaveParam = new juce::AudioParameterInt ({ "octave", 1 }, "Octave", -engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, 0));
 
+    // Where the chords usually sit: the user's own setting, the same in every project
+    if (const auto settings = juce::parseXML (getSettingsFile()))
+        homeOctave.store (juce::jlimit (-engine::kMaxHomeOctave, engine::kMaxHomeOctave, settings->getIntAttribute ("homeOctave", 0)));
+
     for (auto& variant : padVariant)
         variant.store (-1);
     for (auto& entry : history)
@@ -220,7 +224,7 @@ public:
 
         // The same chord always has the same notes: only the key and the Oct buttons count
         const auto voicing = engine::voiceChord (chord, owner.keyParam->getIndex());
-        const auto heard = engine::shiftedByOctaves (voicing, owner.octaveParam->get());
+        const auto heard = engine::shiftedByOctaves (voicing, owner.getTotalOctave());
 
         if (pad >= 0)
             owner.recordPlayed (chord); // every chord played on a pad goes in the history
@@ -748,6 +752,26 @@ void ProgrezzorProcessor::clearPadVariant (int pad)
     ++variantVersion;
 }
 
+// The user's own settings, in a file in the usual place for the system (or the folder in PROGREZZOR_SETTINGS_FOLDER)
+juce::File ProgrezzorProcessor::getSettingsFile()
+{
+    const auto fromEnvironment = juce::SystemStats::getEnvironmentVariable ("PROGREZZOR_SETTINGS_FOLDER", {});
+    const auto folder = fromEnvironment.isNotEmpty() ? juce::File (fromEnvironment)
+                                                     : juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("Progrezzor");
+    return folder.getChildFile ("settings.xml");
+}
+
+void ProgrezzorProcessor::setHomeOctave (int octaves)
+{
+    homeOctave.store (juce::jlimit (-engine::kMaxHomeOctave, engine::kMaxHomeOctave, octaves));
+
+    juce::XmlElement xml ("ProgrezzorSettings");
+    xml.setAttribute ("homeOctave", homeOctave.load());
+    const auto file = getSettingsFile();
+    if (file.getParentDirectory().createDirectory().wasOk())
+        xml.writeTo (file);
+}
+
 juce::File ProgrezzorProcessor::getExportFolder()
 {
     const auto fromEnvironment = juce::SystemStats::getEnvironmentVariable ("PROGREZZOR_EXPORT_FOLDER", {});
@@ -763,7 +787,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto key = getKey();
 
     // What the file is made from. The same again gives the same file.
-    juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (octaveParam->get());
+    juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (getTotalOctave());
     const auto arp = getArpSettings();
     if (arp.on)
         madeFrom << "/arp" << arp.style << "," << arp.rate << "," << arp.octaves << "," << arp.steps << "," << arp.hits << "," << arp.rotation;
@@ -778,7 +802,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto ticks = [] (double beats) { return beats * kTicksPerQuarter; };
 
     juce::MidiMessageSequence sequence;
-    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), octaveParam->get(), engine::kCentreNote, arp))
+    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), getTotalOctave(), engine::kCentreNote, arp))
     {
         // All MIDI on channel 1. A note off comes before a note on at the same time, so that equal chords strike again.
         sequence.addEvent (juce::MidiMessage::noteOn (1, note.note, (juce::uint8) note.velocity).withTimeStamp (ticks (note.start)));
