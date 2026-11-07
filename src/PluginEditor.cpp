@@ -21,6 +21,46 @@ void drawLock (juce::Graphics& g, juce::Rectangle<float> r, juce::Colour colour,
     g.strokePath (shackle, juce::PathStrokeType (1.7f));
 }
 
+// The sign for a pause in music notation, by length: half a bar is a half rest (a block that sits on the line), one bar a whole
+// rest (a block that hangs from it), one and a half both, and two bars or more the multi-bar rest (a thick bar between two
+// ends, with the number of bars over it). Drawn in `area`, around its centre.
+void drawRestSign (juce::Graphics& g, juce::Rectangle<float> area, double bars, juce::Colour colour, juce::Font numberFont)
+{
+    g.setColour (colour);
+    const float u = std::max (4.0f, std::min (area.getHeight() * 0.62f, area.getWidth() * 0.3f)); // the unit: the height of a block
+    const auto c = area.getCentre();
+    const float lineWidth = std::max (1.2f, u * 0.12f);
+
+    const auto block = [&] (float cx, float cy, bool hangs, float scale)
+    {
+        const float w = u * 1.5f * scale, h = u * 0.55f * scale;
+        g.fillRect (cx - w * 0.5f, hangs ? cy : cy - h, w, h);
+        g.fillRect (cx - w * 0.9f, cy - lineWidth * 0.5f, w * 1.8f, lineWidth); // the line it hangs from or sits on
+    };
+
+    if (bars >= 1.99)
+    {
+        const float v = u * 0.62f; // smaller than the other signs: it has the number above it, in the same room
+        const float w = v * 3.4f, h = v * 0.62f, end = v * 1.6f;
+        const float y = c.y + v * 0.7f;
+        g.fillRect (c.x - w * 0.5f, y - h * 0.5f, w, h);
+        g.fillRect (c.x - w * 0.5f, y - end * 0.5f, lineWidth * 1.4f, end);
+        g.fillRect (c.x + w * 0.5f - lineWidth * 1.4f, y - end * 0.5f, lineWidth * 1.4f, end);
+        g.setFont (numberFont);
+        const auto number = bars > std::floor (bars) + 0.01 ? juce::String (bars, 1) : juce::String ((int) std::lround (bars));
+        g.drawText (number, juce::Rectangle<float> (c.x - w * 0.5f, y - end * 0.5f - v * 1.35f, w, v * 1.3f).toNearestInt(), juce::Justification::centred);
+    }
+    else if (bars >= 1.49) // one bar and half a bar: the two signs side by side
+    {
+        block (c.x - u * 0.95f, c.y - u * 0.2f, true, 0.85f);
+        block (c.x + u * 0.95f, c.y + u * 0.35f, false, 0.85f);
+    }
+    else if (bars >= 0.99)
+        block (c.x, c.y - u * 0.25f, true, 1.0f);
+    else
+        block (c.x, c.y + u * 0.3f, false, 1.0f);
+}
+
 // "+1" or "-1": how many octaves a chord is moved. Nothing for 0.
 juce::String octaveMark (int octave)
 {
@@ -136,14 +176,12 @@ void PadButton::paint (juce::Graphics& g)
 
     if (restPad)
     {
-        // The blank pad: a pause sign (two bars) and the word under it, in the grey of the other buttons
+        // The blank pad: the sign for a pause of one bar (the whole rest) and the word under it, in the grey of the other buttons
         const auto ink = theme::dimText.brighter (0.3f);
-        const float barHeight = juce::jlimit (18.0f, 60.0f, face.getHeight() * 0.22f), barWidth = barHeight * 0.28f;
-        const auto c = juce::Point<float> (face.getCentreX(), face.getCentreY() - barHeight * 0.45f);
+        auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel());
+        drawRestSign (g, face.withTrimmedBottom (face.getHeight() * 0.3f).reduced (4.0f, 0.0f), 1.0, ink, l != nullptr ? l->titleFont (14.0f) : juce::Font (juce::FontOptions (14.0f)));
         g.setColour (ink);
-        g.fillRoundedRectangle (juce::Rectangle<float> (barWidth, barHeight).withCentre ({ c.x - barWidth * 0.95f, c.y }), barWidth * 0.3f);
-        g.fillRoundedRectangle (juce::Rectangle<float> (barWidth, barHeight).withCentre ({ c.x + barWidth * 0.95f, c.y }), barWidth * 0.3f);
-        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+        if (l != nullptr)
             g.setFont (l->titleFont (juce::jlimit (13.0f, 24.0f, (float) getWidth() * 0.2f)));
         g.drawFittedText ("Rest", face.withTrimmedTop (face.getHeight() * 0.55f).reduced (4.0f, 0.0f).toNearestInt(), juce::Justification::centredTop, 1, 0.6f);
         return;
@@ -568,9 +606,11 @@ juce::String BlockButton::lengthText (double beats, double barBeats)
 void BlockButton::setLength (double beats, double barBeats)
 {
     const auto text = lengthText (beats, barBeats);
-    if (text != lengthLabel)
+    const double bars = beats / std::max (1.0, barBeats);
+    if (text != lengthLabel || std::abs (bars - restBars) > 1.0e-9)
     {
         lengthLabel = text;
+        restBars = bars;
         repaint();
     }
 }
@@ -768,8 +808,12 @@ void BlockButton::paint (juce::Graphics& g)
         const float nameHeight = nameSize * 1.12f, lengthHeight = lengthSize * 1.2f;
         const float top = bounds.getCentreY() - (nameHeight + lengthHeight) * 0.5f;
         g.setFont (l->titleFont (nameSize));
-        g.drawFittedText (chordName, juce::Rectangle<float> (bounds.getX() + 4.0f, top, bounds.getWidth() - 8.0f, nameHeight).toNearestInt(),
-                          juce::Justification::centred, 1, 0.6f);
+        if (rest)
+            drawRestSign (g, juce::Rectangle<float> (bounds.getX() + 4.0f, top - nameHeight * 0.15f, bounds.getWidth() - 8.0f, nameHeight * 1.3f),
+                          restBars, lit ? theme::onAccent : ink.withAlpha (0.8f), l->titleFont (juce::jlimit (10.0f, 16.0f, nameSize * 0.45f)));
+        else
+            g.drawFittedText (chordName, juce::Rectangle<float> (bounds.getX() + 4.0f, top, bounds.getWidth() - 8.0f, nameHeight).toNearestInt(),
+                              juce::Justification::centred, 1, 0.6f);
 
         // Under the name, in one line: where the chord sits in the key (I, ii, III ...), how long it lasts, and how far the chord
         // is moved (when it is). If the block is too narrow for everything, the numeral goes first, then the long form of the move.

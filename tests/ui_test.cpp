@@ -537,6 +537,23 @@ int main (int argc, char** argv)
                    "dragged between blocks it adds a pause of one bar");
             check (! processor.getProgression()[0].rest && processor.getProgression()[2] == barBefore[1], "the other blocks stay as they were");
             snapshot ("rest_in_bar");
+            {
+                // The sign follows the length: half rest, whole rest, both, and the multi-bar rest with its number
+                const auto shown = processor.getProgression();
+                engine::Progression lengths;
+                for (double beats : { 2.0, 4.0, 6.0, 8.0, 12.0 })
+                {
+                    engine::Block block;
+                    block.rest = true;
+                    block.beats = beats;
+                    lengths.push_back (block);
+                }
+                processor.setProgression (lengths);
+                settle (100);
+                snapshot ("rest_lengths");
+                processor.setProgression (shown);
+                settle (50);
+            }
 
             // Pulled onto the middle of a block it turns that block into a pause (the length is kept)
             const auto lengthOfThird = processor.getProgression()[2].beats;

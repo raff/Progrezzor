@@ -200,6 +200,7 @@ private:
     bool hovered() const { return forceHover || isMouseOver(); }
     int rootPitchClass = 0;
     juce::String lengthLabel, numeral;
+    double restBars = 1.0; // the length in bars, for the rest sign
     bool locked = false;
     bool outsideScale = false;
     bool silent = false;
