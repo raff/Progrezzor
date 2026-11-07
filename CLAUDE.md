@@ -45,7 +45,7 @@ Regler:
 
 - Første klik på en pad giver lyd, uden routing eller opsætning.
 - Gode standarder, så man kan spille med det samme. Standard er A Minor.
-- Pads viser kun akkordnavne, ikke romertal eller teoriord.
+- Pads og blokke viser akkordnavnet og, småt, akkordens plads i tonearten som romertal (I, ii, III, IV, v, VI, VII, ii° for formindsket). Henrik ønskede det 2026-11-07. Store bogstaver er dur, små er mol. Ingen andre teoriord.
 - Pads lyser op, når de spilles, både fra mus og MIDI.
 - Avancerede ting er skjulte. ⚙️ på pads og 🔒 på blokke vises først ved mouseover.
 - Ingen dialogbokse i det normale flow. Fortryd og gendan virker altid.
@@ -92,6 +92,7 @@ Akkordlogik, stemmeføring, rundgange, Suggest og Quick-text er nyt. CI og relea
 - Sus4 tilbydes med låsen til kun, hvis den rene kvart findes i skalaen. Sus2 kun, hvis den store sekund findes.
 - Akkordnavne staves efter tonearten (Bb frem for A#, når tonearten bruger b).
 - Ingen automatisk stemmeføring og ingen magi (besluttet af Henrik 2026-11-07). En akkord har altid de samme toner, uanset hvad der blev spillet før: grundstilling, eller den omvending brugeren selv har valgt. Tonerne placeres omkring midten af det valgte toneleje.
+- En lille klaviatur i højre panel viser, hvor akkorderne ligger (det lyse felt, som flytter sig med Settings og Oct-knapperne) og lyser grønt for de toner, der spiller lige nu.
 - Toneleje: Settings (tandhjulet i bjælkens højre side) vælger standardlejet: Low, Mid (standard) eller High, en oktav fra hinanden. Oct- og Oct+ i samme panel flytter alt yderligere en oktav ad gangen, -2 til +2, og panelet viser både lejet og Oct-trinnet. Lejet gælder pads, rundgang og MIDI-fil.
 
 ## Lock to scale

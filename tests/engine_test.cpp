@@ -1058,6 +1058,34 @@ void testOctaves()
     check (parseQuickText ("Am-F-C-G", key, 4.0, true).blocks.size() == 4, "a hyphen still separates chords");
 }
 
+void testRomanNumerals()
+{
+    std::printf ("roman numerals\n");
+    const auto padsAs = [] (ScaleId scale)
+    {
+        std::string text;
+        for (int pad = 0; pad < 7; ++pad)
+            text += (pad > 0 ? " " : "") + romanNumeral (padChord (scale, pad), scale);
+        return text;
+    };
+    checkEqual (padsAs (ScaleId::Minor), std::string ("i ii\xC2\xB0 III iv v VI VII"), "Minor: i ii° III iv v VI VII");
+    checkEqual (padsAs (ScaleId::Major), std::string ("I ii iii IV V vi vii\xC2\xB0"), "Major: I ii iii IV V vi vii°");
+    checkEqual (padsAs (ScaleId::Dorian), std::string ("i ii III IV v vi\xC2\xB0 VII"), "Dorian: i ii III IV v vi° VII");
+    checkEqual (padsAs (ScaleId::Phrygian), std::string ("i II III iv v\xC2\xB0 VI vii"), "Phrygian: i II III iv v° VI vii");
+
+    checkEqual (romanNumeral ({ 5, ChordType::Dom7, kAutoInversion }, ScaleId::Major), std::string ("IV7"), "a seventh");
+    checkEqual (romanNumeral ({ 0, ChordType::Maj7, kAutoInversion }, ScaleId::Major), std::string ("Imaj7"), "a major seventh");
+    checkEqual (romanNumeral ({ 9, ChordType::Min7, kAutoInversion }, ScaleId::Major), std::string ("vi7"), "a minor seventh");
+    checkEqual (romanNumeral ({ 0, ChordType::Add9, kAutoInversion }, ScaleId::Major), std::string ("Iadd9"), "add9");
+    checkEqual (romanNumeral ({ 7, ChordType::Sus4, kAutoInversion }, ScaleId::Major), std::string ("Vsus4"), "sus4");
+    checkEqual (romanNumeral ({ 1, ChordType::Major, kAutoInversion }, ScaleId::Major), std::string ("bII"), "outside the scale: a flat on the degree above");
+    checkEqual (romanNumeral ({ 10, ChordType::Major, kAutoInversion }, ScaleId::Major), std::string ("bVII"), "bVII in a major key");
+    checkEqual (romanNumeral ({ 1, ChordType::Major, kAutoInversion }, ScaleId::Minor), std::string ("bII"), "bII in a minor key");
+    checkEqual (romanNumeral ({ 6, ChordType::Minor, kAutoInversion }, ScaleId::Minor), std::string ("bv"), "a minor chord outside the scale: small letters");
+    checkEqual (romanNumeral ({ 4, ChordType::Major, kAutoInversion }, ScaleId::Minor), std::string ("bIV"), "between two degrees a semitone apart from both: the flat of the one above");
+    checkEqual (romanNumeral ({ 11, ChordType::Major, kAutoInversion }, ScaleId::Minor), std::string ("#VII"), "the note just under the tonic is a sharp seventh, not a flat of the tonic");
+}
+
 void testArp()
 {
     std::printf ("arp\n");
@@ -1153,6 +1181,7 @@ void testArp()
 
 int main()
 {
+    testRomanNumerals();
     testArp();
     testOctaves();
     testQuickText();

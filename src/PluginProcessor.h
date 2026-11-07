@@ -103,6 +103,9 @@ public:
     // The length of a bar in the host's time signature, in beats (4 until the host has told)
     double getHostBarBeats() const { return hostBarBeats.load(); }
 
+    // Which notes sound now, for the little keyboard in the editor (bit 0 of the first number is note 0, of the second note 64)
+    bool isNoteSounding (int note) const { return note >= 0 && note < 128 && ((soundingMask[(size_t) (note / 64)].load() >> (note % 64)) & 1u) != 0; }
+
     // The notes the plug-in has sent that are still on, for the tests
     int soundingNotes() const { return soundingCount.load(); }
 
@@ -243,6 +246,7 @@ private:
 
     std::atomic<unsigned> lit { 0 };
     std::atomic<int> soundingCount { 0 };
+    std::array<std::atomic<std::uint64_t>, 2> soundingMask {};
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ProgrezzorProcessor)
 };

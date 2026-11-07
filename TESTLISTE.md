@@ -46,6 +46,13 @@ retter de gamle linjer om mulighed A og B. Branchen merges ikke før du siger de
 - [ ] Tempoændringer i DAW'en mens arpen spiller.
 - [ ] Preview-lyden ved korte arp-noter: er lyden brugbar, eller skal Pad-lyden have hurtigere anslag?
 
+## 2c. Romertal og klaviaturet (2026-11-07)
+
+- [ ] Padsene og blokkene viser romertal (I, ii, III ...). Er de til at læse, og er de i vejen? Prøv også en anden toneart og skala (C Major: I ii iii IV V vi vii°).
+- [ ] Den lille klaviatur i højre panel: det lyse felt flytter sig, når du trykker Oct+/Oct- og vælger Low/Middle/High.
+- [ ] Tonerne, der spiller, lyser grønt på klaviaturet (akkorder og arp).
+- [ ] Settings-menuen hedder nu "Where the chords sit" (Low, Middle, High).
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

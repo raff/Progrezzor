@@ -106,6 +106,11 @@ std::string keyName (const Key& key);
 // "Am", "Bbmaj7". A chosen inversion adds the bass note: "Am/C".
 std::string chordName (const Chord& chord, const Key& key);
 
+// The usual numeral for a chord in a key: I, ii, III, IV, v, VI, VII for the degree of the scale its root is on. Capital
+// letters for chords with a major third, small for minor ones, a ° for diminished, and 7, maj7, 9, add9, sus2 and so on after
+// it. A root that is not in the scale gets a b or a # (bII, #IV). Written the same in every key.
+std::string romanNumeral (const Chord& chord, ScaleId scale);
+
 // ---- Voicing -----------------------------------------------------------------------------------------------------
 
 constexpr int kLowestNote = 36;  // C2

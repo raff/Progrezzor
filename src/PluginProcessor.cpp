@@ -379,6 +379,14 @@ public:
                 mask |= 1u << pad;
         owner.lit.store (mask);
         owner.soundingCount.store (owner.tracker.soundingNotes());
+        for (int half = 0; half < 2; ++half)
+        {
+            std::uint64_t bits = 0;
+            for (int i = 0; i < 64; ++i)
+                if (owner.tracker.isSounding (half * 64 + i))
+                    bits |= (std::uint64_t) 1 << i;
+            owner.soundingMask[(size_t) half].store (bits);
+        }
         owner.playingBlock.store (owner.loopActive && owner.loopIndex >= 0 ? owner.loopIndex : -1);
 
         // Nothing louder than full scale can leave, whatever is played

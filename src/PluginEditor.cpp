@@ -68,6 +68,15 @@ void PadButton::setChordName (const juce::String& name)
     }
 }
 
+void PadButton::setNumeral (const juce::String& newNumeral)
+{
+    if (newNumeral != numeral)
+    {
+        numeral = newNumeral;
+        repaint();
+    }
+}
+
 void PadButton::setLit (bool nowLit)
 {
     if (nowLit != lit)
@@ -143,6 +152,15 @@ void PadButton::paint (juce::Graphics& g)
     g.drawFittedText (chordName, textArea.translated (0, 2), juce::Justification::centred, 1, 0.6f);
     g.setColour (ink);
     g.drawFittedText (chordName, textArea, juce::Justification::centred, 1, 0.6f);
+
+    // Where the chord sits in the key (I, ii, III ...), small at the top
+    if (numeral.isNotEmpty())
+        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+        {
+            g.setFont (l->titleFont (juce::jlimit (13.0f, 22.0f, (float) getWidth() * 0.16f)));
+            g.setColour (ink.withAlpha (0.78f));
+            g.drawText (numeral, face.withTrimmedTop (9.0f).withHeight (30.0f).toNearestInt(), juce::Justification::centredTop);
+        }
 
     // The gear shows on mouseover (and stays a little visible when the pad plays another kind of chord)
     if (isMouseOver() || hasVariant)
@@ -495,6 +513,15 @@ void BlockButton::setLength (double beats, double barBeats)
     }
 }
 
+void BlockButton::setNumeral (const juce::String& nowNumeral)
+{
+    if (nowNumeral != numeral)
+    {
+        numeral = nowNumeral;
+        repaint();
+    }
+}
+
 void BlockButton::setDropTarget (bool nowTarget)
 {
     if (nowTarget != dropTarget)
@@ -625,30 +652,54 @@ void BlockButton::paint (juce::Graphics& g)
         g.drawFittedText (chordName, juce::Rectangle<float> (bounds.getX() + 4.0f, top, bounds.getWidth() - 8.0f, nameHeight).toNearestInt(),
                           juce::Justification::centred, 1, 0.6f);
 
-        // How long it lasts, right under the name, with how far the chord is moved (when it is) beside it
+        // Under the name, in one line: where the chord sits in the key (I, ii, III ...), how long it lasts, and how far the chord
+        // is moved (when it is). If the block is too narrow for everything, the numeral goes first, then the long form of the move.
         const auto lengthFont = l->labelFont (lengthSize);
+        const auto boldFont = l->titleFont (lengthSize);
         const auto row = juce::Rectangle<float> (bounds.getX(), top + nameHeight, bounds.getWidth(), lengthHeight).toNearestInt();
-        const float lengthWidth = juce::GlyphArrangement::getStringWidth (lengthFont, lengthLabel);
         const juce::Colour lengthInk = lit ? theme::onAccent.withAlpha (0.85f) : ink.withAlpha (0.72f);
-        if (octave == 0)
+        const juce::Colour numeralInk = lit ? theme::onAccent : ink.withAlpha (0.95f);
+        const juce::Colour markInk = lit ? theme::onAccent : theme::accent;
+
+        struct Part { juce::String text; juce::Font font; juce::Colour colour; float width; };
+        const auto make = [&] (bool withNumeral, bool shortMark)
         {
-            g.setFont (lengthFont);
-            g.setColour (lengthInk);
-            g.drawText (lengthLabel, row, juce::Justification::centred);
-        }
-        else
+            std::vector<Part> parts;
+            if (withNumeral && numeral.isNotEmpty())
+                parts.push_back ({ numeral, boldFont, numeralInk, 0.0f });
+            parts.push_back ({ lengthLabel, lengthFont, lengthInk, 0.0f });
+            if (octave != 0)
+            {
+                auto mark = octaveMark (octave);
+                if (shortMark)
+                    mark = mark.upToFirstOccurrenceOf (" ", false, false);
+                parts.push_back ({ mark, boldFont, markInk, 0.0f });
+            }
+            for (auto& part : parts)
+                part.width = juce::GlyphArrangement::getStringWidth (part.font, part.text);
+            return parts;
+        };
+        const auto totalWidth = [] (const std::vector<Part>& parts)
         {
-            auto mark = octaveMark (octave);
-            if (lengthWidth + 10.0f + juce::GlyphArrangement::getStringWidth (lengthFont, mark) > bounds.getWidth() - 8.0f)
-                mark = mark.upToFirstOccurrenceOf (" ", false, false); // short of room: just +1
-            const float markWidth = juce::GlyphArrangement::getStringWidth (lengthFont, mark);
-            const float startX = (float) row.getCentreX() - (lengthWidth + 10.0f + markWidth) * 0.5f;
-            g.setFont (lengthFont);
-            g.setColour (lengthInk);
-            g.drawText (lengthLabel, juce::Rectangle<float> (startX, (float) row.getY(), lengthWidth + 2.0f, (float) row.getHeight()).toNearestInt(), juce::Justification::centredLeft);
-            g.setColour (lit ? theme::onAccent : theme::accent);
-            g.setFont (l->titleFont (lengthSize));
-            g.drawText (mark, juce::Rectangle<float> (startX + lengthWidth + 10.0f, (float) row.getY(), markWidth + 4.0f, (float) row.getHeight()).toNearestInt(), juce::Justification::centredLeft);
+            float total = 0.0f;
+            for (const auto& part : parts)
+                total += part.width;
+            return total + 10.0f * (float) (parts.size() - 1);
+        };
+
+        auto parts = make (true, false);
+        if (totalWidth (parts) > bounds.getWidth() - 8.0f)
+            parts = make (true, true);
+        if (totalWidth (parts) > bounds.getWidth() - 8.0f)
+            parts = make (false, true);
+
+        float x = (float) row.getCentreX() - totalWidth (parts) * 0.5f;
+        for (const auto& part : parts)
+        {
+            g.setFont (part.font);
+            g.setColour (part.colour);
+            g.drawText (part.text, juce::Rectangle<float> (x, (float) row.getY(), part.width + 4.0f, (float) row.getHeight()).toNearestInt(), juce::Justification::centredLeft);
+            x += part.width + 10.0f;
         }
     }
 
@@ -1176,7 +1227,7 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     playButton.setTooltip ("Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
     addAndMakeVisible (playButton);
 
-    settingsButton.setTooltip ("Settings: how high or low the chords sit");
+    settingsButton.setTooltip ("Settings: where the chords sit, low, middle or high. The Oct buttons move them from there");
     settingsButton.setComponentID ("settings");
     settingsButton.onClick = [this] { showSettingsMenu(); };
     addAndMakeVisible (settingsButton);
@@ -1452,6 +1503,19 @@ void ProgressionBar::updateButtons()
         octaveLabel = label;
         registerLabel = registerName;
         repaint (octaveLabelBounds);
+        repaint (stripBounds); // the lit band on the little keyboard moves with it
+    }
+
+    // The notes that sound light up on the little keyboard
+    std::uint64_t soundingNow[2] = {};
+    for (int note = 0; note < 128; ++note)
+        if (processor.isNoteSounding (note))
+            soundingNow[note / 64] |= (std::uint64_t) 1 << (note % 64);
+    if (soundingNow[0] != lastSounding[0] || soundingNow[1] != lastSounding[1])
+    {
+        lastSounding[0] = soundingNow[0];
+        lastSounding[1] = soundingNow[1];
+        repaint (stripBounds);
     }
     octaveDownButton.setEnabled (octave > -engine::kMaxGeneralOctave);
     octaveUpButton.setEnabled (octave < engine::kMaxGeneralOctave);
@@ -1491,13 +1555,13 @@ void ProgressionBar::chooseRegister (int index)
 void ProgressionBar::showSettingsMenu()
 {
     juce::PopupMenu menu;
-    menu.addSectionHeader ("Pitch");
-    const char* names[engine::kNumRegisters] = { "Low  (deeper, warmer)", "Mid  (the usual)", "High  (brighter)" };
+    menu.addSectionHeader ("Where the chords sit");
+    const char* names[engine::kNumRegisters] = { "Low  (deeper and warmer)", "Middle  (the usual)", "High  (brighter)" };
     for (int i = 0; i < engine::kNumRegisters; ++i)
         menu.addItem (i + 1, names[i], true, i == processor.getRegisterIndex());
 
     juce::Component::SafePointer<ProgressionBar> safe (this);
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (190),
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (230),
                         [safe] (int result)
                         {
                             if (safe != nullptr && result > 0)
@@ -1717,6 +1781,7 @@ void ProgressionBar::refresh()
         blocks[i]->setChordName (engine::chordName (block.chord, key));
         blocks[i]->setLength (block.beats, processor.getHostBarBeats());
         blocks[i]->setRoot (key.tonic + block.chord.root);
+        blocks[i]->setNumeral (engine::romanNumeral (block.chord, key.scale));
         blocks[i]->setLocked (block.locked);
         blocks[i]->setOctave (block.chord.octave);
         blocks[i]->setOutsideScale (processor.isLockedToScale() && ! engine::chordFitsScale (block.chord, key.scale));
@@ -1780,6 +1845,16 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
     g.fillRect (left, area.getY(), right - left, area.getHeight());
     g.setColour (theme::accent);
     g.drawRect (left, area.getY(), right - left, area.getHeight(), 1.6f);
+
+    // The notes that sound now: lit keys, in the colour of Play
+    for (int note = firstNote; note < lastNote; ++note)
+        if (processor.isNoteSounding (note))
+        {
+            g.setColour (theme::go);
+            g.fillRect (xOf (note), area.getY(), std::max (2.5f, perNote), area.getHeight());
+            g.setColour (juce::Colours::black.withAlpha (0.5f));
+            g.drawRect (xOf (note), area.getY(), std::max (2.5f, perNote), area.getHeight(), 0.8f);
+        }
 
     g.setColour (juce::Colour (0xff3a3560));
     g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.2f);
@@ -1963,7 +2038,7 @@ void ProgressionBar::resized()
     // The right side: the Drag tile, and Capture on top of Undo, Redo and the pencil (which stays in its place)
     dragTile.setBounds (area.removeFromRight (std::min (68, std::max (56, area.getHeight()))).withTrimmedTop (labelHeight).withHeight (controlsHeight));
     area.removeFromRight (10);
-    auto right = area.removeFromRight (112).withTrimmedTop (labelHeight).withHeight (controlsHeight);
+    auto right = area.removeFromRight (136).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromRight (10);
     const int rowHeight = (right.getHeight() - 15) / 4;
     auto captureRow = right.removeFromTop (rowHeight);
@@ -2234,6 +2309,7 @@ void ProgrezzorEditor::updateNames()
     {
         pads[(size_t) i].setChordName (engine::chordName (processor.getPadChord (i), key));
         pads[(size_t) i].setRoot (key.tonic + processor.getPadChord (i).root);
+        pads[(size_t) i].setNumeral (engine::romanNumeral (processor.getPadChord (i), key.scale));
         pads[(size_t) i].setHasVariant (processor.padHasVariant (i));
     }
 

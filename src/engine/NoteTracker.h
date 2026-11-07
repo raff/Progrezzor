@@ -82,6 +82,7 @@ public:
             release (source, emit);
     }
 
+    bool isSounding (int note) const { return note >= 0 && note < 128 && counters[(size_t) note] > 0; }
     bool isHeld (int source) const { return source >= 0 && source < kNumSources && active[(size_t) source]; }
 
     int soundingNotes() const

@@ -97,6 +97,59 @@ std::string chordName (const Chord& chord, const Key& key)
     return name;
 }
 
+std::string romanNumeral (const Chord& chord, ScaleId scale)
+{
+    const auto& sc = scaleOf (scale);
+    const int root = wrap12 (chord.root);
+
+    int degree = -1;
+    for (int i = 0; i < kScaleSize; ++i)
+        if (sc.intervals[i] == root)
+            degree = i;
+
+    std::string accidental;
+    if (degree < 0)
+    {
+        // Not in the scale: a flat on the degree just above, or a sharp on the degree just below
+        int above = -1, below = 0;
+        for (int i = 0; i < kScaleSize; ++i)
+        {
+            if (sc.intervals[i] == wrap12 (root + 1))
+                above = i;
+            if (sc.intervals[i] < root)
+                below = i;
+        }
+        const bool flat = above > 0; // not a flat of the tonic above: the note below the tonic is a sharp seventh
+        accidental = flat ? "b" : "#";
+        degree = flat ? above : below;
+    }
+
+    static const char* numerals[kScaleSize] = { "I", "II", "III", "IV", "V", "VI", "VII" };
+    std::string numeral = numerals[degree];
+
+    const bool small = chord.type == ChordType::Minor || chord.type == ChordType::Min7 || chord.type == ChordType::Min9 || chord.type == ChordType::Dim;
+    if (small)
+        for (auto& c : numeral)
+            c = (char) (c - 'A' + 'a');
+
+    const char* suffix = "";
+    switch (chord.type)
+    {
+        case ChordType::Power5: suffix = "5"; break;
+        case ChordType::Dom7:   suffix = "7"; break;
+        case ChordType::Min7:   suffix = "7"; break;
+        case ChordType::Maj7:   suffix = "maj7"; break;
+        case ChordType::Dom9:   suffix = "9"; break;
+        case ChordType::Min9:   suffix = "9"; break;
+        case ChordType::Add9:   suffix = "add9"; break;
+        case ChordType::Sus2:   suffix = "sus2"; break;
+        case ChordType::Sus4:   suffix = "sus4"; break;
+        case ChordType::Dim:    suffix = "\xC2\xB0"; break; // the degree sign
+        default: break;
+    }
+    return accidental + numeral + suffix;
+}
+
 namespace
 {
 // Notes of the chord in the given inversion, ascending, around the octave where the tonic is 0..11.

@@ -19,6 +19,7 @@ public:
 
     void setChordName (const juce::String& name);
     void setRoot (int pitchClass); // the note the chord is built on (0 = C ... 11 = B): it gives the pad its colour
+    void setNumeral (const juce::String& numeral); // I, ii, III, IV ... : the place of the chord in the key, small above its name
     void setLit (bool nowLit);
     void setHasVariant (bool nowHasVariant);
     void setSuggested (bool nowSuggested); // fits well after the chord played last: a soft glow, not the full light of a pad that sounds
@@ -36,7 +37,7 @@ public:
 private:
     juce::Rectangle<int> gearArea() const { return { getWidth() - 34, 6, 28, 28 }; }
 
-    juce::String chordName;
+    juce::String chordName, numeral;
     bool lit = false;
     bool heldByMouse = false;
     bool dragging = false;
@@ -135,6 +136,7 @@ public:
     void setPlaying (bool nowPlaying); // the loop is playing this block
     void setSelected (bool nowSelected);
     void setRoot (int pitchClass); // gives the block the colour of its chord
+    void setNumeral (const juce::String& nowNumeral); // I, ii, III ... shown with the length
     void setLength (double beats, double barBeats); // shown small on the block: 1 bar, 1/2 bar, 2 bars
     static juce::String lengthText (double beats, double barBeats);
     void setDropTarget (bool nowTarget); // a chord from a pad is held over it and would replace it
@@ -176,7 +178,7 @@ private:
     bool forceHover = false;
     bool hovered() const { return forceHover || isMouseOver(); }
     int rootPitchClass = 0;
-    juce::String lengthLabel;
+    juce::String lengthLabel, numeral;
     bool locked = false;
     bool outsideScale = false;
     bool silent = false;
@@ -289,6 +291,7 @@ private:
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };
     juce::Rectangle<int> octaveLabelBounds, stripBounds;
+    std::uint64_t lastSounding[2] = { 0, 0 };
     juce::String octaveLabel, registerLabel;
     juce::TextEditor textEditor;
     std::unique_ptr<TextMarks> textMarks;
