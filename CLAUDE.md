@@ -221,6 +221,14 @@ Mulighed A er valgt: IS_SYNTH FALSE og CLAP-feature note-effect. Testet på Linu
 
 Suggest bruger kun akkorder, der også findes som pads (de 7 treklange). Alt i bjælken kan dermed spilles direkte på en pad. Biblioteket har stadig m7-, maj7- og add9-rundgange, men Suggest vælger dem ikke. De kan bruges, når variant-menuen kommer i milepæl 5. Besluttet af Henrik efter test af milepæl 3.
 
+## Versioner
+
+- Første udgivelse er 1.0.0, når Henrik selv har testet og er tilfreds. Der laves ingen 0.x- eller beta-udgivelser, for udgivelser må ikke afhænge af brugernes feedback.
+- Før 1.0.0 testes i Bitwig og REAPER på Linux og mindst én gang på Windows.
+- 1.0.x er fejlrettelser. 1.x er nye funktioner eller presets. 2.0 kun hvis gamle projekter ikke længere åbner ens.
+- Plugin-ID'er og parametre må aldrig ændres, så gemte projekter altid kan åbnes.
+- Lav aldrig tag, push eller release, før Henrik siger til.
+
 ## Definition på færdig
 
 - Bygger uden nye advarsler.

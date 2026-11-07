@@ -118,7 +118,7 @@ void PadButton::paint (juce::Graphics& g)
     const bool on = lit || heldByMouse;
     const auto colour = theme::chordColour (rootPitchClass);
     const auto bounds = getLocalBounds().toFloat().reduced (5.0f, 4.0f);
-    const float lip = juce::jlimit (8.0f, 18.0f, bounds.getHeight() * 0.07f);
+    const float lip = juce::jlimit (5.0f, 9.0f, bounds.getHeight() * 0.035f);
     const float corner = 15.0f;
 
     const auto rest = colour.withMultipliedBrightness (0.80f);
@@ -261,7 +261,7 @@ void LockToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButton
     const bool on = getToggleState();
     const auto face = theme::drawKey (g, getLocalBounds().toFloat(), on ? theme::accent : theme::pad, 10.0f, 4.0f, isButtonDown, isMouseOver);
     drawLock (g, face.withSizeKeepingCentre (face.getHeight() * 0.58f, face.getHeight() * 0.58f),
-              on ? theme::onAccent : theme::dimText, on);
+              juce::Colours::white, on);
 }
 
 // ---- PlayToggle ----------------------------------------------------------------------------------------------------
@@ -272,11 +272,13 @@ void PlayToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButton
     const auto bounds = getLocalBounds().toFloat();
     if (on)
         theme::drawGlow (g, bounds.reduced (5.0f, 6.0f), theme::go, 7.0f, 14.0f, 0.3f);
-    const auto face = theme::drawKey (g, bounds.reduced (3.0f, 2.0f), on ? theme::go : theme::pad, 14.0f, 6.0f, isButtonDown, isMouseOver);
+    const bool usable = isEnabled();
+    const auto face = theme::drawKey (g, bounds.reduced (3.0f, 2.0f), on ? theme::go : (usable ? theme::pad : theme::pad.darker (0.3f)), 14.0f, 6.0f,
+                                      isButtonDown && usable, isMouseOver && usable);
 
     // The icon says what a click does: a triangle (start) while it is stopped, a square (stop) while it plays
     const float size = std::min (face.getWidth(), face.getHeight()) * 0.36f;
-    g.setColour (on ? theme::onAccent : theme::dimText);
+    g.setColour (on ? theme::onAccent : (usable ? theme::dimText : theme::dimText.withAlpha (0.4f)));
     if (on)
     {
         g.fillRoundedRectangle (juce::Rectangle<float> (size * 1.05f, size * 1.05f).withCentre (face.getCentre()), size * 0.16f);
@@ -324,21 +326,28 @@ void LearnToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButto
         theme::drawGlow (g, getLocalBounds().toFloat().reduced (4.0f, 5.0f), theme::chordColour (5), 6.0f, 10.0f, 0.3f);
     const auto face = theme::drawKey (g, getLocalBounds().toFloat(), on ? theme::chordColour (5) : theme::pad, 10.0f, 4.0f, isButtonDown, isMouseOver);
 
-    // A graduation cap: a flat diamond with a tassel
-    const auto ink = on ? theme::onAccent : theme::dimText.brighter (0.2f);
-    const auto c = juce::Point<float> (face.getCentreX(), face.getY() + face.getHeight() * 0.33f);
+    // A graduation cap: a flat diamond with a tassel, big and bright so that it is seen at a glance
+    const auto ink = on ? theme::onAccent : theme::dimText.brighter (0.2f); // the same grey as the icons on the other buttons
+    const float k = 0.72f * std::min (face.getWidth() / 44.0f, face.getHeight() / 34.0f);
+    const auto c = juce::Point<float> (face.getCentreX(), face.getY() + face.getHeight() * 0.30f);
     juce::Path cap;
-    cap.startNewSubPath (c.x, c.y - 6.0f);
-    cap.lineTo (c.x + 13.0f, c.y);
-    cap.lineTo (c.x, c.y + 6.0f);
-    cap.lineTo (c.x - 13.0f, c.y);
+    cap.startNewSubPath (c.x, c.y - 10.0f * k);
+    cap.lineTo (c.x + 20.0f * k, c.y);
+    cap.lineTo (c.x, c.y + 10.0f * k);
+    cap.lineTo (c.x - 20.0f * k, c.y);
     cap.closeSubPath();
     g.setColour (ink);
     g.fillPath (cap);
-    g.drawLine (c.x + 9.0f, c.y + 1.5f, c.x + 9.0f, c.y + 8.0f, 1.6f);
+    juce::Path crown; // the part that sits on the head, under the flat top
+    crown.startNewSubPath (c.x - 10.0f * k, c.y + 5.0f * k);
+    crown.lineTo (c.x - 10.0f * k, c.y + 11.0f * k);
+    crown.quadraticTo (c.x, c.y + 16.0f * k, c.x + 10.0f * k, c.y + 11.0f * k);
+    crown.lineTo (c.x + 10.0f * k, c.y + 5.0f * k);
+    g.strokePath (crown, juce::PathStrokeType (2.0f * k));
+    g.drawLine (c.x + 16.0f * k, c.y + 1.0f * k, c.x + 16.0f * k, c.y + 12.0f * k, 2.0f * k);
     if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
         g.setFont (l->titleFont (13.0f));
-    g.drawText ("Learn", face.withTrimmedTop (face.getHeight() * 0.58f).toNearestInt(), juce::Justification::centred);
+    g.drawText ("Learn", face.withTrimmedTop (face.getHeight() * 0.62f).toNearestInt(), juce::Justification::centred);
 }
 
 // ---- BarButton -----------------------------------------------------------------------------------------------------
@@ -1474,7 +1483,12 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     addAndMakeVisible (arpOptionsButton);
 
     playButton.setClickingTogglesState (false);
-    playButton.onClick = [this] { processor.togglePlay(); updateButtons(); };
+    playButton.onClick = [this]
+    {
+        if (processor.isPlayOn() || ! processor.getProgression().empty()) // nothing to play in an empty bar
+            processor.togglePlay();
+        updateButtons();
+    };
     playButton.setTooltip ("Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
     addAndMakeVisible (playButton);
 
@@ -1754,6 +1768,7 @@ void ProgressionBar::updateButtons()
     // starting and stopping.
     const bool playOn = processor.isPlayOn();
     playButton.setToggleState (playOn, juce::dontSendNotification);
+    playButton.setEnabled (playOn || ! processor.getProgression().empty()); // an empty bar cannot be played
     arpButton.setToggleState (processor.getArpSettings().on, juce::dontSendNotification);
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
 
@@ -2083,7 +2098,7 @@ void ProgressionBar::setPlayingBlock (int index)
 // follows the Oct buttons, so that you see the pitch instead of reading it.
 void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> area) const
 {
-    constexpr int firstNote = 12, lastNote = 108; // C0 to C8: the whole way the Oct buttons can take the chords
+    constexpr int firstNote = 24, lastNote = 96; // C1 to C7: where the chords sit in practice (the band is cut off at the ends)
     const float perNote = area.getWidth() / (float) (lastNote - firstNote);
     const auto xOf = [&] (int note) { return area.getX() + (float) (note - firstNote) * perNote; };
 
@@ -2342,7 +2357,7 @@ void ProgressionBar::resized()
     const int controlsHeight = std::min (area.getHeight() - labelHeight, 150);
     auto left = area.removeFromLeft (64).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromLeft (10);
-    auto learnRow = left.removeFromBottom (36);
+    auto learnRow = left.removeFromBottom (46);
     left.removeFromBottom (4);
     auto arpRow = left.removeFromBottom (36);
     left.removeFromBottom (6);
@@ -2352,12 +2367,18 @@ void ProgressionBar::resized()
     arpRow.removeFromRight (2);
     arpButton.setBounds (arpRow);
 
-    // The right side: the Drag tile, and Capture on top of Undo, Redo and the pencil (which stays in its place)
-    dragTile.setBounds (area.removeFromRight (std::min (68, std::max (56, area.getHeight()))).withTrimmedTop (labelHeight).withHeight (controlsHeight));
+    // The right side. The group (the buttons and the Drag tile) grows with the window, and the little keyboard sits in the
+    // bottom right corner under all of it, as wide as the group.
+    const int groupWidth = juce::jlimit (214, 460, juce::roundToInt ((float) getWidth() * 0.27f));
+    auto group = area.removeFromRight (groupWidth).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromRight (10);
-    auto right = area.removeFromRight (136).withTrimmedTop (labelHeight).withHeight (controlsHeight);
-    area.removeFromRight (10);
-    const int rowHeight = (right.getHeight() - 15) / 4;
+    const int rowHeight = (group.getHeight() - 15) / 4;
+    stripBounds = group.removeFromBottom (rowHeight);
+    group.removeFromBottom (5);
+    auto upper = group;
+    dragTile.setBounds (upper.removeFromRight (std::min (68, std::max (56, upper.getHeight()))));
+    upper.removeFromRight (10);
+    auto right = upper;
     auto captureRow = right.removeFromTop (rowHeight);
     settingsButton.setBounds (captureRow.removeFromRight ((right.getWidth() - 12) / 3));
     captureRow.removeFromRight (6);
@@ -2370,10 +2391,6 @@ void ProgressionBar::resized()
     redoButton.setBounds (smallRow.removeFromLeft (smallWidth));
     smallRow.removeFromLeft (6);
     quickTextButton.setBounds (smallRow);
-    right.removeFromTop (5);
-
-    // A small keyboard that shows where the chords sit
-    stripBounds = right.removeFromTop (rowHeight);
     right.removeFromTop (5);
 
     // Oct- and Oct+ with the register between them

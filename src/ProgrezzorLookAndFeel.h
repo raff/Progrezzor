@@ -107,18 +107,18 @@ inline juce::Rectangle<float> drawKey (juce::Graphics& g, juce::Rectangle<float>
                                        float lip, bool pressed, bool hover = false)
 {
     r = r.reduced (0.5f);
-    const float shadow = 2.0f;
+    const float shadow = 1.5f;
     const auto body = r.withTrimmedBottom (shadow);
     const float sink = pressed ? std::min (lip * 0.65f, 3.0f) : 0.0f; // pressed: a small, quiet dip
 
     // Shadow under the key, in two soft layers
-    g.setColour (juce::Colours::black.withAlpha (0.08f));
+    g.setColour (juce::Colours::black.withAlpha (0.03f));
     g.fillRoundedRectangle (body.translated (0.0f, shadow).expanded (0.6f, 0.0f), corner + 1.0f);
-    g.setColour (juce::Colours::black.withAlpha (0.14f));
+    g.setColour (juce::Colours::black.withAlpha (0.05f));
     g.fillRoundedRectangle (body.translated (0.0f, shadow * 0.5f), corner);
 
     // The lip, with a dark outline round the whole key
-    g.setGradientFill (juce::ColourGradient (base.darker (0.28f), 0.0f, body.getY(), base.darker (0.50f), 0.0f, body.getBottom(), false));
+    g.setGradientFill (juce::ColourGradient (base.darker (0.15f), 0.0f, body.getY(), base.darker (0.30f), 0.0f, body.getBottom(), false));
     g.fillRoundedRectangle (body, corner);
 
     // The face
@@ -142,13 +142,13 @@ inline juce::Rectangle<float> drawKey (juce::Graphics& g, juce::Rectangle<float>
     // The bevel: light along the top inside the edge, dark along the bottom
     g.setColour (juce::Colours::white.withAlpha (0.22f));
     g.drawRoundedRectangle (face.reduced (1.0f), corner - 1.0f, 1.0f);
-    g.setColour (juce::Colours::black.withAlpha (0.22f));
+    g.setColour (juce::Colours::black.withAlpha (0.08f));
     g.drawLine (face.getX() + corner * 0.6f, face.getBottom() - 1.5f, face.getRight() - corner * 0.6f, face.getBottom() - 1.5f, 1.0f);
 
     // The outline
-    g.setColour (base.darker (0.7f).withAlpha (0.7f));
+    g.setColour (base.darker (0.6f).withAlpha (0.35f));
     g.drawRoundedRectangle (body, corner, 1.0f);
-    g.setColour (base.darker (0.7f).withAlpha (0.7f));
+    g.setColour (base.darker (0.6f).withAlpha (0.35f));
     g.drawRoundedRectangle (face, corner, 1.0f);
     return face;
 }
