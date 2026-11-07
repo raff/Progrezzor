@@ -58,14 +58,18 @@ retter de gamle linjer om mulighed A og B. Branchen merges ikke før du siger de
 
 ## 2e. Learn (branch feature/learn-mode)
 
-- [ ] Learn-knappen (nederst til venstre, under Arp): tænd den med en rundgang i bjælken (fx fra Suggest). Den første blok pulserer, og overskriften siger "Play C (1 of 4)".
-- [ ] Spil den rigtige pad (mus eller MIDI-tastatur): blokken får et grønt mærke, og næste blok pulserer.
-- [ ] Spil en forkert pad: den blinker rødt, intet andet sker. Efter to fejl lyser den rigtige pad, og de rigtige toner lyser lyserødt på det lille klaviatur.
-- [ ] Settings > "Show hints from the start": hintet er der fra første forsøg.
-- [ ] Når alle er spillet: "All done!". Tryk Learn igen for at starte forfra.
-- [ ] I Learn spiller loopet ikke, og Arp er ignoreret (du hører hele akkorden).
-- [ ] Ændr bjælken mens Learn er tændt: det starter forfra.
-- [ ] Er det til at forstå uden forklaring? Hvad savner du først: rigtige toner på et tastatur, tempo, eller at høre rundgangen først?
+Kræver et MIDI-tastatur.
+
+- [ ] Learn-knappen (nederst til venstre, under Arp): tænd den med en rundgang i bjælken (fx fra Suggest). Den første blok pulserer, og overskriften siger "Play C on your keyboard (1 of 4)".
+- [ ] Hold tonerne i akkorden nede på tastaturet (fx C, E og G): blokken får et grønt mærke, og næste pulserer. Prøv en anden oktav og en anden rækkefølge. Det skal også være rigtigt.
+- [ ] Slip tangenterne før næste akkord. Hold du dem, tæller de ikke for den næste.
+- [ ] Spil en forkert akkord og hold den lidt: blokken får en rød kant. Slip tangenterne uden at have ramt: også et forkert forsøg.
+- [ ] Efter to fejl kommer et klaviaturudsnit med de rigtige taster lyserøde og nodenavne. Dine egne taster lyser grønne (rigtige) eller blå (forkerte).
+- [ ] Settings > "Show hints from the start": udsnittet er der fra første forsøg.
+- [ ] Klik på en pad i Learn: det tæller ikke, men den lyder.
+- [ ] Du hører de toner, du spiller, og de sendes ud som MIDI.
+- [ ] Når alle er spillet: "All done!". Tryk Learn igen for at starte forfra. Slå Learn fra: tangenterne er pads igen.
+- [ ] Er klaviaturudsnittet stort og tydeligt nok? Skal det kunne spilles med musen, hvis man ikke har et tastatur?
 
 ## 3. Tidligere ting, der stadig venter
 

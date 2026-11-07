@@ -11,7 +11,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Added
-- **Learn.** A Learn button in the bar: play the chords of the progression one after the other on the pads or a MIDI keyboard. The next chord is marked in the bar, a right pad ticks it off, a wrong one flashes red, and after two wrong tries the right pad and its notes light up. Hints can be on from the start in Settings.
+- **Learn.** A Learn button in the bar: hold the keys of each chord of the progression on a MIDI keyboard, one chord after the other, in any octave. The next chord is marked in the bar, a right chord ticks it off, and a wrong one flashes red. After two wrong tries, or from the start if you switch on hints in Settings, a piece of a keyboard shows which keys to hold.
 
 ### Changed
 - A new project starts in C Major with the Bright mood (it was A Minor and Melancholic).

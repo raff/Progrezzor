@@ -1259,40 +1259,76 @@ int main (int argc, char** argv)
         processor.setLearnHints (false);
         processor.setProgression ({ { { 0, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },   // C
                                     { { 5, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },   // F
-                                    { { 7, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },   // G
-                                    { { 6, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false } }); // F# : no pad plays it
+                                    { { 9, engine::ChordType::Minor, engine::kAutoInversion }, 4.0, false } }); // Am
         settle (80);
         check (! processor.isLearning() && ! learnBar.getLearnButton().getToggleState(), "Learn is off to begin with");
 
+        {
+            // No key from an earlier test is still down
+            juce::MidiBuffer clear;
+            clear.addEvent (juce::MidiMessage::allNotesOff (1), 0);
+            juce::AudioBuffer<float> audio (2, 512);
+            processor.processBlock (audio, clear);
+        }
         learnBar.getLearnButton().triggerClick();
         settle (120);
         check (processor.isLearning() && learnBar.getLearnButton().getToggleState(), "the Learn button switches Learn mode on");
-        // The pad of a chord in C Major: C is pad 1, F is pad 4, G is pad 5. Nothing is played yet, so the first block is the target.
-        const auto playPad = [&] (int pad)
-        {
-            processor.pressPad (pad);
-            runBlock (processor);
-            processor.releasePad (pad);
-            runBlock (processor);
-            settle (80);
-        };
-        check (! learnUi.getPad (0).isSuggested(), "(no pad is glowing without hints)");
-
         check (learnBar.getLearnTarget() == 0, "the first chord is the target");
-        playPad (3); // F: wrong, C is next
-        check (learnBar.getLearnTarget() == 0 && ! learnUi.getPad (0).isLearnTarget(), "a wrong pad changes nothing, and there is no hint yet");
-        playPad (4); // G: wrong
-        settle (60);
-        check (learnBar.getLearnTarget() == 0 && learnUi.getPad (0).isLearnTarget(), "after two wrong tries the pad to play glows");
-        snapshot ("learn_hint");
-        playPad (0); // C: right
-        check (learnBar.getLearnTarget() == 1 && ! learnUi.getPad (0).isLearnTarget(), "the right pad moves on to the next chord, and the hint goes out");
-        playPad (3); // F: right
-        check (learnBar.getLearnTarget() == 2, "on to the third");
-        playPad (4); // G: right, and the last block (F#) has no pad, so that is the end
+
+        // Keys of a MIDI keyboard: the notes in a block of audio, with the keys held down in later blocks
+        std::vector<int> heard;
+        const auto pressKeys = [&] (std::initializer_list<int> down, std::initializer_list<int> up, int wait)
+        {
+            juce::MidiBuffer in;
+            for (int n : up)
+                in.addEvent (juce::MidiMessage::noteOff (1, n), 0);
+            for (int n : down)
+                in.addEvent (juce::MidiMessage::noteOn (1, n, (juce::uint8) 90), 0);
+            juce::MidiBuffer out;
+            juce::AudioBuffer<float> audio (2, 512);
+            processor.processBlock (audio, in);
+            (void) out;
+            settle (wait);
+        };
+        const auto soundingKeys = [&] { return processor.soundingNotes(); };
+
+        // A pad click is not a chord in Learn mode
+        processor.pressPad (0);
+        runBlock (processor);
+        processor.releasePad (0);
+        runBlock (processor);
         settle (120);
-        check (learnBar.getLearnTarget() == -1, "all played: the block without a pad is skipped and it is finished");
+        check (learnBar.getLearnTarget() == 0, "clicking the pad does not count: the keys do");
+
+        // The right keys held at the same time: C E G
+        pressKeys ({ 60, 64 }, {}, 60);
+        check (learnBar.getLearnTarget() == 0, "two of the three keys is not the chord yet, and not wrong either");
+        pressKeys ({ 67 }, {}, 120);
+        check (learnBar.getLearnTarget() == 1, "the three keys of C move on to the next chord");
+        check (soundingKeys() == 3, "the keys play their own notes");
+        pressKeys ({}, { 60, 64, 67 }, 80);
+        check (soundingKeys() == 0, "and let go of them again");
+
+        // F in another octave and order, with a doubled note: right
+        pressKeys ({ 69, 53, 60, 65 }, {}, 120);
+        check (learnBar.getLearnTarget() == 2, "F in another octave and order is right");
+        pressKeys ({}, { 69, 53, 60, 65 }, 80);
+
+        // The wrong chord, held: red, and after two wrong tries the hint
+        pressKeys ({ 60, 64, 67 }, {}, 700);
+        check (learnBar.getLearnTarget() == 2, "the wrong chord does not move on");
+        snapshot ("learn_wrong");
+        pressKeys ({}, { 60, 64, 67 }, 120);
+        pressKeys ({ 62, 65 }, {}, 60);
+        pressKeys ({}, { 62, 65 }, 120);
+        settle (60);
+        snapshot ("learn_hint");
+        pressKeys ({ 57, 60, 64 }, {}, 120); // Am
+        settle (120);
+        check (learnBar.getLearnTarget() == -1, "the last chord finishes it");
         snapshot ("learn_done");
+        pressKeys ({}, { 57, 60, 64 }, 80);
+        check (soundingKeys() == 0, "nothing hangs");
 
         // The loop is silent in Learn mode, and so is the arp
         FakeTransport learnTransport;
@@ -1306,29 +1342,21 @@ int main (int argc, char** argv)
         runBlock (processor);
         processor.setPlayHead (nullptr);
 
-        *processor.arpOnParam = true;
-        runBlock (processor);
-        processor.pressPad (0);
-        runBlock (processor);
-        check (processor.soundingNotes() == 3, "in Learn mode a pad plays the whole chord, also with the arp on");
-        processor.releasePad (0);
-        runBlock (processor);
-        *processor.arpOnParam = false;
-
-        // Hints from the settings: the pad glows from the start. They are kept in the settings file.
+        // Hints from the settings are kept for every project
         processor.setLearnHints (true);
-        learnBar.setEditing (true);
-        settle (120);
         {
             ProgrezzorProcessor another;
             check (another.getLearnHints(), "the choice about hints is kept for every project");
         }
         processor.setLearnHints (false);
 
-        // Switching it off again
+        // Switching it off again: the keys are the pads again
         learnBar.getLearnButton().triggerClick();
         settle (120);
         check (! processor.isLearning(), "the Learn button switches it off again");
+        pressKeys ({ 60 }, {}, 40);
+        check (processor.litPads() != 0, "with Learn off a key plays a pad again");
+        pressKeys ({}, { 60 }, 40);
         processor.setProgression ({});
         settle (60);
     }

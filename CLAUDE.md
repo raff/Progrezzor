@@ -161,15 +161,17 @@ Besluttet af Henrik 2026-11-07. Arp-knappen (nederst til venstre i bjælken, und
 - Rytmen er et Euklid-mønster og koden er tilpasset fra ../seqverse (Music.h), uden arp-delene fra SeqVerses skalaer.
 - Ingen hængende noter: hver arp-node har sin egen note off, og alt stopper ved slip, transport stop, bypass og når Arp skiftes.
 
-## Learn (trin 1, på branchen feature/learn-mode)
+## Learn (på branchen feature/learn-mode)
 
-Henrik ønskede en Learn-knap (2026-11-07). Knappen "Learn" nederst til venstre i bjælken tænder og slukker den.
+Henrik ønskede en Learn-knap (2026-11-07), og at brugeren skal spille de RIGTIGE TANGENTER på et MIDI-tastatur, ikke bare trykke på pads. Knappen "Learn" nederst til venstre i bjælken tænder og slukker den.
 
-- Brugeren spiller rundgangens akkorder én ad gangen med musen eller MIDI-tastaturet (pads). Den næste akkord er markeret i bjælken (pulserende kant og en lille pil, med "Play C (2 of 4)" i overskriften). Rigtig pad: blokken får et grønt mærke og målet rykker videre. Forkert pad: den får en rød kant et øjeblik, og ingenting andet sker.
-- Rigtig betyder samme grundtone og samme slags akkord. Omvending og oktav er ligegyldige. Blokke, som ingen pad kan spille, springes over.
-- Hint: efter to forkerte forsøg lyser den rigtige pad, og de rigtige toner lyser på det lille klaviatur. Hint kan også være slået til fra starten i Settings ("Show hints from the start"), gemt for alle projekter.
-- Den venter på brugeren, der er intet tempo. Loopet er tavst og arpen slået fra, så man hører den hele akkord. Ændres bjælken, starter forfra.
-- Ikke med endnu (BACKLOG.md): spil de rigtige toner på et tastatur, spil med i takt, og at høre rundgangen først.
+- Brugeren holder tonerne i den næste akkord nede samtidig på et MIDI-tastatur. Den næste akkord er markeret i bjælken (pulserende kant og en lille pil, med "Play Am on your keyboard (3 of 3)" i overskriften).
+- Rigtig betyder, at præcis tonerne i akkorden holdes nede, i en hvilken som helst oktav og rækkefølge (så en hvilken som helst omvending og fordobling er rigtig). Ekstra toner gør det forkert. Klik på pads tæller ikke.
+- Rigtig akkord: blokken får et grønt mærke og målet rykker videre. Tangenterne skal først slippes, før næste akkord bedømmes. Forkert: blokken får en rød kant et øjeblik, når de holdes lidt, eller når tangenterne slippes uden at have været rigtige. Toner der kommer én ad gangen er ikke forkerte, før der er nok tangenter til en akkord.
+- I Learn spiller tangenterne deres egne toner (de er ikke pads), også ud som MIDI.
+- Hint: efter to forkerte forsøg, eller fra start hvis det er slået til i Settings ("Show hints from the start", gemt for alle projekter), vises et udsnit af et klaviatur nederst i rundgangsvinduet med de taster, der skal holdes nede (lyserøde, med nodenavne). De taster, brugeren holder, lyser grønt (rigtig) eller blåt (ikke en del af akkorden). De rigtige toner lyser også på det lille klaviatur i højre panel.
+- Den venter på brugeren, der er intet tempo. Loopet er tavst og arpen slået fra. Ændres bjælken, starter forfra.
+- Ikke med endnu (BACKLOG.md): spil med i takt, og at høre rundgangen først.
 
 ## Quick-text
 

@@ -77,23 +77,6 @@ void PadButton::setNumeral (const juce::String& newNumeral)
     }
 }
 
-void PadButton::setLearnTarget (bool nowTarget)
-{
-    if (nowTarget != learnTarget)
-    {
-        learnTarget = nowTarget;
-        repaint();
-    }
-}
-
-void PadButton::flashWrong()
-{
-    wrongUntil = juce::Time::getMillisecondCounter() + 450;
-    repaint();
-    juce::Component::SafePointer<PadButton> safe (this);
-    juce::Timer::callAfterDelay (480, [safe] { if (safe != nullptr) safe->repaint(); });
-}
-
 void PadButton::setLit (bool nowLit)
 {
     if (nowLit != lit)
@@ -169,19 +152,6 @@ void PadButton::paint (juce::Graphics& g)
     g.drawFittedText (chordName, textArea.translated (0, 2), juce::Justification::centred, 1, 0.6f);
     g.setColour (ink);
     g.drawFittedText (chordName, textArea, juce::Justification::centred, 1, 0.6f);
-
-    // Learn: the pad to play now has a ring that pulses, and a pad that was wrong has a red edge for a moment
-    if (learnTarget)
-    {
-        const float pulse = 0.5f + 0.5f * std::sin ((float) juce::Time::getMillisecondCounter() * 0.008f);
-        g.setColour (theme::accent.withAlpha (0.45f + 0.5f * pulse));
-        g.drawRoundedRectangle (face.reduced (1.5f), corner, 4.0f + 2.0f * pulse);
-    }
-    if (juce::Time::getMillisecondCounter() < wrongUntil)
-    {
-        g.setColour (theme::warn);
-        g.drawRoundedRectangle (face.reduced (1.5f), corner, 5.0f);
-    }
 
     // Where the chord sits in the key (I, ii, III ...), small at the top
     if (numeral.isNotEmpty())
@@ -588,6 +558,14 @@ void BlockButton::setLearn (bool nowDone, bool nowTarget)
     }
 }
 
+void BlockButton::flashWrong()
+{
+    wrongUntil = juce::Time::getMillisecondCounter() + 500;
+    repaint();
+    juce::Component::SafePointer<BlockButton> safe (this);
+    juce::Timer::callAfterDelay (530, [safe] { if (safe != nullptr) safe->repaint(); });
+}
+
 void BlockButton::setDropTarget (bool nowTarget)
 {
     if (nowTarget != dropTarget)
@@ -682,7 +660,12 @@ void BlockButton::paint (juce::Graphics& g)
         g.setColour (theme::shade.withAlpha (0.45f));
         g.drawEllipse (light, 1.0f);
     }
-    if (learnTarget) // Learn: this is the chord to play now
+    if (juce::Time::getMillisecondCounter() < wrongUntil) // Learn: that was not it
+    {
+        g.setColour (theme::warn);
+        g.drawRoundedRectangle (body.expanded (0.5f), 9.5f, 5.0f);
+    }
+    else if (learnTarget) // Learn: this is the chord to play now
     {
         const float pulse = 0.5f + 0.5f * std::sin ((float) juce::Time::getMillisecondCounter() * 0.008f);
         g.setColour (theme::accent.withAlpha (0.55f + 0.45f * pulse));
@@ -1302,24 +1285,152 @@ public:
     }
 };
 
+// The hint of Learn mode: a piece of a keyboard (two or three octaves) with the keys to hold lit up, and the keys you hold now
+// in green, so that you can see how close you are. Any octave is right, so it is only one way to play the chord.
+class ProgressionBar::LearnKeys : public juce::Component
+{
+public:
+    std::vector<int> target, held;
+    bool flats = false;
+    juce::String caption;
+
+    LearnKeys() { setInterceptsMouseClicks (false, false); }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto r = getLocalBounds().toFloat().reduced (3.0f);
+        g.setColour (theme::shade.withAlpha (0.35f));
+        g.fillRoundedRectangle (r.translated (0.0f, 3.0f), 12.0f);
+        g.setColour (theme::panel);
+        g.fillRoundedRectangle (r, 12.0f);
+        g.setColour (theme::accent.withAlpha (0.85f));
+        g.drawRoundedRectangle (r, 12.0f, 2.0f);
+
+        if (target.empty())
+            return;
+
+        // Which part of the keyboard: from the C below the lowest key to show, over as many octaves as the chord needs
+        const int lowest = *std::min_element (target.begin(), target.end());
+        const int highest = *std::max_element (target.begin(), target.end());
+        const int first = (lowest / 12) * 12;
+        const int octaves = highest >= first + 24 ? 3 : 2;
+        const int lastNote = first + 12 * octaves; // the C that ends the piece
+
+        const auto keys = r.reduced (14.0f, 10.0f).withTrimmedTop (16.0f);
+        const int whiteCount = 7 * octaves + 1;
+        const float whiteWidth = keys.getWidth() / (float) whiteCount;
+        const auto isBlack = [] (int note) { const int n = note % 12; return n == 1 || n == 3 || n == 6 || n == 8 || n == 10; };
+        const auto contains = [] (const std::vector<int>& list, int note) { return std::find (list.begin(), list.end(), note) != list.end(); };
+
+        // White key positions
+        std::vector<std::pair<int, float>> whites; // note, x
+        float x = keys.getX();
+        for (int note = first; note <= lastNote; ++note)
+            if (! isBlack (note))
+            {
+                whites.push_back ({ note, x });
+                x += whiteWidth;
+            }
+        const auto xOfNote = [&] (int note) // the left edge of a key, a black key halfway over the white one below it
+        {
+            for (const auto& w : whites)
+                if (w.first == note)
+                    return w.second;
+            for (const auto& w : whites)
+                if (w.first == note - 1)
+                    return w.second + whiteWidth * 0.7f;
+            return keys.getX();
+        };
+
+        const auto fill = [&] (int note) -> juce::Colour
+        {
+            const bool wanted = contains (target, note), down = contains (held, note);
+            if (wanted && down)
+                return theme::go;
+            if (wanted)
+                return theme::hotPink;
+            if (down)
+                return theme::chordColour (7);
+            return isBlack (note) ? theme::keyBlack : theme::keyWhite;
+        };
+
+        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+            g.setFont (l->titleFont (12.0f));
+        for (const auto& w : whites)
+        {
+            const auto key = juce::Rectangle<float> (w.second, keys.getY(), whiteWidth, keys.getHeight());
+            g.setColour (fill (w.first));
+            g.fillRect (key.reduced (0.6f, 0.0f));
+            g.setColour (theme::keyLine);
+            g.drawRect (key, 0.8f);
+            if (contains (target, w.first)) // the name of a key to hold
+            {
+                g.setColour (theme::onAccent);
+                g.drawText (juce::String (engine::noteName (w.first, flats)), key.withTrimmedTop (key.getHeight() * 0.62f).toNearestInt(), juce::Justification::centred);
+            }
+        }
+        for (int note = first; note <= lastNote; ++note)
+            if (isBlack (note))
+            {
+                const auto key = juce::Rectangle<float> (xOfNote (note), keys.getY(), whiteWidth * 0.62f, keys.getHeight() * 0.6f);
+                g.setColour (fill (note));
+                g.fillRect (key);
+                g.setColour (theme::shade.withAlpha (0.7f));
+                g.drawRect (key, 0.8f);
+                if (contains (target, note))
+                {
+                    g.setColour (theme::onAccent);
+                    g.drawText (juce::String (engine::noteName (note, flats)), key.toNearestInt(), juce::Justification::centred);
+                }
+            }
+
+        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+            g.setFont (l->labelFont (12.0f));
+        g.setColour (theme::dimText);
+        g.drawText (caption, r.withHeight (18.0f).reduced (14.0f, 0.0f).translated (0.0f, 2.0f).toNearestInt(), juce::Justification::centredLeft);
+    }
+};
+
 void ProgressionBar::toggleLearn()
 {
     processor.setLearning (! processor.isLearning());
     updateButtons();
 }
 
-void ProgressionBar::setLearn (bool active, int target, const std::vector<bool>& done, const std::vector<int>& targetNotes, bool showNotes, int playable)
+void ProgressionBar::setLearn (bool active, int target, const std::vector<bool>& done, const std::vector<int>& targetNotes,
+                               const std::vector<int>& heldNotes, bool showHint, int total)
 {
-    learnPlayable = playable;
+    const bool hintBefore = learnActive && learnShowHint && learnTarget >= 0;
     learnActive = active;
     learnTarget = target;
     learnDone = done;
     learnNotes = targetNotes;
-    learnShowNotes = showNotes;
+    learnHeld = heldNotes;
+    learnShowHint = showHint;
+    learnTotal = total;
     for (int i = 0; i < blocks.size(); ++i)
         blocks[i]->setLearn (active && i < (int) done.size() && done[(size_t) i] && i != target, active && i == target);
+
+    const bool hintNow = active && showHint && target >= 0;
+    if (hintNow)
+    {
+        learnKeys->target = targetNotes;
+        learnKeys->held = heldNotes;
+        learnKeys->flats = engine::keyUsesFlats (processor.getKey());
+        learnKeys->caption = "Hold these keys at the same time (any octave)";
+        learnKeys->repaint();
+    }
+    if (hintNow != hintBefore)
+        resized(); // the keyboard takes room from the blocks
+    learnKeys->setVisible (hintNow);
     repaint (stripBounds);
     repaint (labelBounds.withWidth (getWidth()));
+}
+
+void ProgressionBar::flashLearnWrong()
+{
+    if (learnTarget >= 0 && learnTarget < blocks.size())
+        blocks[learnTarget]->flashWrong();
 }
 
 void ProgressionBar::toggleArp()
@@ -1346,7 +1457,9 @@ std::unique_ptr<juce::Component> ProgressionBar::makeArpPanel()
 
 ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
 {
-    learnButton.setTooltip ("Learn: play the chords of the progression, one after the other");
+    learnKeys = std::make_unique<LearnKeys>();
+    addChildComponent (*learnKeys);
+    learnButton.setTooltip ("Learn: hold the keys of each chord of the progression on your MIDI keyboard, one chord after the other");
     learnButton.setComponentID ("learn");
     learnButton.onClick = [this] { toggleLearn(); };
     addAndMakeVisible (learnButton);
@@ -2007,7 +2120,7 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
     g.drawRect (left, area.getY(), right - left, area.getHeight(), 1.6f);
 
     // Learn: the notes of the chord to play, when the hint is on
-    if (learnActive && learnShowNotes)
+    if (learnActive && learnShowHint)
         for (int note : learnNotes)
             if (note >= firstNote && note < lastNote)
             {
@@ -2118,7 +2231,7 @@ void ProgressionBar::paint (juce::Graphics& g)
         {
             const auto key = processor.getKey();
             juce::String status;
-            const int total = learnPlayable;
+            const int total = learnTotal;
             int done = 0;
             for (bool d : learnDone)
                 done += d ? 1 : 0;
@@ -2126,7 +2239,7 @@ void ProgressionBar::paint (juce::Graphics& g)
                 status = total > 0 ? "All done! Press Learn to go again" : "Nothing to learn yet: put chords in the bar";
             else if (learnTarget < (int) processor.getProgression().size())
                 status = "Play " + juce::String (engine::chordName (processor.getProgression()[(size_t) learnTarget].chord, key))
-                         + "   (" + juce::String (done + 1) + " of " + juce::String (total) + ")";
+                         + " on your keyboard   (" + juce::String (done + 1) + " of " + juce::String (total) + ")";
             g.setFont (l->titleFont (14.0f));
             g.setColour (learnTarget < 0 ? theme::go : theme::accent);
             g.drawText (status, trayBounds.withHeight (labelBounds.getHeight()).withY (labelBounds.getY()).withTrimmedLeft (130), juce::Justification::centredLeft);
@@ -2301,6 +2414,14 @@ void ProgressionBar::resized()
     }
 
     area = area.reduced (8, 6); // the blocks sit a little inside the tray
+
+    // Learn: the keyboard with the keys to hold sits at the bottom of the tray, and the blocks have what is left
+    if (learnActive && learnShowHint && learnTarget >= 0)
+    {
+        const auto keysArea = area.removeFromBottom (92);
+        area.removeFromBottom (4);
+        learnKeys->setBounds (keysArea.withSizeKeepingCentre (std::min (keysArea.getWidth(), 520), keysArea.getHeight()));
+    }
 
     if (textMode)
     {
@@ -2552,22 +2673,10 @@ void ProgrezzorEditor::timerCallback()
         pad.setDragEnabled (processor.isEditing() && ! bar.isInTextMode());
 }
 
-// Learn mode
-int ProgrezzorEditor::padForChord (const engine::Chord& chord) const
-{
-    for (int i = 0; i < ProgrezzorProcessor::kNumPads; ++i)
-        if (engine::sameChordForLearning (processor.getPadChord (i), chord))
-            return i;
-    return -1;
-}
-
+// Learn mode: the user holds the keys of the chord on a MIDI keyboard
 void ProgrezzorEditor::startLearnSession()
 {
-    const auto& progression = processor.getProgression();
-    std::vector<bool> playable;
-    for (const auto& block : progression)
-        playable.push_back (padForChord (block.chord) >= 0);
-    learn.start (progression, playable);
+    learn.start (processor.getProgression());
     learnVersion = processor.getProgressionVersion();
 }
 
@@ -2583,9 +2692,7 @@ void ProgrezzorEditor::updateLearning()
 
     if (! on)
     {
-        for (auto& pad : pads)
-            pad.setLearnTarget (false);
-        bar.setLearn (false, -1, {}, {}, false, 0);
+        bar.setLearn (false, -1, {}, {}, {}, false, 0);
         return;
     }
 
@@ -2593,36 +2700,37 @@ void ProgrezzorEditor::updateLearning()
         startLearnSession();
 
     const auto& progression = processor.getProgression();
-    for (const auto& played : processor.takeNewlyPlayed())
-        if (learn.play (played, progression) == engine::LearnSession::Outcome::Wrong)
-            if (const int pad = padForChord (played); pad >= 0)
-                pads[(size_t) pad].flashWrong();
+
+    // The keys that are held now
+    unsigned classes = 0;
+    std::vector<int> heldNotes;
+    for (int note = 0; note < 128; ++note)
+        if (processor.isKeyHeld (note))
+        {
+            classes |= 1u << (note % 12);
+            heldNotes.push_back (note);
+        }
+
+    if (learn.update (classes, (int) heldNotes.size(), juce::Time::getMillisecondCounterHiRes(), progression, processor.getKey().tonic)
+        == engine::LearnSession::Outcome::Wrong)
+        bar.flashLearnWrong();
 
     const int target = learn.target();
     const bool hint = processor.getLearnHints() || learn.needsHint();
-    const int targetPad = target >= 0 && target < (int) progression.size() ? padForChord (progression[(size_t) target].chord) : -1;
-    for (int i = 0; i < ProgrezzorProcessor::kNumPads; ++i)
-        pads[(size_t) i].setLearnTarget (hint && i == targetPad);
-
     std::vector<bool> done;
-    for (int i = 0; i < learn.total(); ++i)
+    for (int i = 0; i < learn.blockCount(); ++i)
         done.push_back (learn.isPlayed (i));
     std::vector<int> notes;
     if (target >= 0 && target < (int) progression.size())
     {
-        const auto voicing = engine::shiftedByOctaves (engine::voiceChord (progression[(size_t) target].chord, processor.getKey().tonic), processor.getTotalOctave());
+        const auto voicing = engine::voiceChord (progression[(size_t) target].chord, processor.getKey().tonic);
         for (int i = 0; i < voicing.count; ++i)
             notes.push_back (voicing.notes[(size_t) i]);
     }
-    bar.setLearn (true, target, done, notes, hint, learn.playableCount());
+    bar.setLearn (true, target, done, notes, heldNotes, hint, learn.blockCount());
 
-    // The target pulses: keep it moving
     if (target >= 0)
-    {
-        if (targetPad >= 0 && hint)
-            pads[(size_t) targetPad].repaint();
-        bar.repaint();
-    }
+        bar.repaint(); // the target pulses: keep it moving
 }
 
 // The pads that fit well after the last chord: the one played last on a pad, or else the last block in the bar

@@ -1078,40 +1078,71 @@ void testRomanNumerals()
 void testLearn()
 {
     std::printf ("learn mode\n");
+    const int tonic = 0; // C
     Progression p;
-    const Chord am { 0, ChordType::Minor, kAutoInversion }, f { 8, ChordType::Major, kAutoInversion };
-    const Chord c { 3, ChordType::Major, kAutoInversion }, g { 10, ChordType::Major, kAutoInversion };
-    for (const auto& chord : { am, f, c, g })
+    const Chord c { 0, ChordType::Major, kAutoInversion }, f { 5, ChordType::Major, kAutoInversion };
+    const Chord am { 9, ChordType::Minor, kAutoInversion }, g { 7, ChordType::Major, kAutoInversion };
+    for (const auto& chord : { c, f, am, g })
         p.push_back ({ chord, 4.0 });
 
+    const auto classesOf = [] (std::initializer_list<int> notes)
+    {
+        unsigned bits = 0;
+        for (int n : notes)
+            bits |= 1u << (n % 12);
+        return bits;
+    };
+    checkEqual (std::to_string (chordPitchClasses (c, tonic)), std::to_string (classesOf ({ 60, 64, 67 })), "C is C, E and G");
+    checkEqual (std::to_string (chordPitchClasses (am, tonic)), std::to_string (classesOf ({ 57, 60, 64 })), "Am is A, C and E");
+    checkEqual (std::to_string (chordPitchClasses (Chord { 0, ChordType::Major, kAutoInversion }, 2)), std::to_string (classesOf ({ 62, 66, 69 })), "the same chord in D is D, F# and A");
+
     LearnSession session;
-    check (! session.started() && session.play (am, p) == LearnSession::Outcome::Nothing, "nothing happens before the session starts");
-    session.start (p, { true, true, true, true });
-    check (session.started() && session.target() == 0 && session.total() == 4 && session.doneCount() == 0, "it starts on the first block");
+    double now = 0.0;
+    const auto hold = [&] (std::initializer_list<int> notes, double ms = 33.0)
+    {
+        now += ms;
+        return session.update (classesOf (notes), (int) notes.size(), now, p, tonic);
+    };
+    const auto release = [&] { now += 33.0; return session.update (0, 0, now, p, tonic); };
 
-    check (session.play (f, p) == LearnSession::Outcome::Wrong && session.tries() == 1 && session.target() == 0, "a wrong chord counts a try and stays on the block");
+    check (! session.started() && hold ({ 60 }) == LearnSession::Outcome::Nothing, "nothing happens before the session starts");
+    session.start (p);
+    check (session.started() && session.target() == 0 && session.blockCount() == 4 && session.playedCount() == 0, "it starts on the first block");
+
+    // Notes come one at a time: that is not a mistake
+    check (hold ({ 60 }) == LearnSession::Outcome::Nothing && hold ({ 60, 64 }) == LearnSession::Outcome::Nothing && session.tries() == 0, "the keys of a chord pressed one after the other are not wrong while the chord is not complete");
+    check (hold ({ 60, 64, 67 }) == LearnSession::Outcome::Right && session.target() == 1 && session.isPlayed (0), "all three keys: the chord is right, and the next block is the target");
+
+    // After a right chord the keys must come up first
+    check (hold ({ 60, 64, 67 }) == LearnSession::Outcome::Nothing && session.target() == 1, "the same keys held on do not count for the next chord");
+    release();
+
+    // Any octave and any order is the same chord
+    check (hold ({ 53, 57, 72 }) == LearnSession::Outcome::Right && session.target() == 2, "F in any octave and inversion (F A C, with the C high) is right");
+    release();
+
+    // The wrong chord, held: a try after a moment
+    check (hold ({ 60, 64, 67 }) == LearnSession::Outcome::Nothing && session.tries() == 0, "the wrong chord is not wrong at the very first moment");
+    check (hold ({ 60, 64, 67 }, 600.0) == LearnSession::Outcome::Wrong && session.tries() == 1 && session.target() == 2, "held for a moment it is a wrong try, and it stays on the block");
+    check (hold ({ 60, 64, 67 }, 600.0) == LearnSession::Outcome::Nothing && session.tries() == 1, "and it is counted once");
     check (! session.needsHint(), "no hint after one wrong try");
-    check (session.play (g, p) == LearnSession::Outcome::Wrong && session.needsHint(), "the hint comes after two wrong tries");
-    check (session.play (Chord { 0, ChordType::Minor, 2, 1 }, p) == LearnSession::Outcome::Right && session.target() == 1 && session.tries() == 0 && session.isDone (0),
-           "the right chord, in another inversion and octave, is right, and the next block is the target");
-    check (session.play (f, p) == LearnSession::Outcome::Right && session.play (c, p) == LearnSession::Outcome::Right && ! session.finished(), "on through the progression");
-    check (session.play (Chord { 0, ChordType::Major, kAutoInversion }, p) == LearnSession::Outcome::Wrong, "the same root with another kind of chord is wrong");
-    check (session.play (g, p) == LearnSession::Outcome::Finished && session.finished() && session.target() == -1 && session.doneCount() == 4, "the last chord finishes it");
-    check (session.play (am, p) == LearnSession::Outcome::Nothing, "and nothing counts after that");
+    release();
 
-    // Blocks that no pad can play are skipped
-    session.start (p, { true, false, true, false });
-    check (session.target() == 0 && session.isDone (1) && session.isDone (3) && session.isSkipped (1) && ! session.isPlayed (1), "blocks without a pad are skipped");
-    check (session.playableCount() == 2 && session.playedCount() == 0, "only the other two count");
-    session.play (am, p);
-    check (session.target() == 2, "the target jumps over a skipped block");
-    check (session.play (c, p) == LearnSession::Outcome::Finished && session.playedCount() == 2 && session.isPlayed (0) && session.isPlayed (2), "and the session finishes when the last playable block is done");
+    // A wrong chord that is let go quickly is a try too
+    check (hold ({ 60, 63 }) == LearnSession::Outcome::Nothing, "two keys pressed");
+    check (release() == LearnSession::Outcome::Wrong && session.tries() == 2 && session.needsHint(), "let go without being right: a wrong try, and the hint comes after two");
 
-    // An empty progression, and one with nothing playable
-    session.start ({}, {});
+    // A right chord with an extra note is wrong
+    check (hold ({ 57, 60, 64, 66 }, 700.0) == LearnSession::Outcome::Nothing, "an extra note is not the first moment");
+    check (hold ({ 57, 60, 64, 66 }, 700.0) == LearnSession::Outcome::Wrong, "the right notes and one more is wrong");
+    release();
+    check (hold ({ 57, 60, 64 }) == LearnSession::Outcome::Right && session.target() == 3 && session.tries() == 0, "the right chord is right, and the tries start over on the next block");
+    release();
+    check (hold ({ 55, 59, 62 }) == LearnSession::Outcome::Finished && session.finished() && session.target() == -1 && session.playedCount() == 4, "the last chord finishes it");
+    check (hold ({ 60 }) == LearnSession::Outcome::Nothing, "and nothing counts after that");
+
+    session.start ({});
     check (! session.started(), "an empty bar has nothing to learn");
-    session.start (p, { false, false, false, false });
-    check (session.finished(), "a bar where no block can be played is finished at once");
 }
 
 void testTotalOctave()

@@ -4,21 +4,28 @@
 
 #include <vector>
 
+#include "ChordEngine.h"
 #include "Progression.h"
 
-// Learn mode: the user plays the chords of the progression one after the other. The session knows which block is next, counts
-// the wrong tries, and says when the whole progression has been played. It waits for the user: there is no tempo. Pure C++,
-// no JUCE.
+// Learn mode: the user plays the chords of the progression one after the other, on the keys of a MIDI keyboard. The session
+// knows which block is next, looks at which keys are held, counts the wrong tries, and says when the whole progression has been
+// played. It waits for the user: there is no tempo. Pure C++, no JUCE.
 //
-// A chord is "right" when it has the same root and the same kind as the block's chord (an inversion or an octave does not
-// matter). A block that no pad can play is skipped.
+// A chord is right when the keys held are exactly the notes of the chord, in any octave and in any order (so any inversion and
+// any doubling is right), and all of them are held at the same time. Other notes held make it wrong.
 namespace engine
 {
-constexpr int kLearnHintAfterTries = 2; // after this many wrong tries the hint is shown, whatever the settings say
+constexpr int kLearnHintAfterTries = 2;      // after this many wrong tries the hint is shown, whatever the settings say
+constexpr double kLearnMismatchMs = 450.0;   // enough keys held for a chord, but not the right ones, for this long: a wrong try
 
-inline bool sameChordForLearning (const Chord& a, const Chord& b)
+// The twelve pitch classes of a chord in a key, as bits (bit 0 is C)
+inline unsigned chordPitchClasses (const Chord& chord, int tonic)
 {
-    return wrap12 (a.root) == wrap12 (b.root) && a.type == b.type;
+    const auto& shape = shapeOf (chord.type);
+    unsigned classes = 0;
+    for (int i = 0; i < shape.count; ++i)
+        classes |= 1u << wrap12 (tonic + chord.root + shape.intervals[i]);
+    return classes;
 }
 
 class LearnSession
@@ -26,72 +33,116 @@ class LearnSession
 public:
     enum class Outcome { Nothing, Right, Wrong, Finished };
 
-    // `playable[i]` is false for a block that no pad can play: it is skipped and counts as done
-    void start (const Progression& progression, const std::vector<bool>& playable)
+    void start (const Progression& progression)
     {
-        done.assign (progression.size(), false);
-        skipped.assign (progression.size(), false);
-        for (size_t i = 0; i < progression.size(); ++i)
-            if (i < playable.size() && ! playable[i])
-            {
-                done[i] = true;
-                skipped[i] = true;
-            }
+        total = (int) progression.size();
+        played.assign (progression.size(), false);
         wrongTries = 0;
-        current = nextUndone (0);
-        isFinished = ! progression.empty() && current < 0;
-        isStarted = ! progression.empty();
+        current = total > 0 ? 0 : -1;
+        isFinished = false;
+        isStarted = total > 0;
+        resetAttempt();
+        waitForRelease = false;
     }
 
     bool started() const { return isStarted; }
-    int target() const { return current; }                // the block to play now, -1 if there is none
-    int tries() const { return wrongTries; }              // wrong tries on this block
+    int target() const { return current; }               // the block to play now, -1 if there is none
+    int tries() const { return wrongTries; }             // wrong tries on this block
     bool finished() const { return isFinished; }
-    bool isDone (int block) const { return block >= 0 && block < (int) done.size() && done[(size_t) block]; }
-    int total() const { return (int) done.size(); }
-    int doneCount() const { int n = 0; for (bool d : done) n += d ? 1 : 0; return n; }
-    bool isSkipped (int block) const { return block >= 0 && block < (int) skipped.size() && skipped[(size_t) block]; }
-    bool isPlayed (int block) const { return isDone (block) && ! isSkipped (block); } // played by the user, not skipped
-    int playableCount() const { int n = 0; for (bool s : skipped) n += s ? 0 : 1; return n; }
-    int playedCount() const { return doneCount() - (total() - playableCount()); }
+    bool isPlayed (int block) const { return block >= 0 && block < (int) played.size() && played[(size_t) block]; }
+    int blockCount() const { return total; }
+    int playedCount() const { int n = 0; for (bool p : played) n += p ? 1 : 0; return n; }
     bool needsHint() const { return wrongTries >= kLearnHintAfterTries; }
 
-    // A chord was played. Says what that was.
-    Outcome play (const Chord& played, const Progression& progression)
+    // Called often (every tick of the editor) with the keys that are held now: `classes` are their pitch classes (bit 0 is C) and
+    // `count` is how many keys. `nowMs` is any clock that counts milliseconds.
+    Outcome update (unsigned classes, int count, double nowMs, const Progression& progression, int tonic)
     {
         if (! isStarted || isFinished || current < 0 || current >= (int) progression.size())
             return Outcome::Nothing;
 
-        if (! sameChordForLearning (played, progression[(size_t) current].chord))
+        // After a right chord the keys must come up before the next one is looked at
+        if (waitForRelease)
         {
-            ++wrongTries;
-            return Outcome::Wrong;
+            if (count == 0)
+                waitForRelease = false;
+            return Outcome::Nothing;
         }
 
-        done[(size_t) current] = true;
-        wrongTries = 0;
-        current = nextUndone (current + 1);
-        if (current < 0)
+        if (count == 0)
         {
-            isFinished = true;
-            return Outcome::Finished;
+            // Everything let go: if something was played and it never was right, that was a try
+            const bool wasWrong = attempting && ! reportedWrong && maxHeld >= 1;
+            resetAttempt();
+            if (wasWrong)
+            {
+                ++wrongTries;
+                return Outcome::Wrong;
+            }
+            return Outcome::Nothing;
         }
-        return Outcome::Right;
+
+        attempting = true;
+        if (count > maxHeld)
+            maxHeld = count;
+
+        const auto& chord = progression[(size_t) current].chord;
+        const unsigned wanted = chordPitchClasses (chord, tonic);
+        const int needed = shapeOf (chord.type).count;
+
+        if (classes == wanted && count >= needed)
+        {
+            played[(size_t) current] = true;
+            wrongTries = 0;
+            ++current;
+            resetAttempt();
+            waitForRelease = true;
+            if (current >= total)
+            {
+                current = -1;
+                isFinished = true;
+                return Outcome::Finished;
+            }
+            return Outcome::Right;
+        }
+
+        // Enough keys for a chord, but not the right ones, and they stay: a wrong try, once
+        if (count >= needed && ! reportedWrong)
+        {
+            if (mismatchSince < 0.0)
+                mismatchSince = nowMs;
+            else if (nowMs - mismatchSince >= kLearnMismatchMs)
+            {
+                reportedWrong = true;
+                ++wrongTries;
+                return Outcome::Wrong;
+            }
+        }
+        else if (classes == wanted || count < needed)
+            mismatchSince = -1.0;
+
+        return Outcome::Nothing;
     }
 
 private:
-    int nextUndone (int from) const
+    void resetAttempt()
     {
-        for (int i = from; i < (int) done.size(); ++i)
-            if (! done[(size_t) i])
-                return i;
-        return -1;
+        attempting = false;
+        reportedWrong = false;
+        mismatchSince = -1.0;
+        maxHeld = 0;
     }
 
-    std::vector<bool> done, skipped;
+    std::vector<bool> played;
+    int total = 0;
     int current = -1;
     int wrongTries = 0;
     bool isFinished = false;
     bool isStarted = false;
+    bool attempting = false;
+    bool reportedWrong = false;
+    bool waitForRelease = false;
+    double mismatchSince = -1.0;
+    int maxHeld = 0;
 };
 }

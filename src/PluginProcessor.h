@@ -170,14 +170,15 @@ public:
     int getTotalOctave() const { return juce::jlimit (-engine::kMaxTotalOctave, engine::kMaxTotalOctave, homeOctave.load() + octaveParam->get()); }
     static juce::File getSettingsFile();
 
-    // Learn mode: the user plays the chords of the progression one after the other. While it is on the loop is silent and the arp
-    // is off, so that what you play is what you hear. The session itself is kept by the editor; this holds the switch, the
-    // user's choice about hints, and what has been played since the last look.
+    // Learn mode: the user plays the chords of the progression one after the other, on the keys of a MIDI keyboard. While it is on
+    // the loop is silent and the arp is off, and the keys play their own notes (they are not the pads), so that what you play is
+    // what you hear. The session itself is kept by the editor; this holds the switch, the user's choice about hints, and which
+    // keys are held.
     bool isLearning() const { return learnOn.load(); }
     void setLearning (bool nowLearning);
-    bool getLearnHints() const { return learnHints.load(); } // hints (the pad that glows, the notes on the keyboard) from the start
+    bool getLearnHints() const { return learnHints.load(); } // hints (the keys to hold) from the start
     void setLearnHints (bool nowOn); // message thread: kept in the settings file
-    std::vector<engine::Chord> takeNewlyPlayed(); // the chords played on the pads (mouse and MIDI keys) since the last call
+    bool isKeyHeld (int note) const { return note >= 0 && note < 128 && ((heldKeys[(size_t) (note / 64)].load() >> (note % 64)) & 1u) != 0; } // a key of the MIDI keyboard
     engine::Mood getMood() const { return (engine::Mood) moodParam->getIndex(); }
 
 private:
@@ -266,7 +267,8 @@ private:
     std::atomic<int> homeOctave { 0 };
     std::atomic<bool> learnOn { false };
     std::atomic<bool> learnHints { false };
-    unsigned learnCursor = 0;
+    std::array<std::atomic<std::uint64_t>, 2> heldKeys {}; // the keys of the MIDI keyboard that are down
+    std::uint64_t heldKeysLocal[2] = { 0, 0 };              // audio thread
     void writeSettings() const;
     std::array<std::atomic<std::uint64_t>, 2> soundingMask {};
 

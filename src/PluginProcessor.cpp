@@ -285,6 +285,23 @@ public:
         }
     }
 
+    // Learn mode: a key plays its own note, not a pad
+    void pressNote (int source, int note, int velocity, int position)
+    {
+        if (source < 0 || source >= engine::NoteTracker::kNumSources)
+            return;
+        pressingAgain = true;
+        releaseSource (source, position);
+        pressingAgain = false;
+        owner.sourcePad[(size_t) source] = -1;
+        ++owner.userHolds;
+        owner.sourceActive[(size_t) source] = true;
+        engine::Voicing single;
+        single.count = 1;
+        single.notes[0] = note;
+        owner.tracker.press (source, single, velocity, [&] (const engine::NoteEvent& e) { emit (e, position); });
+    }
+
     // ---- The arp --------------------------------------------------------------------------------------------------
     // A source that holds a chord plays it one note at a time. The steps follow from the moment the chord started (a pad
     // pressed, a block of the loop begun), the notes from the step number alone, so the MIDI file has the same notes.
@@ -534,6 +551,27 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         if (message.kind == allNotesOffMessage)
         {
             work.releaseEverything (message.position);
+            heldKeysLocal[0] = heldKeysLocal[1] = 0;
+            continue;
+        }
+
+        // Which keys are down, for Learn mode
+        if (message.note >= 0 && message.note < 128)
+        {
+            const std::uint64_t bit = (std::uint64_t) 1 << (message.note % 64);
+            if (message.kind == noteOnMessage)
+                heldKeysLocal[message.note / 64] |= bit;
+            else
+                heldKeysLocal[message.note / 64] &= ~bit;
+        }
+
+        if (learnOn.load()) // Learn: a key plays its own note
+        {
+            const int source = engine::NoteTracker::keySource (message.note);
+            if (message.kind == noteOnMessage)
+                work.pressNote (source, message.note, juce::jlimit (1, 127, message.velocity), message.position);
+            else
+                work.releaseSource (source, message.position);
             continue;
         }
 
@@ -551,6 +589,8 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     work.advanceLoop (buffer.getNumSamples());
     work.advanceArp (buffer.getNumSamples());
+    heldKeys[0].store (heldKeysLocal[0]);
+    heldKeys[1].store (heldKeysLocal[1]);
     work.finish();
 }
 
@@ -796,21 +836,7 @@ void ProgrezzorProcessor::setLearnHints (bool nowOn)
 
 void ProgrezzorProcessor::setLearning (bool nowLearning)
 {
-    if (nowLearning)
-        learnCursor = historyCount.load (std::memory_order_acquire); // only what is played from now on counts
     learnOn.store (nowLearning);
-}
-
-std::vector<engine::Chord> ProgrezzorProcessor::takeNewlyPlayed()
-{
-    const unsigned n = historyCount.load (std::memory_order_acquire);
-    std::vector<engine::Chord> chords;
-    if (n - learnCursor > (unsigned) kHistorySize)
-        learnCursor = n - (unsigned) kHistorySize; // far behind: only what is still kept
-    for (unsigned i = learnCursor; i != n; ++i)
-        chords.push_back (unpackChord (history[i % kHistorySize].load (std::memory_order_relaxed)));
-    learnCursor = n;
-    return chords;
 }
 
 juce::File ProgrezzorProcessor::getExportFolder()
