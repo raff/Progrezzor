@@ -56,6 +56,17 @@ retter de gamle linjer om mulighed A og B. Branchen merges ikke før du siger de
 - [ ] Settings huskes, når du lukker og åbner DAW'en, og er ens i alle projekter. (Filen ligger i ~/.config/Progrezzor/settings.xml.)
 - [ ] Oct-knapperne tæller oven i Settings, og MIDI-filen har de samme toner, som du hører.
 
+## 2e. Learn (branch feature/learn-mode)
+
+- [ ] Learn-knappen (nederst til venstre, under Arp): tænd den med en rundgang i bjælken (fx fra Suggest). Den første blok pulserer, og overskriften siger "Play C (1 of 4)".
+- [ ] Spil den rigtige pad (mus eller MIDI-tastatur): blokken får et grønt mærke, og næste blok pulserer.
+- [ ] Spil en forkert pad: den blinker rødt, intet andet sker. Efter to fejl lyser den rigtige pad, og de rigtige toner lyser lyserødt på det lille klaviatur.
+- [ ] Settings > "Show hints from the start": hintet er der fra første forsøg.
+- [ ] Når alle er spillet: "All done!". Tryk Learn igen for at starte forfra.
+- [ ] I Learn spiller loopet ikke, og Arp er ignoreret (du hører hele akkorden).
+- [ ] Ændr bjælken mens Learn er tændt: det starter forfra.
+- [ ] Er det til at forstå uden forklaring? Hvad savner du først: rigtige toner på et tastatur, tempo, eller at høre rundgangen først?
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

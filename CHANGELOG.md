@@ -10,6 +10,9 @@ tag the commit (`vX.Y.Z`).
 
 ## [Unreleased]
 
+### Added
+- **Learn.** A Learn button in the bar: play the chords of the progression one after the other on the pads or a MIDI keyboard. The next chord is marked in the bar, a right pad ticks it off, a wrong one flashes red, and after two wrong tries the right pad and its notes light up. Hints can be on from the start in Settings.
+
 ### Changed
 - A new project starts in C Major with the Bright mood (it was A Minor and Melancholic).
 - The question "Replace the chords in the bar?" now sits in a small card in the middle of the bar, and Capture asks it too before it replaces chords you made.

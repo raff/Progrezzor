@@ -59,7 +59,10 @@ ProgrezzorProcessor::ProgrezzorProcessor()
 
     // Where the chords usually sit: the user's own setting, the same in every project
     if (const auto settings = juce::parseXML (getSettingsFile()))
+    {
         homeOctave.store (juce::jlimit (-engine::kMaxHomeOctave, engine::kMaxHomeOctave, settings->getIntAttribute ("homeOctave", 0)));
+        learnHints.store (settings->getIntAttribute ("learnHints", 0) != 0);
+    }
 
     for (auto& variant : padVariant)
         variant.store (-1);
@@ -483,6 +486,8 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     const double beatsPerSample = bpm / 60.0 / sampleRate;
     samplesPerBeat = sampleRate * 60.0 / bpm;
     blockArp = getArpSettings();
+    if (learnOn.load())
+        blockArp.on = false; // in Learn mode a chord is played whole
     if (blockArp.on != arpWasOn) // Arp was switched: everything that sounds stops, and starts again the other way
     {
         work.releaseEverything (0);
@@ -492,7 +497,7 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // The loop plays while the host plays and Play is on, or on its own clock when Play was pressed with the host stopped
     loopBuffer.update();
-    loopActive = playing && (ownClock || loopParam->get()) && loopBuffer.read().count > 0;
+    loopActive = playing && (ownClock || loopParam->get()) && loopBuffer.read().count > 0 && ! learnOn.load();
     loopPlan = loopActive ? engine::planLoop (loopBuffer.read(), startBeat, beatsPerSample, buffer.getNumSamples()) : engine::LoopPlan();
     if (! loopActive)
         loopIndex = -1;
@@ -767,15 +772,45 @@ juce::File ProgrezzorProcessor::getSettingsFile()
     return folder.getChildFile ("settings.xml");
 }
 
-void ProgrezzorProcessor::setHomeOctave (int octaves)
+void ProgrezzorProcessor::writeSettings() const
 {
-    homeOctave.store (juce::jlimit (-engine::kMaxHomeOctave, engine::kMaxHomeOctave, octaves));
-
     juce::XmlElement xml ("ProgrezzorSettings");
     xml.setAttribute ("homeOctave", homeOctave.load());
+    xml.setAttribute ("learnHints", learnHints.load() ? 1 : 0);
     const auto file = getSettingsFile();
     if (file.getParentDirectory().createDirectory().wasOk())
         xml.writeTo (file);
+}
+
+void ProgrezzorProcessor::setHomeOctave (int octaves)
+{
+    homeOctave.store (juce::jlimit (-engine::kMaxHomeOctave, engine::kMaxHomeOctave, octaves));
+    writeSettings();
+}
+
+void ProgrezzorProcessor::setLearnHints (bool nowOn)
+{
+    learnHints.store (nowOn);
+    writeSettings();
+}
+
+void ProgrezzorProcessor::setLearning (bool nowLearning)
+{
+    if (nowLearning)
+        learnCursor = historyCount.load (std::memory_order_acquire); // only what is played from now on counts
+    learnOn.store (nowLearning);
+}
+
+std::vector<engine::Chord> ProgrezzorProcessor::takeNewlyPlayed()
+{
+    const unsigned n = historyCount.load (std::memory_order_acquire);
+    std::vector<engine::Chord> chords;
+    if (n - learnCursor > (unsigned) kHistorySize)
+        learnCursor = n - (unsigned) kHistorySize; // far behind: only what is still kept
+    for (unsigned i = learnCursor; i != n; ++i)
+        chords.push_back (unpackChord (history[i % kHistorySize].load (std::memory_order_relaxed)));
+    learnCursor = n;
+    return chords;
 }
 
 juce::File ProgrezzorProcessor::getExportFolder()

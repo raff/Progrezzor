@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PluginProcessor.h"
+#include "engine/Learn.h"
 #include "engine/NextPads.h"
 #include "ProgrezzorLookAndFeel.h"
 
@@ -22,6 +23,9 @@ public:
     void setNumeral (const juce::String& numeral); // I, ii, III, IV ... : the place of the chord in the key, small above its name
     void setLit (bool nowLit);
     void setHasVariant (bool nowHasVariant);
+    void setLearnTarget (bool nowTarget); // Learn: this is the pad to play now (a pulsing ring)
+    void flashWrong();                    // Learn: it was the wrong pad (a red edge for a moment)
+    bool isLearnTarget() const { return learnTarget; }
     void setSuggested (bool nowSuggested); // fits well after the chord played last: a soft glow, not the full light of a pad that sounds
     bool isSuggested() const { return suggested; }
     void setDragEnabled (bool nowEnabled) { dragEnabled = nowEnabled; } // pulling a pad down into the bar is editing
@@ -38,6 +42,8 @@ private:
     juce::Rectangle<int> gearArea() const { return { getWidth() - 34, 6, 28, 28 }; }
 
     juce::String chordName, numeral;
+    bool learnTarget = false;
+    juce::uint32 wrongUntil = 0;
     bool lit = false;
     bool heldByMouse = false;
     bool dragging = false;
@@ -76,6 +82,14 @@ class ArpToggle : public juce::Button
 {
 public:
     ArpToggle() : juce::Button ("Arp") { setClickingTogglesState (false); }
+    void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
+};
+
+// The Learn button: lit while Learn mode is on (you play the chords of the progression, one after the other)
+class LearnToggle : public juce::Button
+{
+public:
+    LearnToggle() : juce::Button ("Learn") { setClickingTogglesState (false); }
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 };
 
@@ -139,7 +153,8 @@ public:
     void setNumeral (const juce::String& nowNumeral); // I, ii, III ... shown with the length
     void setLength (double beats, double barBeats); // shown small on the block: 1 bar, 1/2 bar, 2 bars
     static juce::String lengthText (double beats, double barBeats);
-    void setDropTarget (bool nowTarget); // a chord from a pad is held over it and would replace it
+    void setDropTarget (bool nowTarget);
+    void setLearn (bool nowDone, bool nowTarget); // Learn: this block has been played / is the one to play now // a chord from a pad is held over it and would replace it
     void setLocked (bool nowLocked);
     void setOutsideScale (bool nowOutside); // Lock to scale is on and the chord does not fit: marked, but it still plays
     bool isOutsideScale() const { return outsideScale; }
@@ -175,6 +190,7 @@ private:
     bool playing = false;
     bool selected = false;
     bool dropTarget = false;
+    bool learnDone = false, learnTarget = false;
     bool forceHover = false;
     bool hovered() const { return forceHover || isMouseOver(); }
     int rootPitchClass = 0;
@@ -246,6 +262,7 @@ public:
     void shiftGeneralOctave (int steps);
     void showSettingsMenu();
     void showArpPanel();
+    void toggleLearn();
     std::unique_ptr<juce::Component> makeArpPanel(); // the panel behind the Arp button (also for the tests)
     void toggleArp();
     bool arpPanelShown = false;
@@ -260,6 +277,11 @@ public:
     juce::Rectangle<int> getTrayBounds() const { return trayBounds; }
     ArpToggle& getArpButton() { return arpButton; }
     BarButton& getCaptureButton() { return captureButton; }
+    LearnToggle& getLearnButton() { return learnButton; }
+    int getLearnTarget() const { return learnActive ? learnTarget : -2; } // -1: all played, -2: not learning
+
+    // Learn mode, from the editor: which block is next and which are done, with the notes of the next chord for the keyboard
+    void setLearn (bool active, int target, const std::vector<bool>& done, const std::vector<int>& targetNotes, bool showNotes, int playable);
     BarButton& getSettingsButton() { return settingsButton; }
     void chooseHomeOctave (int octaves); // Settings: where the chords usually sit, kept for every project
     BarButton& getOctaveUpButton() { return octaveUpButton; }
@@ -292,10 +314,15 @@ private:
     BarButton allowButton { "Allow", BarButton::Icon::None };
     BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     ArpToggle arpButton;
+    LearnToggle learnButton;
     BarButton arpOptionsButton { "Arp options", BarButton::Icon::Dots };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };
     juce::Rectangle<int> octaveLabelBounds, stripBounds;
+    bool learnActive = false, learnShowNotes = false;
+    int learnTarget = -1, learnPlayable = 0;
+    std::vector<bool> learnDone;
+    std::vector<int> learnNotes;
     std::uint64_t lastSounding[2] = { 0, 0 };
     juce::String octaveLabel;
     juce::TextEditor textEditor;
@@ -349,6 +376,9 @@ private:
     void timerCallback() override;
     void updateNames();
     void updateSuggestedPads();
+    void updateLearning();         // Learn mode: follows what is played, and marks what is next
+    void startLearnSession();
+    int padForChord (const engine::Chord&) const; // the pad that plays this kind of chord, -1 if there is none
     void padPressed (int pad);
 
     ProgrezzorProcessor& processor;
@@ -369,4 +399,7 @@ private:
     ProgressionBar bar;
     std::unique_ptr<DragGhost> ghost;
     int shownKey = -1, shownScale = -1, shownProgression = -1, shownVariant = -1, shownLock = -1;
+    engine::LearnSession learn;
+    int learnVersion = -1;
+    bool wasLearning = false;
 };

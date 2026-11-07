@@ -77,6 +77,23 @@ void PadButton::setNumeral (const juce::String& newNumeral)
     }
 }
 
+void PadButton::setLearnTarget (bool nowTarget)
+{
+    if (nowTarget != learnTarget)
+    {
+        learnTarget = nowTarget;
+        repaint();
+    }
+}
+
+void PadButton::flashWrong()
+{
+    wrongUntil = juce::Time::getMillisecondCounter() + 450;
+    repaint();
+    juce::Component::SafePointer<PadButton> safe (this);
+    juce::Timer::callAfterDelay (480, [safe] { if (safe != nullptr) safe->repaint(); });
+}
+
 void PadButton::setLit (bool nowLit)
 {
     if (nowLit != lit)
@@ -152,6 +169,19 @@ void PadButton::paint (juce::Graphics& g)
     g.drawFittedText (chordName, textArea.translated (0, 2), juce::Justification::centred, 1, 0.6f);
     g.setColour (ink);
     g.drawFittedText (chordName, textArea, juce::Justification::centred, 1, 0.6f);
+
+    // Learn: the pad to play now has a ring that pulses, and a pad that was wrong has a red edge for a moment
+    if (learnTarget)
+    {
+        const float pulse = 0.5f + 0.5f * std::sin ((float) juce::Time::getMillisecondCounter() * 0.008f);
+        g.setColour (theme::accent.withAlpha (0.45f + 0.5f * pulse));
+        g.drawRoundedRectangle (face.reduced (1.5f), corner, 4.0f + 2.0f * pulse);
+    }
+    if (juce::Time::getMillisecondCounter() < wrongUntil)
+    {
+        g.setColour (theme::warn);
+        g.drawRoundedRectangle (face.reduced (1.5f), corner, 5.0f);
+    }
 
     // Where the chord sits in the key (I, ii, III ...), small at the top
     if (numeral.isNotEmpty())
@@ -313,6 +343,32 @@ void ArpToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
     if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
         g.setFont (l->titleFont (13.0f));
     g.drawText ("Arp", face.withTrimmedTop (face.getHeight() * 0.5f).toNearestInt(), juce::Justification::centred);
+}
+
+// ---- LearnToggle ---------------------------------------------------------------------------------------------------
+
+void LearnToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonDown)
+{
+    const bool on = getToggleState();
+    if (on)
+        theme::drawGlow (g, getLocalBounds().toFloat().reduced (4.0f, 5.0f), theme::chordColour (5), 6.0f, 10.0f, 0.3f);
+    const auto face = theme::drawKey (g, getLocalBounds().toFloat(), on ? theme::chordColour (5) : theme::pad, 10.0f, 4.0f, isButtonDown, isMouseOver);
+
+    // A graduation cap: a flat diamond with a tassel
+    const auto ink = on ? theme::onAccent : theme::dimText.brighter (0.2f);
+    const auto c = juce::Point<float> (face.getCentreX(), face.getY() + face.getHeight() * 0.33f);
+    juce::Path cap;
+    cap.startNewSubPath (c.x, c.y - 6.0f);
+    cap.lineTo (c.x + 13.0f, c.y);
+    cap.lineTo (c.x, c.y + 6.0f);
+    cap.lineTo (c.x - 13.0f, c.y);
+    cap.closeSubPath();
+    g.setColour (ink);
+    g.fillPath (cap);
+    g.drawLine (c.x + 9.0f, c.y + 1.5f, c.x + 9.0f, c.y + 8.0f, 1.6f);
+    if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+        g.setFont (l->titleFont (13.0f));
+    g.drawText ("Learn", face.withTrimmedTop (face.getHeight() * 0.58f).toNearestInt(), juce::Justification::centred);
 }
 
 // ---- BarButton -----------------------------------------------------------------------------------------------------
@@ -522,6 +578,16 @@ void BlockButton::setNumeral (const juce::String& nowNumeral)
     }
 }
 
+void BlockButton::setLearn (bool nowDone, bool nowTarget)
+{
+    if (nowDone != learnDone || nowTarget != learnTarget)
+    {
+        learnDone = nowDone;
+        learnTarget = nowTarget;
+        repaint();
+    }
+}
+
 void BlockButton::setDropTarget (bool nowTarget)
 {
     if (nowTarget != dropTarget)
@@ -615,6 +681,29 @@ void BlockButton::paint (juce::Graphics& g)
         g.fillEllipse (light);
         g.setColour (theme::shade.withAlpha (0.45f));
         g.drawEllipse (light, 1.0f);
+    }
+    if (learnTarget) // Learn: this is the chord to play now
+    {
+        const float pulse = 0.5f + 0.5f * std::sin ((float) juce::Time::getMillisecondCounter() * 0.008f);
+        g.setColour (theme::accent.withAlpha (0.55f + 0.45f * pulse));
+        g.drawRoundedRectangle (body.expanded (0.5f), 9.5f, 3.0f + 1.5f * pulse);
+        juce::Path arrow; // a little arrow in the corner: play me
+        const auto c = juce::Point<float> (bounds.getRight() - 14.0f, bounds.getY() + 14.0f);
+        arrow.addTriangle (c.x - 5.0f, c.y - 6.0f, c.x - 5.0f, c.y + 6.0f, c.x + 6.0f, c.y);
+        g.setColour (theme::accent);
+        g.fillPath (arrow);
+    }
+    else if (learnDone) // Learn: played, a green mark
+    {
+        const auto c = juce::Point<float> (bounds.getRight() - 14.0f, bounds.getY() + 14.0f);
+        g.setColour (theme::go);
+        g.fillEllipse (juce::Rectangle<float> (16.0f, 16.0f).withCentre (c));
+        juce::Path tick;
+        tick.startNewSubPath (c.x - 4.5f, c.y);
+        tick.lineTo (c.x - 1.0f, c.y + 3.5f);
+        tick.lineTo (c.x + 5.0f, c.y - 3.5f);
+        g.setColour (theme::onAccent);
+        g.strokePath (tick, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
     if (dropTarget)
     {
@@ -1213,6 +1302,26 @@ public:
     }
 };
 
+void ProgressionBar::toggleLearn()
+{
+    processor.setLearning (! processor.isLearning());
+    updateButtons();
+}
+
+void ProgressionBar::setLearn (bool active, int target, const std::vector<bool>& done, const std::vector<int>& targetNotes, bool showNotes, int playable)
+{
+    learnPlayable = playable;
+    learnActive = active;
+    learnTarget = target;
+    learnDone = done;
+    learnNotes = targetNotes;
+    learnShowNotes = showNotes;
+    for (int i = 0; i < blocks.size(); ++i)
+        blocks[i]->setLearn (active && i < (int) done.size() && done[(size_t) i] && i != target, active && i == target);
+    repaint (stripBounds);
+    repaint (labelBounds.withWidth (getWidth()));
+}
+
 void ProgressionBar::toggleArp()
 {
     auto& parameter = *processor.arpOnParam;
@@ -1237,6 +1346,11 @@ std::unique_ptr<juce::Component> ProgressionBar::makeArpPanel()
 
 ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
 {
+    learnButton.setTooltip ("Learn: play the chords of the progression, one after the other");
+    learnButton.setComponentID ("learn");
+    learnButton.onClick = [this] { toggleLearn(); };
+    addAndMakeVisible (learnButton);
+
     arpButton.setTooltip ("Arp: play everything one note at a time (the MIDI file follows)");
     arpButton.setComponentID ("arp");
     arpButton.onClick = [this] { toggleArp(); };
@@ -1528,6 +1642,7 @@ void ProgressionBar::updateButtons()
     const bool playOn = processor.isPlayOn();
     playButton.setToggleState (playOn, juce::dontSendNotification);
     arpButton.setToggleState (processor.getArpSettings().on, juce::dontSendNotification);
+    learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
 
     // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
     const int octave = processor.getGeneralOctave();
@@ -1598,6 +1713,9 @@ void ProgressionBar::showSettingsMenu()
         menu.addItem (i + 1, names[i], true, i - 2 == processor.getHomeOctave());
     menu.addSeparator();
     menu.addItem (100, "Kept for every project. The keyboard shows where.", false, false);
+    menu.addSeparator();
+    menu.addSectionHeader ("Learn");
+    menu.addItem (20, "Show hints from the start", true, processor.getLearnHints());
 
     juce::Component::SafePointer<ProgressionBar> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (260),
@@ -1605,6 +1723,8 @@ void ProgressionBar::showSettingsMenu()
                         {
                             if (safe != nullptr && result >= 1 && result <= 5)
                                 safe->chooseHomeOctave (result - 3);
+                            else if (safe != nullptr && result == 20)
+                                safe->processor.setLearnHints (! safe->processor.getLearnHints());
                         });
 }
 
@@ -1886,6 +2006,17 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
     g.setColour (theme::accent);
     g.drawRect (left, area.getY(), right - left, area.getHeight(), 1.6f);
 
+    // Learn: the notes of the chord to play, when the hint is on
+    if (learnActive && learnShowNotes)
+        for (int note : learnNotes)
+            if (note >= firstNote && note < lastNote)
+            {
+                g.setColour (theme::hotPink);
+                g.fillRect (xOf (note), area.getY(), std::max (3.0f, perNote), area.getHeight());
+                g.setColour (theme::shade.withAlpha (0.6f));
+                g.drawRect (xOf (note), area.getY(), std::max (3.0f, perNote), area.getHeight(), 0.8f);
+            }
+
     // The notes that sound now: lit keys, in the colour of Play
     for (int note = firstNote; note < lastNote; ++note)
         if (processor.isNoteSounding (note))
@@ -1981,6 +2112,25 @@ void ProgressionBar::paint (juce::Graphics& g)
         g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ (float) labelBounds.getX() + 7.0f, (float) labelBounds.getCentreY() }));
         g.setColour (theme::dimText);
         g.drawText ("PROGRESSION", labelBounds.withTrimmedLeft (16), juce::Justification::centredLeft);
+
+        // Learn: what to play now
+        if (learnActive)
+        {
+            const auto key = processor.getKey();
+            juce::String status;
+            const int total = learnPlayable;
+            int done = 0;
+            for (bool d : learnDone)
+                done += d ? 1 : 0;
+            if (learnTarget < 0)
+                status = total > 0 ? "All done! Press Learn to go again" : "Nothing to learn yet: put chords in the bar";
+            else if (learnTarget < (int) processor.getProgression().size())
+                status = "Play " + juce::String (engine::chordName (processor.getProgression()[(size_t) learnTarget].chord, key))
+                         + "   (" + juce::String (done + 1) + " of " + juce::String (total) + ")";
+            g.setFont (l->titleFont (14.0f));
+            g.setColour (learnTarget < 0 ? theme::go : theme::accent);
+            g.drawText (status, trayBounds.withHeight (labelBounds.getHeight()).withY (labelBounds.getY()).withTrimmedLeft (130), juce::Justification::centredLeft);
+        }
 
         // A small keyboard, and where the chords sit on it
         if (! stripBounds.isEmpty())
@@ -2079,9 +2229,12 @@ void ProgressionBar::resized()
     const int controlsHeight = std::min (area.getHeight() - labelHeight, 150);
     auto left = area.removeFromLeft (64).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromLeft (10);
-    auto arpRow = left.removeFromBottom (40);
+    auto learnRow = left.removeFromBottom (36);
+    left.removeFromBottom (4);
+    auto arpRow = left.removeFromBottom (36);
     left.removeFromBottom (6);
     playButton.setBounds (left);
+    learnButton.setBounds (learnRow);
     arpOptionsButton.setBounds (arpRow.removeFromRight (16));
     arpRow.removeFromRight (2);
     arpButton.setBounds (arpRow);
@@ -2393,9 +2546,83 @@ void ProgrezzorEditor::timerCallback()
         pads[(size_t) i].setLit ((lit & (1u << i)) != 0);
 
     updateSuggestedPads();
+    updateLearning();
 
     for (auto& pad : pads)
         pad.setDragEnabled (processor.isEditing() && ! bar.isInTextMode());
+}
+
+// Learn mode
+int ProgrezzorEditor::padForChord (const engine::Chord& chord) const
+{
+    for (int i = 0; i < ProgrezzorProcessor::kNumPads; ++i)
+        if (engine::sameChordForLearning (processor.getPadChord (i), chord))
+            return i;
+    return -1;
+}
+
+void ProgrezzorEditor::startLearnSession()
+{
+    const auto& progression = processor.getProgression();
+    std::vector<bool> playable;
+    for (const auto& block : progression)
+        playable.push_back (padForChord (block.chord) >= 0);
+    learn.start (progression, playable);
+    learnVersion = processor.getProgressionVersion();
+}
+
+void ProgrezzorEditor::updateLearning()
+{
+    const bool on = processor.isLearning();
+    if (on != wasLearning)
+    {
+        wasLearning = on;
+        if (on)
+            startLearnSession();
+    }
+
+    if (! on)
+    {
+        for (auto& pad : pads)
+            pad.setLearnTarget (false);
+        bar.setLearn (false, -1, {}, {}, false, 0);
+        return;
+    }
+
+    if (processor.getProgressionVersion() != learnVersion) // the bar was changed: start from the first chord again
+        startLearnSession();
+
+    const auto& progression = processor.getProgression();
+    for (const auto& played : processor.takeNewlyPlayed())
+        if (learn.play (played, progression) == engine::LearnSession::Outcome::Wrong)
+            if (const int pad = padForChord (played); pad >= 0)
+                pads[(size_t) pad].flashWrong();
+
+    const int target = learn.target();
+    const bool hint = processor.getLearnHints() || learn.needsHint();
+    const int targetPad = target >= 0 && target < (int) progression.size() ? padForChord (progression[(size_t) target].chord) : -1;
+    for (int i = 0; i < ProgrezzorProcessor::kNumPads; ++i)
+        pads[(size_t) i].setLearnTarget (hint && i == targetPad);
+
+    std::vector<bool> done;
+    for (int i = 0; i < learn.total(); ++i)
+        done.push_back (learn.isPlayed (i));
+    std::vector<int> notes;
+    if (target >= 0 && target < (int) progression.size())
+    {
+        const auto voicing = engine::shiftedByOctaves (engine::voiceChord (progression[(size_t) target].chord, processor.getKey().tonic), processor.getTotalOctave());
+        for (int i = 0; i < voicing.count; ++i)
+            notes.push_back (voicing.notes[(size_t) i]);
+    }
+    bar.setLearn (true, target, done, notes, hint, learn.playableCount());
+
+    // The target pulses: keep it moving
+    if (target >= 0)
+    {
+        if (targetPad >= 0 && hint)
+            pads[(size_t) targetPad].repaint();
+        bar.repaint();
+    }
 }
 
 // The pads that fit well after the last chord: the one played last on a pad, or else the last block in the bar

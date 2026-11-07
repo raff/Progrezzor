@@ -12,6 +12,7 @@
 #include "../src/engine/MidiExport.h"
 #include "../src/engine/NextPads.h"
 #include "../src/engine/Arp.h"
+#include "../src/engine/Learn.h"
 #include "../src/engine/QuickText.h"
 
 #include <algorithm>
@@ -1074,6 +1075,45 @@ void testRomanNumerals()
     checkEqual (romanNumeral ({ 11, ChordType::Major, kAutoInversion }, ScaleId::Minor), std::string ("#VII"), "the note just under the tonic is a sharp seventh, not a flat of the tonic");
 }
 
+void testLearn()
+{
+    std::printf ("learn mode\n");
+    Progression p;
+    const Chord am { 0, ChordType::Minor, kAutoInversion }, f { 8, ChordType::Major, kAutoInversion };
+    const Chord c { 3, ChordType::Major, kAutoInversion }, g { 10, ChordType::Major, kAutoInversion };
+    for (const auto& chord : { am, f, c, g })
+        p.push_back ({ chord, 4.0 });
+
+    LearnSession session;
+    check (! session.started() && session.play (am, p) == LearnSession::Outcome::Nothing, "nothing happens before the session starts");
+    session.start (p, { true, true, true, true });
+    check (session.started() && session.target() == 0 && session.total() == 4 && session.doneCount() == 0, "it starts on the first block");
+
+    check (session.play (f, p) == LearnSession::Outcome::Wrong && session.tries() == 1 && session.target() == 0, "a wrong chord counts a try and stays on the block");
+    check (! session.needsHint(), "no hint after one wrong try");
+    check (session.play (g, p) == LearnSession::Outcome::Wrong && session.needsHint(), "the hint comes after two wrong tries");
+    check (session.play (Chord { 0, ChordType::Minor, 2, 1 }, p) == LearnSession::Outcome::Right && session.target() == 1 && session.tries() == 0 && session.isDone (0),
+           "the right chord, in another inversion and octave, is right, and the next block is the target");
+    check (session.play (f, p) == LearnSession::Outcome::Right && session.play (c, p) == LearnSession::Outcome::Right && ! session.finished(), "on through the progression");
+    check (session.play (Chord { 0, ChordType::Major, kAutoInversion }, p) == LearnSession::Outcome::Wrong, "the same root with another kind of chord is wrong");
+    check (session.play (g, p) == LearnSession::Outcome::Finished && session.finished() && session.target() == -1 && session.doneCount() == 4, "the last chord finishes it");
+    check (session.play (am, p) == LearnSession::Outcome::Nothing, "and nothing counts after that");
+
+    // Blocks that no pad can play are skipped
+    session.start (p, { true, false, true, false });
+    check (session.target() == 0 && session.isDone (1) && session.isDone (3) && session.isSkipped (1) && ! session.isPlayed (1), "blocks without a pad are skipped");
+    check (session.playableCount() == 2 && session.playedCount() == 0, "only the other two count");
+    session.play (am, p);
+    check (session.target() == 2, "the target jumps over a skipped block");
+    check (session.play (c, p) == LearnSession::Outcome::Finished && session.playedCount() == 2 && session.isPlayed (0) && session.isPlayed (2), "and the session finishes when the last playable block is done");
+
+    // An empty progression, and one with nothing playable
+    session.start ({}, {});
+    check (! session.started(), "an empty bar has nothing to learn");
+    session.start (p, { false, false, false, false });
+    check (session.finished(), "a bar where no block can be played is finished at once");
+}
+
 void testTotalOctave()
 {
     std::printf ("the total octave\n");
@@ -1186,6 +1226,7 @@ void testArp()
 
 int main()
 {
+    testLearn();
     testTotalOctave();
     testRomanNumerals();
     testArp();

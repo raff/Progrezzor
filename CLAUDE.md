@@ -161,6 +161,16 @@ Besluttet af Henrik 2026-11-07. Arp-knappen (nederst til venstre i bjælken, und
 - Rytmen er et Euklid-mønster og koden er tilpasset fra ../seqverse (Music.h), uden arp-delene fra SeqVerses skalaer.
 - Ingen hængende noter: hver arp-node har sin egen note off, og alt stopper ved slip, transport stop, bypass og når Arp skiftes.
 
+## Learn (trin 1, på branchen feature/learn-mode)
+
+Henrik ønskede en Learn-knap (2026-11-07). Knappen "Learn" nederst til venstre i bjælken tænder og slukker den.
+
+- Brugeren spiller rundgangens akkorder én ad gangen med musen eller MIDI-tastaturet (pads). Den næste akkord er markeret i bjælken (pulserende kant og en lille pil, med "Play C (2 of 4)" i overskriften). Rigtig pad: blokken får et grønt mærke og målet rykker videre. Forkert pad: den får en rød kant et øjeblik, og ingenting andet sker.
+- Rigtig betyder samme grundtone og samme slags akkord. Omvending og oktav er ligegyldige. Blokke, som ingen pad kan spille, springes over.
+- Hint: efter to forkerte forsøg lyser den rigtige pad, og de rigtige toner lyser på det lille klaviatur. Hint kan også være slået til fra starten i Settings ("Show hints from the start"), gemt for alle projekter.
+- Den venter på brugeren, der er intet tempo. Loopet er tavst og arpen slået fra, så man hører den hele akkord. Ændres bjælken, starter forfra.
+- Ikke med endnu (BACKLOG.md): spil de rigtige toner på et tastatur, spil med i takt, og at høre rundgangen først.
+
 ## Quick-text
 
 ✏️ gør bjælken til en tekstlinje med de aktuelle akkorder. Enter anvender, Esc fortryder. Teksten ændrer kun rundgangen, ikke de 7 pads.

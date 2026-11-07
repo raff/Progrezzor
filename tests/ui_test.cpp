@@ -1249,6 +1249,90 @@ int main (int argc, char** argv)
         processor.setProgression ({});
     }
 
+    std::printf ("learn mode\n");
+    {
+        auto& learnUi = *static_cast<ProgrezzorEditor*> (editor.get());
+        auto& learnBar = learnUi.getBar();
+        *processor.keyParam = 0;
+        *processor.scaleParam = 1;
+        *processor.arpOnParam = false;
+        processor.setLearnHints (false);
+        processor.setProgression ({ { { 0, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },   // C
+                                    { { 5, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },   // F
+                                    { { 7, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },   // G
+                                    { { 6, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false } }); // F# : no pad plays it
+        settle (80);
+        check (! processor.isLearning() && ! learnBar.getLearnButton().getToggleState(), "Learn is off to begin with");
+
+        learnBar.getLearnButton().triggerClick();
+        settle (120);
+        check (processor.isLearning() && learnBar.getLearnButton().getToggleState(), "the Learn button switches Learn mode on");
+        // The pad of a chord in C Major: C is pad 1, F is pad 4, G is pad 5. Nothing is played yet, so the first block is the target.
+        const auto playPad = [&] (int pad)
+        {
+            processor.pressPad (pad);
+            runBlock (processor);
+            processor.releasePad (pad);
+            runBlock (processor);
+            settle (80);
+        };
+        check (! learnUi.getPad (0).isSuggested(), "(no pad is glowing without hints)");
+
+        check (learnBar.getLearnTarget() == 0, "the first chord is the target");
+        playPad (3); // F: wrong, C is next
+        check (learnBar.getLearnTarget() == 0 && ! learnUi.getPad (0).isLearnTarget(), "a wrong pad changes nothing, and there is no hint yet");
+        playPad (4); // G: wrong
+        settle (60);
+        check (learnBar.getLearnTarget() == 0 && learnUi.getPad (0).isLearnTarget(), "after two wrong tries the pad to play glows");
+        snapshot ("learn_hint");
+        playPad (0); // C: right
+        check (learnBar.getLearnTarget() == 1 && ! learnUi.getPad (0).isLearnTarget(), "the right pad moves on to the next chord, and the hint goes out");
+        playPad (3); // F: right
+        check (learnBar.getLearnTarget() == 2, "on to the third");
+        playPad (4); // G: right, and the last block (F#) has no pad, so that is the end
+        settle (120);
+        check (learnBar.getLearnTarget() == -1, "all played: the block without a pad is skipped and it is finished");
+        snapshot ("learn_done");
+
+        // The loop is silent in Learn mode, and so is the arp
+        FakeTransport learnTransport;
+        processor.setPlayHead (&learnTransport);
+        learnTransport.playing = true;
+        learnTransport.quarters = 0.0;
+        runBlock (processor);
+        runBlock (processor);
+        check (processor.getPlayingBlock() == -1 && processor.soundingNotes() == 0, "the loop does not play in Learn mode");
+        learnTransport.playing = false;
+        runBlock (processor);
+        processor.setPlayHead (nullptr);
+
+        *processor.arpOnParam = true;
+        runBlock (processor);
+        processor.pressPad (0);
+        runBlock (processor);
+        check (processor.soundingNotes() == 3, "in Learn mode a pad plays the whole chord, also with the arp on");
+        processor.releasePad (0);
+        runBlock (processor);
+        *processor.arpOnParam = false;
+
+        // Hints from the settings: the pad glows from the start. They are kept in the settings file.
+        processor.setLearnHints (true);
+        learnBar.setEditing (true);
+        settle (120);
+        {
+            ProgrezzorProcessor another;
+            check (another.getLearnHints(), "the choice about hints is kept for every project");
+        }
+        processor.setLearnHints (false);
+
+        // Switching it off again
+        learnBar.getLearnButton().triggerClick();
+        settle (120);
+        check (! processor.isLearning(), "the Learn button switches it off again");
+        processor.setProgression ({});
+        settle (60);
+    }
+
     std::printf ("block lengths\n");
     check (BlockButton::lengthText (4.0, 4.0) == "1 bar" && BlockButton::lengthText (2.0, 4.0) == "1/2 bar" && BlockButton::lengthText (8.0, 4.0) == "2 bars"
                && BlockButton::lengthText (6.0, 4.0) == "1 1/2 bars" && BlockButton::lengthText (3.0, 3.0) == "1 bar" && BlockButton::lengthText (32.0, 4.0) == "8 bars",
