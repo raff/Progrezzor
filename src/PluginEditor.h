@@ -235,6 +235,7 @@ public:
     BlockButton* getBlock (int i) { return blocks[i]; }
     void shiftGeneralOctave (int steps);
     void showSettingsMenu();
+    void drawPitchStrip (juce::Graphics&, juce::Rectangle<float>) const;
     void askToReplace();  // Suggest was pressed and would overwrite chords: ask in the message line
     void cancelAsk();
     juce::Rectangle<int> getTrayBounds() const { return trayBounds; }
@@ -272,7 +273,7 @@ private:
     BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };
-    juce::Rectangle<int> octaveLabelBounds;
+    juce::Rectangle<int> octaveLabelBounds, stripBounds;
     juce::String octaveLabel, registerLabel;
     juce::TextEditor textEditor;
     std::unique_ptr<TextMarks> textMarks;

@@ -812,7 +812,7 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     playButton.setTooltip ("Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
     addAndMakeVisible (playButton);
 
-    settingsButton.setTooltip ("Settings: the default register");
+    settingsButton.setTooltip ("Settings: how high or low the chords sit");
     settingsButton.setComponentID ("settings");
     settingsButton.onClick = [this] { showSettingsMenu(); };
     addAndMakeVisible (settingsButton);
@@ -1126,7 +1126,7 @@ void ProgressionBar::chooseRegister (int index)
 void ProgressionBar::showSettingsMenu()
 {
     juce::PopupMenu menu;
-    menu.addSectionHeader ("Register");
+    menu.addSectionHeader ("Pitch");
     const char* names[engine::kNumRegisters] = { "Low  (deeper, warmer)", "Mid  (the usual)", "High  (brighter)" };
     for (int i = 0; i < engine::kNumRegisters; ++i)
         menu.addItem (i + 1, names[i], true, i == processor.getRegisterIndex());
@@ -1376,6 +1376,50 @@ void ProgressionBar::setPlayingBlock (int index)
         blocks[i]->setPlaying (i == playingBlock);
 }
 
+// A little keyboard from the lowest to the highest note the chords can reach, with a lit band where the chords sit now. It
+// follows Settings (Low, Mid, High) and the Oct buttons, so that you see the pitch instead of reading it.
+void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> area) const
+{
+    constexpr int firstNote = 12, lastNote = 108; // C0 to C8: the whole way the Oct buttons can take the chords
+    const float perNote = area.getWidth() / (float) (lastNote - firstNote);
+    const auto xOf = [&] (int note) { return area.getX() + (float) (note - firstNote) * perNote; };
+
+    juce::Path clip;
+    clip.addRoundedRectangle (area, 6.0f);
+    juce::Graphics::ScopedSaveState state (g);
+    g.reduceClipRegion (clip);
+
+    // The keys: white, with the black ones as short dark marks
+    g.setColour (juce::Colour (0xffd9d4ee));
+    g.fillRect (area);
+    for (int note = firstNote; note < lastNote; ++note)
+    {
+        const int inOctave = note % 12;
+        const bool black = inOctave == 1 || inOctave == 3 || inOctave == 6 || inOctave == 8 || inOctave == 10;
+        if (black)
+        {
+            g.setColour (juce::Colour (0xff2a2545));
+            g.fillRect (xOf (note), area.getY(), std::max (1.0f, perNote), area.getHeight() * 0.62f);
+        }
+        else if (inOctave == 0) // a thin line at every C
+        {
+            g.setColour (juce::Colour (0xff8f8aa8));
+            g.fillRect (xOf (note), area.getY(), 1.0f, area.getHeight());
+        }
+    }
+
+    // Where the chords sit: the centre of the chords, with room for the notes round it
+    const int centre = engine::registerCentre (processor.getRegisterIndex()) + 12 * processor.getGeneralOctave();
+    const float left = xOf (juce::jlimit (firstNote, lastNote, centre - 9)), right = xOf (juce::jlimit (firstNote, lastNote, centre + 9));
+    g.setColour (theme::accent.withAlpha (0.55f));
+    g.fillRect (left, area.getY(), right - left, area.getHeight());
+    g.setColour (theme::accent);
+    g.drawRect (left, area.getY(), right - left, area.getHeight(), 1.6f);
+
+    g.setColour (juce::Colour (0xff3a3560));
+    g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.2f);
+}
+
 void ProgressionBar::paint (juce::Graphics& g)
 {
     // A card of its own, lighter than the window, with the blocks in a darker tray inside it. A stripe of colour along the
@@ -1441,6 +1485,10 @@ void ProgressionBar::paint (juce::Graphics& g)
         g.fillEllipse (juce::Rectangle<float> (7.0f, 7.0f).withCentre ({ (float) labelBounds.getX() + 7.0f, (float) labelBounds.getCentreY() }));
         g.setColour (theme::dimText);
         g.drawText ("PROGRESSION", labelBounds.withTrimmedLeft (16), juce::Justification::centredLeft);
+
+        // A small keyboard, and where the chords sit on it
+        if (! stripBounds.isEmpty())
+            drawPitchStrip (g, stripBounds.toFloat());
 
         // The general register, between Oct- and Oct+
         if (! octaveLabelBounds.isEmpty())
@@ -1537,7 +1585,7 @@ void ProgressionBar::resized()
     auto area = getLocalBounds().reduced (10, 7);
     // The buttons on both sides start at the top of the tray (under the name of the area), and stay a sensible size
     const int labelHeight = 14;
-    const int controlsHeight = std::min (area.getHeight() - labelHeight, 118);
+    const int controlsHeight = std::min (area.getHeight() - labelHeight, 150);
     auto left = area.removeFromLeft (64).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromLeft (10);
     playButton.setBounds (left);
@@ -1547,7 +1595,7 @@ void ProgressionBar::resized()
     area.removeFromRight (10);
     auto right = area.removeFromRight (112).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromRight (10);
-    const int rowHeight = (right.getHeight() - 10) / 3;
+    const int rowHeight = (right.getHeight() - 15) / 4;
     auto captureRow = right.removeFromTop (rowHeight);
     settingsButton.setBounds (captureRow.removeFromRight ((right.getWidth() - 12) / 3));
     captureRow.removeFromRight (6);
@@ -1560,6 +1608,10 @@ void ProgressionBar::resized()
     redoButton.setBounds (smallRow.removeFromLeft (smallWidth));
     smallRow.removeFromLeft (6);
     quickTextButton.setBounds (smallRow);
+    right.removeFromTop (5);
+
+    // A small keyboard that shows where the chords sit
+    stripBounds = right.removeFromTop (rowHeight);
     right.removeFromTop (5);
 
     // Oct- and Oct+ with the register between them
