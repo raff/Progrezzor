@@ -1086,8 +1086,50 @@ void testOctaves()
     check (parseQuickText ("Am-F-C-G", key, 4.0, true).blocks.size() == 4, "a hyphen still separates chords");
 }
 
+// Clicking around on the pads for a long time must never wander: the register stays where it is, in every scale, whatever the
+// order of the clicks. (Before this was fixed the same pad could sound three octaves away after enough clicks.)
+void testSteadyRegister()
+{
+    std::printf("steady register while clicking around\n");
+    for (int scaleIndex = 0; scaleIndex < kNumScales; ++scaleIndex)
+    {
+        const auto scale = (ScaleId) scaleIndex;
+        for (int tonic : { 0, 3, 9, 11 })
+        {
+            unsigned seed = 12345u + (unsigned) tonic;
+            const auto next = [&] { seed = seed * 1664525u + 1013904223u; return (seed >> 16) & 0x7fff; };
+            Voicing previous;
+            bool have = false;
+            double lowest = 1.0e9, highest = -1.0e9;
+            double lastMean[7] = {};
+            bool seen[7] = {};
+            int octaveJumps = 0;
+            for (int click = 0; click < 5000; ++click)
+            {
+                const int pad = (int) (next() % 7);
+                const auto voicing = voiceChord (padChord (scale, pad), tonic, have ? &previous : nullptr);
+                previous = voicing;
+                have = true;
+                double mean = 0.0;
+                for (int i = 0; i < voicing.count; ++i)
+                    mean += voicing.notes[(size_t) i];
+                mean /= voicing.count;
+                lowest = std::min (lowest, mean);
+                highest = std::max (highest, mean);
+                if (seen[pad] && std::abs (mean - lastMean[pad]) >= 9.0)
+                    ++octaveJumps;
+                lastMean[pad] = mean;
+                seen[pad] = true;
+            }
+            check (lowest >= kCentreNote - 6.0 && highest < kCentreNote + 6.0 && octaveJumps == 0,
+                   std::string (scaleOf (scale).name) + ", tonic " + std::to_string (tonic) + ": 5000 random pad clicks stay in one register, the same pad never jumps an octave");
+        }
+    }
+}
+
 int main()
 {
+    testSteadyRegister();
     testOctaves();
     testQuickText();
     testLoopPlan();

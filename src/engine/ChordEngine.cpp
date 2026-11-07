@@ -174,6 +174,11 @@ Voicing voiceChord (const Chord& chord, int tonic, const Voicing* previous)
     Voicing best;
     double bestCost = 1.0e9;
 
+    // The register is fixed: every chord is placed so that the middle of its notes is within half an octave of the centre
+    // (C4). Without that the voice leading, which always takes the nearest notes, wanders: after enough clicks on the pads the
+    // same pad could sound more than three octaves higher or lower than before. Within the band an inversion has exactly
+    // one place, so the same chord is never an octave away from where it was, only turned a different way.
+    for (int pass = 0; pass < 2 && bestCost > 1.0e8; ++pass) // the second pass (no band) only if nothing fits the band
     for (int inversion = firstInversion; inversion <= lastInversion; ++inversion)
     {
         const Voicing base = invert (chord, tonic, inversion);
@@ -186,6 +191,12 @@ Voicing voiceChord (const Chord& chord, int tonic, const Voicing* previous)
 
             if (candidate.notes[0] < kLowestNote || candidate.notes[(size_t) candidate.count - 1] > kHighestNote)
                 continue;
+            if (pass == 0)
+            {
+                const double middle = meanOf (candidate);
+                if (middle < kCentreNote - 6.0 || middle >= kCentreNote + 6.0)
+                    continue;
+            }
 
             const double distanceFromCentre = std::abs (meanOf (candidate) - kCentreNote);
             // A small cost for each inversion, so that root position wins when nothing else decides.

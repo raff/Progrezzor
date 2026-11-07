@@ -22,6 +22,9 @@ retter de gamle linjer om mulighed A og B. Branchen merges ikke før du siger de
 
 - [ ] Oct- og Oct+ i bjælkens højre side: hæver og sænker alt (pads, rundgang, MIDI-fil) en oktav ad gangen, -2 til +2.
 - [ ] Mærket mellem knapperne viser, hvilket leje vi står i ("Oct 0", "Oct +1", "Oct -2"). Orange, når det ikke er 0.
+- [ ] Klik rundt på padsene i lang tid og i tilfældig rækkefølge: lejet driver ikke. Alle akkorder ligger omkring midt-C
+      (højst en oktav i alt). Samme pad lyder aldrig en oktav højere eller lavere end før. Akkorden kan være vendt
+      anderledes (blød stemmeføring), men ikke flyttet op eller ned i oktav. (Før: op til ca. 4 oktaver forskel.)
 - [ ] Hold en pad nede, tryk Oct+/Oct- og slip: ingen hængende noter.
 - [ ] Spil rundgangen, tryk Suggest flere gange: akkorderne ligger altid i samme leje. De må ikke hoppe op og ned.
 - [ ] Træk MIDI-filen ud med Oct +1: filen har samme toner, som du hører.
