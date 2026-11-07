@@ -321,6 +321,7 @@ private:
     unsigned captureSeen = 0; // how many played chords had been played when Capture went on, or were last taken
     void setCapturing (bool on);
     void takePlayedChords();
+    int captureVersion = -1; // the version of the bar right after Capture last added something
     BarButton arpOptionsButton { "Arp options", BarButton::Icon::Dots };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };

@@ -471,6 +471,24 @@ int main (int argc, char** argv)
             check (processor.getProgression().size() == now.size() - 1, "Undo takes the last one away");
             processor.redo();
 
+            // A pad pulled into the bar while Capture is on counts once (the press that starts the drag is not added too)
+            {
+                const auto sizeBefore = processor.getProgression().size();
+                processor.pressPad (2);
+                runBlock (processor);
+                bar.updateButtons();
+                ui.getPad (2).onDragStart();
+                processor.releasePad (2);
+                runBlock (processor);
+                ui.getPad (2).onDragEnd (bar.localPointToGlobal (juce::Point<int> (bar.getBlock (0)->getBounds().getRight() + 2, bar.getBlock (0)->getBounds().getCentreY())));
+                settle (50);
+                bar.updateButtons();
+                check (processor.getProgression().size() == sizeBefore + 1, "a pad dragged in while Capture is on is added once");
+                check (processor.getProgression()[1].chord == processor.getPadChord (2), "and it is where it was let go");
+                processor.undo(); // the drop
+                settle (50);
+            }
+
             bar.getCaptureButton().triggerClick();
             settle (50);
             check (! bar.isCapturing(), "the Capture button switches it off");

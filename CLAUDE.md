@@ -139,7 +139,7 @@ Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Moo
 ## Rundgangen
 
 - Hver afspillet akkord kommer i historikken. Samme akkord to gange i træk tæller som to.
-- Capture er en TÆNDT/SLUKKET knap (Henrik, 2026-11-07, på prøve på branchen feature/capture-toggle). Er den tændt (lyser med accentfarven), bliver hver akkord, der spilles, sat sidst i rundgangen som én blok på 1 takt, uanset om den spilles med mus på en pad eller fra MIDI-tastaturet. Er den slukket, sker der ingenting. Den kan kun tændes, når Play er slukket, og Play, Quick-text og Learn slukker den. Fortryd tager akkorderne væk igen, en ad gangen. Den gamle Capture-knap (de sidste 8) er væk; historiestriben ligger på feature/capture-history.
+- Capture er en TÆNDT/SLUKKET knap (Henrik, 2026-11-07, på prøve på branchen feature/capture-toggle). Er den tændt (lyser med accentfarven), bliver hver akkord, der spilles, sat sidst i rundgangen som én blok på 1 takt, uanset om den spilles med mus på en pad eller fra MIDI-tastaturet. Er den slukket, sker der ingenting. Den kan kun tændes, når Play er slukket, og Play, Quick-text og Learn slukker den. Fortryd tager akkorderne væk igen, en ad gangen. Trækkes en pad ned i bjælken, mens Capture er tændt, tæller akkorden kun én gang (der, hvor den slippes). Den gamle Capture-knap (de sidste 8) er væk; historiestriben ligger på feature/capture-history.
 - Standardlængde er 1 takt. Mindste længde er ½ takt, største er 8 takter. Længder ændres ved at trække i blokkens højre kant med trin på ½ takt.
 - Rundgangen kan have alle samlede længder, også ulige antal takter.
 - Træk en blok for at flytte den. Hold Ctrl (Option på Mac) nede for at duplikere.

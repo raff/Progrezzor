@@ -1429,6 +1429,8 @@ void ProgressionBar::takePlayedChords()
     captureSeen = processor.getPlayedCount();
     for (const auto& chord : played)
         processor.editProgression (engine::withInserted (processor.getProgression(), (int) processor.getProgression().size(), chord, processor.getHostBarBeats()));
+    if (! played.empty())
+        captureVersion = processor.getProgressionVersion();
 }
 
 void ProgressionBar::toggleLearn()
@@ -1926,6 +1928,14 @@ int ProgressionBar::blockAtScreenPoint (juce::Point<int> screen) const
 
 void ProgressionBar::setDragActive (bool nowActive)
 {
+    if (nowActive && ! dragActive && capturing)
+    {
+        // A pad that is pulled down into the bar was pressed first, and Capture has already taken that press. The drop is the
+        // one that counts, so the chord is not in the bar twice: take the one Capture added back.
+        takePlayedChords();
+        if (processor.getProgressionVersion() == captureVersion && processor.canUndo())
+            processor.undo();
+    }
     if (nowActive != dragActive)
     {
         dragActive = nowActive;
