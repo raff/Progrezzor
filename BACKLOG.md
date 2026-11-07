@@ -15,7 +15,7 @@ Ideas outside the current milestone go here.
 - Quick-text: a block that is disabled (typed outside the scale, lock on) is only marked by the text mode when Enter is pressed; the red message and Allow show under the blocks. If Allow is wanted per chord instead of for all, that is a later change.
 - Quick-text: blocks are matched to the old ones by place, so a chord moved by typing counts as a new block (it loses its 🔒). Matching by order of chords would keep it.
 - Quick-text: a half bar in 3/4 is 1.5 beats, but the smallest length is 2 beats, so "Am:0.5" becomes 2 beats there (same as the dragged lengths above).
-- pluginval is not installed on this machine, so the "passes pluginval" check of the definition of done is still open.
+- pluginval is in ~/SDKs/pluginval (it was missed before). Run on the branch test/vst3-instrument at strictness 10 without GUI tests: SUCCESS. The GUI tests are skipped (no display here).
 
 - Octave is on the blocks in the bar only (Henrik's choice: not on the pads/preview). Suggest and Capture give blocks in the normal register. Quick-text has no way to write an octave: a block keeps its octave only while its chord is unchanged at the same place.
 

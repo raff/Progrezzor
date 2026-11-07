@@ -907,6 +907,35 @@ int main (int argc, char** argv)
         }
     }
 
+    {
+        // Off: no preview sound at all, but the notes are still sent
+        PadSynth synth;
+        synth.prepare (48000.0);
+        synth.setVoice (PadSynth::Off);
+        synth.noteOn (60, 100);
+        std::vector<float> left (512), right (512);
+        synth.render (left.data(), right.data(), 0, 512);
+        double energy = 0.0;
+        for (const float v : left)
+            energy += v * v;
+        check (energy < 1.0e-12 && synth.isSilent(), "sound Off makes no preview sound");
+
+        *processor.voiceParam = PadSynth::Off;
+        juce::MidiBuffer midiOut;
+        juce::AudioBuffer<float> audio (2, 512);
+        for (int i = 0; i < 4; ++i) // what sounded before fades away
+            processor.processBlock (audio, midiOut);
+        processor.pressPad (0);
+        processor.processBlock (audio, midiOut);
+        bool noteOn = false;
+        for (const auto m : midiOut)
+            noteOn |= m.getMessage().isNoteOn();
+        check (noteOn && audio.getMagnitude (0, 512) < 1.0e-9f, "with sound Off the MIDI is still sent and the audio is silent");
+        processor.releasePad (0);
+        processor.processBlock (audio, midiOut);
+        *processor.voiceParam = 0;
+    }
+
     std::printf ("state\n");
     *processor.keyParam = 2;
     *processor.scaleParam = 3;

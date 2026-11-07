@@ -44,7 +44,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     juce::StringArray moods, voices;
     for (const char* name : engine::moodNames)
         moods.add (name);
-    for (const char* name : { "Pad", "Strings", "Keys", "Organ", "Stab", "Pluck" })
+    for (const char* name : { "Pad", "Strings", "Keys", "Organ", "Stab", "Pluck", "Off" }) // Off: no preview sound (the MIDI is the same)
         voices.add (name);
     addParameter (moodParam = new juce::AudioParameterChoice ({ "mood", 1 }, "Mood", moods, (int) engine::Mood::Melancholic));
     addParameter (voiceParam = new juce::AudioParameterChoice ({ "voice", 1 }, "Voice", voices, 0));

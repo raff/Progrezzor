@@ -38,7 +38,8 @@ juce_add_binary_data(ProgrezzorFonts SOURCES
     resources/fonts/ChakraPetch/ChakraPetch-Bold.ttf)
 set_target_properties(ProgrezzorFonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# Milestone 0, option A (as SeqVerse): IS_SYNTH FALSE and CLAP feature note-effect.
+# Test branch test/vst3-instrument: the VST3 registers as an instrument (IS_SYNTH TRUE), the CLAP stays a note effect (its
+# type comes from CLAP_FEATURES below, not from IS_SYNTH).
 juce_add_plugin(Progrezzor
     COMPANY_NAME "Henrik"
     PLUGIN_MANUFACTURER_CODE Hjuh
@@ -46,7 +47,7 @@ juce_add_plugin(Progrezzor
     FORMATS VST3
     COPY_PLUGIN_AFTER_BUILD TRUE
     PRODUCT_NAME "Progrezzor"
-    IS_SYNTH FALSE
+    IS_SYNTH TRUE
     IS_MIDI_EFFECT FALSE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT TRUE

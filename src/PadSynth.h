@@ -14,10 +14,16 @@
 class PadSynth
 {
 public:
-    enum Voice_ { Pad, Strings, Keys, Organ, Stab, Pluck, numVoices };
+    enum Voice_ { Pad, Strings, Keys, Organ, Stab, Pluck, numVoices, Off = numVoices }; // Off: no preview sound at all
 
-    // The voice that new notes get. Notes that already sound keep theirs until they end.
-    void setVoice (int index) { voiceType = std::max (0, std::min ((int) numVoices - 1, index)); }
+    // The voice that new notes get. Notes that already sound keep theirs until they end; Off lets them fade out quickly.
+    void setVoice (int index)
+    {
+        const int wanted = std::max (0, std::min ((int) Off, index));
+        if (wanted == Off && voiceType != Off)
+            allNotesOff();
+        voiceType = wanted;
+    }
 
     void prepare (double newSampleRate)
     {
@@ -36,7 +42,7 @@ public:
 
     void noteOn (int note, int velocity)
     {
-        if (note < 0 || note > 127)
+        if (note < 0 || note > 127 || voiceType == Off)
             return;
         auto& v = voices[(size_t) note];
         const bool wasSilent = ! v.active;

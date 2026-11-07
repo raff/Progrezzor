@@ -1599,7 +1599,7 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     moodAttachment = std::make_unique<juce::ComboBoxParameterAttachment> (*processor.moodParam, moodBox);
     voiceAttachment = std::make_unique<juce::ComboBoxParameterAttachment> (*processor.voiceParam, voiceBox);
     moodBox.setTooltip ("Mood: the feeling of the progressions Suggest gives");
-    voiceBox.setTooltip ("Sound: what you hear when you play (the MIDI is the same)");
+    voiceBox.setTooltip ("Sound: what you hear when you play. Off: only the MIDI (the MIDI is the same)");
     moodBox.setComponentID ("mood");
     voiceBox.setComponentID ("voice");
     addAndMakeVisible (moodBox);
