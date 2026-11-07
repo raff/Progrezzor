@@ -2482,7 +2482,7 @@ void ProgressionBar::resized()
 {
     auto area = getLocalBounds().reduced (10, 7);
     // The buttons on both sides start at the top of the tray (under the name of the area), and stay a sensible size
-    const int labelHeight = 14;
+    const int labelHeight = 26;
     const int controlsHeight = std::min (area.getHeight() - labelHeight, 150);
     auto left = area.removeFromLeft (64).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromLeft (10);
