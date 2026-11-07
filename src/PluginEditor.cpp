@@ -29,6 +29,19 @@ juce::String octaveMark (int octave)
     return (octave > 0 ? "+" : "-") + juce::String (std::abs (octave)) + " oct";
 }
 
+void drawArrow (juce::Graphics& g, juce::Rectangle<float> r, bool up, juce::Colour colour)
+{
+    juce::Path triangle;
+    const auto c = r.getCentre();
+    const float w = std::min (r.getWidth(), 11.0f), h = w * 0.6f;
+    if (up)
+        triangle.addTriangle (c.x - w * 0.5f, c.y + h * 0.5f, c.x + w * 0.5f, c.y + h * 0.5f, c.x, c.y - h * 0.5f);
+    else
+        triangle.addTriangle (c.x - w * 0.5f, c.y - h * 0.5f, c.x + w * 0.5f, c.y - h * 0.5f, c.x, c.y + h * 0.5f);
+    g.setColour (colour);
+    g.fillPath (triangle);
+}
+
 void drawGear (juce::Graphics& g, juce::Rectangle<float> r, juce::Colour colour)
 {
     const auto centre = r.getCentre();
@@ -280,6 +293,10 @@ void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
         case Icon::Plus:
             g.drawLine (centre.x - size, centre.y, centre.x + size, centre.y, 2.4f);
             g.drawLine (centre.x, centre.y - size, centre.x, centre.y + size, 2.4f);
+            break;
+
+        case Icon::Minus:
+            g.drawLine (centre.x - size, centre.y, centre.x + size, centre.y, 2.4f);
             break;
 
         case Icon::Undo:
@@ -612,18 +629,12 @@ void BlockButton::paint (juce::Graphics& g)
     if (locked || (editable && hovered()))
         drawLock (g, lockArea().toFloat().reduced (5.0f), locked ? (heldByMouse ? theme::onAccent : theme::accent) : theme::dimText, locked);
 
-    // The buttons for the octave, in Edit on mouseover: "+1 oct" on top and "-1 oct" below, against the right edge (and free of
-    // the border)
+    // The arrows for the octave of this block, in Edit on mouseover
     if (editable && hovered())
     {
-        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
-            g.setFont (l->titleFont (juce::jlimit (10.0f, 13.0f, (float) getHeight() * 0.22f)));
-        const auto toolInk = heldByMouse ? theme::onAccent : theme::text;
-        const auto up = octaveUpArea().translated (0, 4), down = octaveDownArea().translated (0, -7);
-        g.setColour (octave >= engine::kMaxOctaveShift ? toolInk.withAlpha (0.3f) : toolInk.withAlpha (0.9f));
-        g.drawText ("+1 oct", up.withTrimmedRight (3), juce::Justification::topRight);
-        g.setColour (octave <= -engine::kMaxOctaveShift ? toolInk.withAlpha (0.3f) : toolInk.withAlpha (0.9f));
-        g.drawText ("-1 oct", down.withTrimmedRight (3), juce::Justification::bottomRight);
+        const auto arrowColour = heldByMouse ? theme::onAccent : theme::text.withAlpha (0.85f);
+        drawArrow (g, octaveUpArea().toFloat(), true, octave >= engine::kMaxOctaveShift ? arrowColour.withAlpha (0.3f) : arrowColour);
+        drawArrow (g, octaveDownArea().toFloat(), false, octave <= -engine::kMaxOctaveShift ? arrowColour.withAlpha (0.3f) : arrowColour);
     }
 
     // The grip on the right edge, where the length is dragged
@@ -637,8 +648,7 @@ void BlockButton::paint (juce::Graphics& g)
 
 void BlockButton::mouseMove (const juce::MouseEvent& e)
 {
-    setMouseCursor (editable && inEdge (e.getPosition()) ? juce::MouseCursor::LeftRightResizeCursor
-                                                   : (editable && (octaveUpArea().contains (e.getPosition()) || octaveDownArea().contains (e.getPosition())) ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor));
+    setMouseCursor (editable && inEdge (e.getPosition()) ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::NormalCursor);
 }
 
 void BlockButton::mouseDown (const juce::MouseEvent& e)
@@ -674,7 +684,7 @@ void BlockButton::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
-    if (! inEdge (e.getPosition()) && (octaveUpArea().contains (e.getPosition()) || octaveDownArea().contains (e.getPosition())))
+    if (octaveUpArea().contains (e.getPosition()) || octaveDownArea().contains (e.getPosition()))
     {
         if (onOctave)
             onOctave (octaveUpArea().contains (e.getPosition()) ? 1 : -1);
@@ -797,6 +807,15 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     playButton.onClick = [this] { processor.togglePlay(); updateButtons(); };
     playButton.setTooltip ("Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
     addAndMakeVisible (playButton);
+
+    octaveDownButton.setTooltip ("Lower everything by an octave: the pads, the progression and the MIDI file");
+    octaveUpButton.setTooltip ("Raise everything by an octave: the pads, the progression and the MIDI file");
+    octaveDownButton.setComponentID ("octave-down");
+    octaveUpButton.setComponentID ("octave-up");
+    octaveDownButton.onClick = [this] { shiftGeneralOctave (-1); };
+    octaveUpButton.onClick = [this] { shiftGeneralOctave (1); };
+    addAndMakeVisible (octaveDownButton);
+    addAndMakeVisible (octaveUpButton);
 
     replaceButton.setTooltip ("Replace the chords with a new suggestion (Undo brings them back)");
     replaceButton.setVisible (false);
@@ -1048,6 +1067,17 @@ void ProgressionBar::updateButtons()
     // starting and stopping.
     const bool playOn = processor.isPlayOn();
     playButton.setToggleState (playOn, juce::dontSendNotification);
+
+    // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
+    const int octave = processor.getGeneralOctave();
+    const juce::String label = "Oct " + (octave > 0 ? "+" + juce::String (octave) : juce::String (octave));
+    if (label != octaveLabel)
+    {
+        octaveLabel = label;
+        repaint (octaveLabelBounds);
+    }
+    octaveDownButton.setEnabled (octave > -engine::kMaxGeneralOctave);
+    octaveUpButton.setEnabled (octave < engine::kMaxGeneralOctave);
     if (playOn != lastPlayOn)
     {
         lastPlayOn = playOn;
@@ -1071,6 +1101,17 @@ void ProgressionBar::captureLastChords()
 }
 
 // Suggest would throw away chords the user has made: the bar asks first, in its message line (no dialog box)
+// The general register: everything that sounds and is exported, an octave up or down
+void ProgressionBar::shiftGeneralOctave (int steps)
+{
+    auto& parameter = *processor.octaveParam;
+    const int wanted = juce::jlimit (-engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, parameter.get() + steps);
+    parameter.beginChangeGesture();
+    parameter.setValueNotifyingHost (parameter.convertTo0to1 ((float) wanted));
+    parameter.endChangeGesture();
+    updateButtons();
+}
+
 void ProgressionBar::askToReplace()
 {
     askingReplace = true;
@@ -1362,6 +1403,14 @@ void ProgressionBar::paint (juce::Graphics& g)
         g.setColour (theme::dimText);
         g.drawText ("PROGRESSION", labelBounds.withTrimmedLeft (16), juce::Justification::centredLeft);
 
+        // The general register, between Oct- and Oct+
+        if (! octaveLabelBounds.isEmpty())
+        {
+            g.setFont (l->titleFont (14.0f));
+            g.setColour (processor.getGeneralOctave() != 0 ? theme::accent : theme::text.withAlpha (0.85f));
+            g.drawText (octaveLabel, octaveLabelBounds, juce::Justification::centred);
+        }
+
         if (! textMode && slots.size() == (size_t) processor.getProgression().size())
         {
             g.setFont (l->labelFont (11.0f));
@@ -1454,15 +1503,23 @@ void ProgressionBar::resized()
     area.removeFromRight (10);
     auto right = area.removeFromRight (112).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromRight (10);
-    const int rowHeight = (right.getHeight() - 6) / 2;
+    const int rowHeight = (right.getHeight() - 10) / 3;
     captureButton.setBounds (right.removeFromTop (rowHeight));
-    right.removeFromTop (6);
-    const int smallWidth = (right.getWidth() - 12) / 3;
-    undoButton.setBounds (right.removeFromLeft (smallWidth));
-    right.removeFromLeft (6);
-    redoButton.setBounds (right.removeFromLeft (smallWidth));
-    right.removeFromLeft (6);
-    quickTextButton.setBounds (right);
+    right.removeFromTop (5);
+    auto smallRow = right.removeFromTop (rowHeight);
+    const int smallWidth = (smallRow.getWidth() - 12) / 3;
+    undoButton.setBounds (smallRow.removeFromLeft (smallWidth));
+    smallRow.removeFromLeft (6);
+    redoButton.setBounds (smallRow.removeFromLeft (smallWidth));
+    smallRow.removeFromLeft (6);
+    quickTextButton.setBounds (smallRow);
+    right.removeFromTop (5);
+
+    // Oct- and Oct+ with the register between them
+    auto octaveRow = right.removeFromTop (rowHeight);
+    octaveDownButton.setBounds (octaveRow.removeFromLeft (smallWidth));
+    octaveUpButton.setBounds (octaveRow.removeFromRight (smallWidth));
+    octaveLabelBounds = octaveRow;
 
     // What is left in the middle is the tray the blocks sit in, with the name of the area above it
     labelBounds = area.removeFromTop (labelHeight);

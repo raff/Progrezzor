@@ -843,6 +843,149 @@ int main (int argc, char** argv)
         settle (50);
     }
 
+    std::printf ("general octave and a steady register\n");
+    {
+        *processor.keyParam = 9;
+        *processor.scaleParam = 0;
+        *processor.octaveParam = 0;
+        processor.setProgression ({ { { 0, engine::ChordType::Minor, engine::kAutoInversion }, 4.0, false },
+                                    { { 8, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },
+                                    { { 3, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },
+                                    { { 10, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false } });
+        settle (50);
+
+        const auto notesOf = [&] (juce::MidiBuffer& buffer)
+        {
+            std::vector<int> notes;
+            for (const auto m : buffer)
+                if (m.getMessage().isNoteOn())
+                    notes.push_back (m.getMessage().getNoteNumber());
+            std::sort (notes.begin(), notes.end());
+            return notes;
+        };
+        const auto padNotes = [&] (int pad)
+        {
+            juce::MidiBuffer out;
+            juce::AudioBuffer<float> audio (2, 512);
+            processor.pressPad (pad);
+            processor.processBlock (audio, out);
+            auto notes = notesOf (out);
+            juce::MidiBuffer off;
+            processor.releasePad (pad);
+            processor.processBlock (audio, off);
+            return notes;
+        };
+
+        // The pads: an octave up moves every note exactly 12 semitones
+        const auto atZero = padNotes (0);
+        *processor.octaveParam = 1;
+        const auto atOne = padNotes (0);
+        *processor.octaveParam = -1;
+        const auto atMinusOne = padNotes (0);
+        *processor.octaveParam = 0;
+        bool exact = atZero.size() == 3 && atOne.size() == 3 && atMinusOne.size() == 3;
+        for (size_t i = 0; exact && i < 3; ++i)
+            exact = atOne[i] == atZero[i] + 12 && atMinusOne[i] == atZero[i] - 12;
+        check (exact, "Oct+ and Oct- move the pads exactly an octave");
+
+        // A note that is held when the register changes is let go of with the note that was started
+        {
+            juce::MidiBuffer out;
+            juce::AudioBuffer<float> audio (2, 512);
+            processor.pressPad (0);
+            processor.processBlock (audio, out);
+            const auto started = notesOf (out);
+            *processor.octaveParam = 2;
+            processor.releasePad (0);
+            juce::MidiBuffer off;
+            processor.processBlock (audio, off);
+            std::vector<int> ended;
+            for (const auto m : off)
+                if (m.getMessage().isNoteOff())
+                    ended.push_back (m.getMessage().getNoteNumber());
+            std::sort (ended.begin(), ended.end());
+            *processor.octaveParam = 0;
+            check (started == ended && started.size() == 3, "changing the register while a pad is held leaves no note hanging");
+        }
+
+        // The loop always plays the progression in the same place, whatever was played on the pads before, and it is the
+        // place that the MIDI file has
+        const auto loopFirstBlock = [&] (int padBefore)
+        {
+            if (padBefore >= 0)
+            {
+                padNotes (padBefore);
+                padNotes (padBefore);
+            }
+            FakeTransport loopTransport;
+            processor.setPlayHead (&loopTransport);
+            loopTransport.playing = false;
+            runBlock (processor);
+            loopTransport.playing = true;
+            loopTransport.quarters = 0.0;
+            juce::MidiBuffer out;
+            juce::AudioBuffer<float> audio (2, 512);
+            processor.processBlock (audio, out);
+            const auto notes = notesOf (out);
+            loopTransport.playing = false;
+            runBlock (processor);
+            processor.setPlayHead (nullptr);
+            return notes;
+        };
+        const auto fresh = loopFirstBlock (-1);
+        const auto afterHigh = loopFirstBlock (6); // the G pad, high in the register
+        const auto afterLow = loopFirstBlock (0);
+        check (fresh.size() == 3 && fresh == afterHigh && fresh == afterLow, "the loop starts in the same place however the pads were played before");
+
+        const auto exported = engine::exportNotes (processor.getProgression(), 9, engine::ScaleId::Minor, true, 0);
+        std::vector<int> firstChord;
+        for (const auto& n : exported)
+            if (n.start < 0.01)
+                firstChord.push_back (n.note);
+        std::sort (firstChord.begin(), firstChord.end());
+        check (firstChord == fresh, "and it is the notes of the MIDI file");
+
+        // Suggest again and again: the first chord of the loop never leaves its register by more than the chord itself
+        bool steady = true;
+        for (int i = 0; i < 40 && steady; ++i)
+        {
+            processor.setProgression ({});
+            processor.suggestProgression();
+            const auto one = loopFirstBlock (i % 7);
+            const auto two = loopFirstBlock ((i + 3) % 7);
+            steady = ! one.empty() && one == two && one.front() >= 36 && one.back() <= 96;
+        }
+        check (steady, "after Suggest the loop sounds in the same register however the pads were played");
+
+        // The project keeps the register, and the file has it
+        *processor.octaveParam = 1;
+        juce::MemoryBlock stateBlock;
+        processor.getStateInformation (stateBlock);
+        ProgrezzorProcessor restored;
+        restored.setStateInformation (stateBlock.getData(), (int) stateBlock.getSize());
+        check (restored.getGeneralOctave() == 1, "the general register comes back from a saved project");
+        *processor.octaveParam = 0;
+
+        // The buttons and the label
+        auto& barRef = static_cast<ProgrezzorEditor*> (editor.get())->getBar();
+        barRef.getOctaveUpButton().triggerClick();
+        settle (50);
+        check (processor.getGeneralOctave() == 1 && barRef.getOctaveLabel() == "Oct +1", "Oct+ raises the register and the label says Oct +1");
+        barRef.getOctaveDownButton().triggerClick();
+        barRef.getOctaveDownButton().triggerClick();
+        settle (50);
+        check (processor.getGeneralOctave() == -1 && barRef.getOctaveLabel() == "Oct -1", "Oct- lowers it, and the label says Oct -1");
+        for (int i = 0; i < 5; ++i)
+        {
+            barRef.getOctaveDownButton().triggerClick();
+            settle (30);
+        }
+        check (processor.getGeneralOctave() == -2 && ! barRef.getOctaveDownButton().isEnabled(), "it stops at two octaves down");
+        processor.setProgression ({});
+        *processor.octaveParam = 0;
+        settle (50);
+    }
+
     std::printf ("block lengths\n");
     check (BlockButton::lengthText (4.0, 4.0) == "1 bar" && BlockButton::lengthText (2.0, 4.0) == "1/2 bar" && BlockButton::lengthText (8.0, 4.0) == "2 bars"
                && BlockButton::lengthText (6.0, 4.0) == "1 1/2 bars" && BlockButton::lengthText (3.0, 3.0) == "1 bar" && BlockButton::lengthText (32.0, 4.0) == "8 bars",

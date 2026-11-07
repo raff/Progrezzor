@@ -116,4 +116,9 @@ constexpr int kCentreNote = 60;  // the chords gather around C4
 // moved up does not pull the next one up with it). Without it the chord is in root position near the centre, unless the
 // chord has a chosen inversion.
 Voicing voiceChord (const Chord& chord, int tonic, const Voicing* previous);
+
+// The general register: the whole voicing moved up or down by whole octaves (the Oct buttons), never past the ends of the
+// MIDI range. The voice leading works on the voicing before this, so the register never pulls the next chord with it.
+constexpr int kMaxGeneralOctave = 2;
+Voicing shiftedByOctaves (Voicing voicing, int octaves);
 }

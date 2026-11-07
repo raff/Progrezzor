@@ -55,6 +55,7 @@ public:
     juce::AudioParameterChoice* scaleParam = nullptr;
     juce::AudioParameterChoice* moodParam = nullptr;  // one of the 8 moods: it decides which progressions Suggest picks from
     juce::AudioParameterChoice* voiceParam = nullptr; // the preview sound: Pad, Strings, Keys, Organ, Stab, Pluck
+    juce::AudioParameterInt* octaveParam = nullptr;   // the general register: -2 to +2 octaves for everything that sounds and is exported
     juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)
 
@@ -144,6 +145,7 @@ public:
     void clearPadVariant (int pad);
     int getVariantVersion() const { return variantVersion.load(); }
     bool isLockedToScale() const { return lockParam->get(); }
+    int getGeneralOctave() const { return octaveParam->get(); }
     engine::Mood getMood() const { return (engine::Mood) moodParam->getIndex(); }
 
 private:

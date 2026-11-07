@@ -138,6 +138,19 @@ double movement (const Voicing& from, const Voicing& to)
 }
 }
 
+Voicing shiftedByOctaves (Voicing voicing, int octaves)
+{
+    octaves = std::clamp (octaves, -kMaxGeneralOctave, kMaxGeneralOctave);
+    // Fewer octaves if the top or the bottom would leave the MIDI range
+    while (octaves > 0 && voicing.count > 0 && voicing.notes[(size_t) voicing.count - 1] + 12 * octaves > 127)
+        --octaves;
+    while (octaves < 0 && voicing.count > 0 && voicing.notes[0] + 12 * octaves < 0)
+        ++octaves;
+    for (int i = 0; i < voicing.count; ++i)
+        voicing.notes[(size_t) i] += 12 * octaves;
+    return voicing;
+}
+
 Voicing voiceChord (const Chord& chord, int tonic, const Voicing* previous)
 {
     // The voice leading works in the unmoved register: the chord that sounded before is taken back to where it was

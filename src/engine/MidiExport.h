@@ -25,8 +25,9 @@ struct ExportNote
 
 // Every block strikes its chord at its start and lets go at its end, also when the next block has the same chord
 // A block that is silent (see isBlockDisabled) gives a rest of its length, as it does when the loop plays.
+// `octaveShift` is the general register (the Oct buttons): the file has the notes that are heard.
 inline std::vector<ExportNote> exportNotes (const Progression& progression, int tonic, ScaleId scale = ScaleId::Minor,
-                                            bool lockToScale = false)
+                                            bool lockToScale = false, int octaveShift = 0)
 {
     std::vector<ExportNote> notes;
     Voicing previous;
@@ -41,8 +42,9 @@ inline std::vector<ExportNote> exportNotes (const Progression& progression, int 
 
         const auto voicing = voiceChord (block.chord, tonic, previous.count > 0 ? &previous : nullptr);
         previous = voicing;
-        for (int i = 0; i < voicing.count; ++i)
-            notes.push_back ({ start, block.beats, voicing.notes[(size_t) i], kExportVelocity });
+        const auto heard = shiftedByOctaves (voicing, octaveShift);
+        for (int i = 0; i < heard.count; ++i)
+            notes.push_back ({ start, block.beats, heard.notes[(size_t) i], kExportVelocity });
         start += block.beats;
     }
     return notes;

@@ -74,7 +74,7 @@ public:
 class BarButton : public juce::Button
 {
 public:
-    enum class Icon { None, Plus, Undo, Redo, Pencil };
+    enum class Icon { None, Plus, Minus, Undo, Redo, Pencil };
     BarButton (const juce::String& name, Icon i) : juce::Button (name), icon (i) {}
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
     void setAccented (bool nowAccented) { accented = nowAccented; } // filled with the accent colour: the one thing to press
@@ -153,11 +153,12 @@ private:
 
     juce::Rectangle<int> lockArea() const { return { 2, 2, 26, 26 }; }
     // The two arrows lie over each other (up above, down below) just inside the right edge, which is for the length
-    juce::Rectangle<int> octaveUpArea() const { return { getWidth() - 50, 0, 50, getHeight() / 2 - 1 }; }
-    juce::Rectangle<int> octaveDownArea() const { return { getWidth() - 50, getHeight() / 2 + 1, 50, getHeight() / 2 - 1 }; }
-    // The edge where the length is pulled: the narrow strip on the right, in the middle of the block's height. The top and
-    // bottom of it belong to the octave buttons.
-    bool inEdge (juce::Point<int> p) const { return p.x >= getWidth() - 10 && p.y >= getHeight() * 3 / 10 && p.y <= getHeight() * 7 / 10; }
+    // The two small arrows for the octave of this block: one in the top right corner, one in the bottom right corner. They are
+    // small, so that a click on the chord itself never hits them.
+    int arrowSize() const { return std::min (16, getHeight() / 2 - 3); }
+    juce::Rectangle<int> octaveUpArea() const { return { getWidth() - 30, 3, 18, arrowSize() }; }
+    juce::Rectangle<int> octaveDownArea() const { return { getWidth() - 30, getHeight() - 9 - arrowSize(), 18, arrowSize() }; }
+    bool inEdge (juce::Point<int> p) const { return p.x >= getWidth() - 10; }
 
     juce::String chordName;
     bool heldByMouse = false;
@@ -232,9 +233,13 @@ public:
     // For the tests
     int numBlocks() const { return blocks.size(); }
     BlockButton* getBlock (int i) { return blocks[i]; }
+    void shiftGeneralOctave (int steps);
     void askToReplace();  // Suggest was pressed and would overwrite chords: ask in the message line
     void cancelAsk();
     juce::Rectangle<int> getTrayBounds() const { return trayBounds; }
+    BarButton& getOctaveUpButton() { return octaveUpButton; }
+    BarButton& getOctaveDownButton() { return octaveDownButton; }
+    const juce::String& getOctaveLabel() const { return octaveLabel; }
     BarButton& getReplaceButton() { return replaceButton; }
 
 private:
@@ -260,6 +265,10 @@ private:
     BarButton captureButton { "Capture", BarButton::Icon::None };
     BarButton quickTextButton { "Text", BarButton::Icon::Pencil };
     BarButton allowButton { "Allow", BarButton::Icon::None };
+    BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
+    BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };
+    juce::Rectangle<int> octaveLabelBounds;
+    juce::String octaveLabel;
     juce::TextEditor textEditor;
     std::unique_ptr<TextMarks> textMarks;
     bool textMode = false;
