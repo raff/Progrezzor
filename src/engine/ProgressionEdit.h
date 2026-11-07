@@ -101,22 +101,6 @@ inline Progression withDuplicated (Progression p, int from, int gap)
     return p;
 }
 
-// The last `count` chords that were played (oldest first) become blocks of one bar each
-inline Progression fromHistory (const std::vector<Chord>& history, int count, double barBeats = kBeatsPerBar)
-{
-    Progression p;
-    const int available = (int) history.size();
-    const int n = std::min ({ count, available, kMaxBlocks });
-    for (int i = available - n; i < available; ++i)
-    {
-        Block block;
-        block.chord = history[(size_t) i];
-        block.beats = std::clamp (barBeats, kMinBlockBeats, kMaxBlockBeats);
-        p.push_back (block);
-    }
-    return p;
-}
-
 // A suggestion that respects the pad variants the user has chosen: when a block's root matches a pad that plays another
 // kind of chord than the scale gives it (B changed to B7), the block gets that pad's type and inversion. Lengths, blocks
 // without a matching variant pad and locked blocks are left as they are. Variants outside the scale are used too.

@@ -217,7 +217,7 @@ public:
     void setEditing (bool nowEditing);
     bool isEditing() const { return editing; }
 
-    // Greys out Undo, Redo and Capture when they have nothing to do
+    // Greys out Undo and Redo when they have nothing to do
     void updateButtons();
 
     // Marks the block that the loop plays now (-1 for none)
@@ -264,8 +264,8 @@ public:
     void toggleArp();
     bool arpPanelShown = false;
     void drawPitchStrip (juce::Graphics&, juce::Rectangle<float>) const;
-    // Suggest or Capture would throw away chords the user has made: ask first, in a small card in the middle of the bar
-    enum class Pending { Suggest, Capture };
+    // Suggest would throw away chords the user has made: ask first, in a small card in the middle of the bar
+    enum class Pending { Suggest };
     void askToReplace (Pending what);
     class AskCard;
     Pending pending = Pending::Suggest;
@@ -273,7 +273,6 @@ public:
     void cancelAsk();
     juce::Rectangle<int> getTrayBounds() const { return trayBounds; }
     ArpToggle& getArpButton() { return arpButton; }
-    BarButton& getCaptureButton() { return captureButton; }
     LearnToggle& getLearnButton() { return learnButton; }
     int getLearnTarget() const { return learnActive ? learnTarget : -2; } // -1: all played, -2: not learning
 
@@ -291,7 +290,6 @@ public:
 private:
     int gapAt (juce::Point<int> p) const;
     void select (int index);
-    void captureLastChords();
     void leaveTextMode();
     void updateTextFeedback();
     void updateNotice();
@@ -308,7 +306,6 @@ private:
     int askedAtVersion = -1;
     BarButton undoButton { "Undo", BarButton::Icon::Undo };
     BarButton redoButton { "Redo", BarButton::Icon::Redo };
-    BarButton captureButton { "Capture", BarButton::Icon::None };
     BarButton quickTextButton { "Text", BarButton::Icon::Pencil };
     BarButton allowButton { "Allow", BarButton::Icon::None };
     BarButton settingsButton { "Settings", BarButton::Icon::Gear };

@@ -39,7 +39,7 @@ Alt ligger på én skærm uden faner.
 
 - Topbjælke: Toneart og skala, Lock to scale (🔒), Mood, stemme og en tydelig 🎲 Suggest-knap.
 - Midten: 7 store pads, der fylder hele bredden og næsten halvdelen af vinduet. De skal kunne hamres på med mus eller MIDI.
-- Bund: Rundgangsbjælken, et kort for sig med en mørk bakke til blokkene: Play, blokke (ombrydes i flere rækker), Capture, Fortryd, Gendan, ✏️ Quick-text (fast plads i højre side) og Drag.
+- Bund: Rundgangsbjælken, et kort for sig med en mørk bakke til blokkene: Play, blokke (ombrydes i flere rækker), Fortryd, Gendan, ✏️ Quick-text (fast plads i højre side) og Drag.
 
 Regler:
 
@@ -139,7 +139,7 @@ Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Moo
 ## Rundgangen
 
 - Hver afspillet akkord kommer i historikken. Samme akkord to gange i træk tæller som to.
-- Capture er én knap uden menu: den lægger de sidste 8 akkorder i bjælken (færre, hvis der er spillet færre). Hver akkord får 1 takt. Fortryd bringer den gamle bjælke tilbage. (Besluttet af Henrik efter test af milepæl 7.)
+- Capture (en knap, der lagde de sidste 8 spillede akkorder i bjælken) er fjernet indtil videre (Henrik, 2026-11-07), fordi det ikke er afklaret, hvordan den bør virke. Idéerne med en historiestribe ligger på branchen feature/capture-history og kan genbruges. Historikken over spillede akkorder bruges stadig til at lyse pads op (se Forslag).
 - Standardlængde er 1 takt. Mindste længde er ½ takt, største er 8 takter. Længder ændres ved at trække i blokkens højre kant med trin på ½ takt.
 - Rundgangen kan have alle samlede længder, også ulige antal takter.
 - Træk en blok for at flytte den. Hold Ctrl (Option på Mac) nede for at duplikere.
@@ -147,7 +147,7 @@ Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Moo
 - Højreklik eller Delete sletter.
 - Play-knappen bestemmer alt: Play slukket = rundgangen kan redigeres (der er ingen Edit-knap). Play tændt = blokkene spiller kun deres akkord, når de trykkes, og intet kan ændres.
 - Kører DAW'en, følger loopet DAW'ens position (PPQ). Det skal klare DAW-loops, hop i tid og tempoændringer. Står DAW'en stille, starter Play plug-in'ens eget ur fra første akkord (DAW'ens tempo, ellers 120 BPM). Starter DAW'en, overtager den.
-- Suggest og Capture spørger i et lille kort midt i rundgangsvinduet ("Replace the chords in the bar?" med en Replace-knap, ingen dialogboks), før de overskriver akkorder, brugeren selv har lavet. Capture spørger, hvis der er noget i bjælken, og Suggest, hvis der er blokke uden 🔒. Den spørger ikke, når bjælken er tom, kun har låste blokke, eller stadig er det, Suggest selv lagde der.
+- Suggest spørger i et lille kort midt i rundgangsvinduet ("Replace the chords in the bar?" med en Replace-knap, ingen dialogboks), før den overskriver akkorder, brugeren selv har lavet, hvis der er blokke uden 🔒. Den spørger ikke, når bjælken er tom, kun har låste blokke, eller stadig er det, Suggest selv lagde der.
 - Akkordskift skal lande præcis på taktstregen, også midt i en audio-buffer.
 - Holdes en pad, mens loopet kører, har pad'en forrang, og loopet tier imens.
 
@@ -207,7 +207,7 @@ Reglen er: * betyder antal, og : betyder længde. Tekstfeltet viser altid blokke
 2. 7 store pads, toneart, skala, Pad-stemmen, MIDI ud og keyboard-input. Ingen hængende noter.
 3. Rundgangsbjælken med blokke, 🎲 Suggest og et lille bibliotek til Melancholic. Her testes kvaliteten af forslag tidligt.
 4. Loop synkroniseret med DAW'en.
-5. Redigering: længder, træk, duplikér, tilføj, slet, 🔒, fortryd og gendan, Capture og variant-menu.
+5. Redigering: længder, træk, duplikér, tilføj, slet, 🔒, fortryd og gendan og variant-menu. (Capture indgik, men er fjernet, se Rundgangen.)
 6. MIDI-eksport.
 7. Lock to scale og lysende pads.
 8. Quick-text.

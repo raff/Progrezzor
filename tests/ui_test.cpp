@@ -419,6 +419,12 @@ int main (int argc, char** argv)
             settle (50);
             check (processor.getProgression() == mine, "Suggest does not change the bar before the answer");
             check (bar.getReplaceButton().isVisible() && bar.getNotice().contains ("Replace"), "it asks in the bar");
+            {
+                const auto tray = bar.getTrayBounds();
+                const auto button = bar.getReplaceButton().getBounds();
+                check (std::abs (button.getCentreY() - tray.getCentreY()) <= 4 && button.getCentreX() > tray.getCentreX() && button.getCentreX() < tray.getRight(),
+                       "the question is in the middle of the bar (the Replace button is on the right of the middle)");
+            }
             snapshot ("suggest_asks");
             bar.getReplaceButton().triggerClick();
             settle (50);
@@ -431,32 +437,6 @@ int main (int argc, char** argv)
             settle (50);
         }
 
-        // Capture asks too, in the middle of the bar, before it replaces chords the user made
-        {
-            processor.pressPad (1);
-            runBlock (processor);
-            processor.releasePad (1);
-            runBlock (processor);
-            settle (50);
-            const auto mine = processor.getProgression();
-            check (processor.captureWouldOverwrite(), "Capture would replace the user's chords");
-            bar.getCaptureButton().triggerClick();
-            settle (50);
-            check (processor.getProgression() == mine, "Capture does not change the bar before the answer");
-            check (bar.getReplaceButton().isVisible(), "it asks first");
-            const auto tray = bar.getTrayBounds();
-            const auto button = bar.getReplaceButton().getBounds();
-            check (std::abs (button.getCentreY() - tray.getCentreY()) <= 4 && button.getCentreX() > tray.getCentreX() && button.getCentreX() < tray.getRight(),
-                   "the question is in the middle of the bar (the Replace button is on the right of the middle)");
-            snapshot ("capture_asks");
-            bar.getReplaceButton().triggerClick();
-            settle (50);
-            check (processor.getProgression() != mine, "Replace puts in the chords you played");
-            check (! processor.captureWouldOverwrite(), "and the next Capture does not ask while the bar is still the capture");
-            processor.setProgression (mine);
-            settle (50);
-        }
-
         // A new project starts in C Major with the plainest mood
         {
             ProgrezzorProcessor fresh;
@@ -464,21 +444,6 @@ int main (int argc, char** argv)
                    "a new project starts in C Major, in the Bright mood");
         }
 
-        // Capture
-        for (int pad : { 0, 0, 3, 4, 5 })
-        {
-            processor.pressPad (pad);
-            runBlock (processor);
-            processor.releasePad (pad);
-            runBlock (processor);
-        }
-        check (processor.capture (4), "capture finds chords");
-        check (roots() == "0 5 7 8 " && near (processor.getProgression()[0].beats, 4.0), "the last 4 played chords, one bar each");
-        processor.undo();
-        check (processor.capture (8), "capture 8");
-        check (processor.getProgression().size() == 8 && processor.getProgression()[3].chord == processor.getProgression()[4].chord,
-               "the same chord twice in a row counts twice");
-        snapshot ("captured");
         // A long progression wraps into several rows
         {
             const auto beforeMany = processor.getProgression();
@@ -798,7 +763,7 @@ int main (int argc, char** argv)
         bar.applyQuickText();
         check (processor.getProgression()[0].locked && processor.getProgression()[1].disabled, "text that is not changed changes nothing");
 
-        // Suggest and Capture close the text
+        // Suggest closes the text
         click(bar.getQuickTextButton());
         check (bar.isInTextMode(), "the text is open");
         bar.cancelQuickText();

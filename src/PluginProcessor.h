@@ -132,14 +132,9 @@ public:
     // True if Suggest would throw away chords that did not come from Suggest itself (an empty bar, a bar of only locked blocks
     // and a bar that is still the last suggestion are replaced without asking)
     bool suggestWouldOverwrite() const;
-    // The same for Capture, which replaces the whole bar: true if there is anything in it that did not come from Suggest or
-    // Capture themselves
-    bool captureWouldOverwrite() const;
 
     // The chords played on the pads (mouse and MIDI), newest last, at most `count`. Blocks and the loop are not in it.
     std::vector<engine::Chord> recentChords (int count) const;
-    // Puts the last `count` played chords in the bar, one bar each. False if nothing has been played.
-    bool capture (int count);
 
     // ---- MIDI export (message thread) ----
     // The folder the files go in: a folder called Progrezzor in the user's music folder (or the one in the environment
@@ -258,7 +253,7 @@ private:
     std::vector<engine::Progression> undoStack, redoStack;
     engine::Progression progression;
     int lastSuggestion = -1;
-    int generatedVersion = -1; // progressionVersion right after the last Suggest or Capture
+    int generatedVersion = -1; // progressionVersion right after the last Suggest
     juce::Random random;
     std::atomic<int> progressionVersion { 0 };
 

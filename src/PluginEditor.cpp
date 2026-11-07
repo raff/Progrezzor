@@ -1515,13 +1515,7 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     replaceButton.onClick = [this]
     {
         askingReplace = false;
-        if (pending == Pending::Capture)
-        {
-            if (processor.capture (8))
-                clearSelection();
-        }
-        else
-            processor.suggestProgression();
+        processor.suggestProgression();
         updateNotice();
     };
     addChildComponent (replaceButton);
@@ -1575,10 +1569,6 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     };
     addAndMakeVisible (redoButton);
 
-    captureButton.setButtonText ("Capture");
-    captureButton.setTooltip ("Put the last 8 chords you played in the bar");
-    captureButton.onClick = [this] { captureLastChords(); };
-    addAndMakeVisible (captureButton);
 
     dragTile.makeFile = [this] { return processor.saveMidi(); };
     dragTile.setTooltip ("Drag this into your DAW: the progression as a MIDI file");
@@ -1802,24 +1792,10 @@ void ProgressionBar::updateButtons()
     }
     undoButton.setEnabled (processor.canUndo());
     redoButton.setEnabled (processor.canRedo());
-    captureButton.setEnabled (! processor.recentChords (1).empty());
     dragTile.setReady (! processor.getProgression().empty());
     if (blocks.size() == (int) processor.getProgression().size()) // the length follows a resize, and the DAW's time signature
         for (int i = 0; i < blocks.size(); ++i)
             blocks[i]->setLength (processor.getProgression()[(size_t) i].beats, processor.getHostBarBeats());
-}
-
-void ProgressionBar::captureLastChords()
-{
-    // One click: the last 8 chords you played go in the bar (Undo brings the old bar back)
-    cancelQuickText();
-    if (processor.captureWouldOverwrite())
-    {
-        askToReplace (Pending::Capture); // it would replace chords you made: ask first
-        return;
-    }
-    if (processor.capture (8))
-        clearSelection();
 }
 
 // Suggest would throw away chords the user has made: the bar asks first, in its message line (no dialog box)
@@ -2219,7 +2195,7 @@ void ProgressionBar::paint (juce::Graphics& g)
         g.setColour (theme::dimText);
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
             g.setFont (l->labelFont (16.0f));
-        g.drawText (editing ? "Drag a chord down here, or press Suggest" : "Press Suggest, or play and press Capture",
+        g.drawText (editing ? "Drag a chord down here, or press Suggest" : "Press Suggest",
                     trayBounds, juce::Justification::centred);
     }
 
@@ -2369,28 +2345,25 @@ void ProgressionBar::resized()
 
     // The right side. The group (the buttons and the Drag tile) grows with the window, and the little keyboard sits in the
     // bottom right corner under all of it, as wide as the group.
-    const int groupWidth = juce::jlimit (214, 460, juce::roundToInt ((float) getWidth() * 0.27f));
+    const int groupWidth = juce::jlimit (240, 460, juce::roundToInt ((float) getWidth() * 0.27f));
     auto group = area.removeFromRight (groupWidth).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromRight (10);
-    const int rowHeight = (group.getHeight() - 15) / 4;
+    const int rowHeight = (group.getHeight() - 10) / 3;
     stripBounds = group.removeFromBottom (rowHeight);
     group.removeFromBottom (5);
     auto upper = group;
     dragTile.setBounds (upper.removeFromRight (std::min (68, std::max (56, upper.getHeight()))));
     upper.removeFromRight (10);
     auto right = upper;
-    auto captureRow = right.removeFromTop (rowHeight);
-    settingsButton.setBounds (captureRow.removeFromRight ((right.getWidth() - 12) / 3));
-    captureRow.removeFromRight (6);
-    captureButton.setBounds (captureRow);
-    right.removeFromTop (5);
     auto smallRow = right.removeFromTop (rowHeight);
-    const int smallWidth = (smallRow.getWidth() - 12) / 3;
+    const int smallWidth = (smallRow.getWidth() - 18) / 4;
     undoButton.setBounds (smallRow.removeFromLeft (smallWidth));
     smallRow.removeFromLeft (6);
     redoButton.setBounds (smallRow.removeFromLeft (smallWidth));
     smallRow.removeFromLeft (6);
-    quickTextButton.setBounds (smallRow);
+    quickTextButton.setBounds (smallRow.removeFromLeft (smallWidth));
+    smallRow.removeFromLeft (6);
+    settingsButton.setBounds (smallRow);
     right.removeFromTop (5);
 
     // Oct- and Oct+ with the register between them

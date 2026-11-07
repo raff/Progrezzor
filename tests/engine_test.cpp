@@ -689,19 +689,6 @@ void testEditing()
     const auto replaced = withReplaced (p, 2, other);
     check (replaced[2].chord == other && replaced[2].beats == p[2].beats && replaced[0].chord == p[0].chord, "replace changes only the chord");
 
-    // Capture
-    std::vector<Chord> history;
-    for (int i = 0; i < 10; ++i)
-        history.push_back ({ i, ChordType::Major, kAutoInversion });
-    const auto captured = fromHistory (history, 4);
-    check (captured.size() == 4 && captured[0].chord.root == 6 && captured[3].chord.root == 9, "capture takes the last chords, oldest first");
-    check (captured[0].beats == kBeatsPerBar, "each captured chord gets one bar");
-    check (fromHistory (history, 8).size() == 8 && fromHistory ({ history[0], history[1] }, 4).size() == 2 && fromHistory ({}, 4).empty(),
-           "capture takes fewer if fewer were played");
-    history[9] = history[8];
-    check (fromHistory (history, 4)[2].chord == fromHistory (history, 4)[3].chord, "the same chord twice in a row counts twice");
-    check (fromHistory (history, 4, 3.0)[0].beats == 3.0, "and a bar is as long as the host's bar");
-
     // Suggest keeps locked blocks
     Progression old = threeBlocks();
     old[1].locked = true;

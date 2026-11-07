@@ -712,11 +712,6 @@ void ProgrezzorProcessor::suggestProgression()
     generatedVersion = progressionVersion.load();
 }
 
-bool ProgrezzorProcessor::captureWouldOverwrite() const
-{
-    return ! progression.empty() && progressionVersion.load() != generatedVersion;
-}
-
 bool ProgrezzorProcessor::suggestWouldOverwrite() const
 {
     if (progressionVersion.load() == generatedVersion)
@@ -760,17 +755,6 @@ std::vector<engine::Chord> ProgrezzorProcessor::recentChords (int count) const
     for (unsigned i = n - (unsigned) take; i != n; ++i)
         chords.push_back (unpackChord (history[i % kHistorySize].load (std::memory_order_relaxed)));
     return chords;
-}
-
-bool ProgrezzorProcessor::capture (int count)
-{
-    const auto captured = engine::fromHistory (recentChords (count), count, getHostBarBeats());
-    if (captured.empty())
-        return false;
-
-    editProgression (captured);
-    generatedVersion = progressionVersion.load();
-    return true;
 }
 
 engine::Chord ProgrezzorProcessor::getPadChord (int pad) const
