@@ -74,7 +74,7 @@ public:
 class BarButton : public juce::Button
 {
 public:
-    enum class Icon { None, Plus, Minus, Undo, Redo, Pencil };
+    enum class Icon { None, Plus, Minus, Undo, Redo, Pencil, Gear };
     BarButton (const juce::String& name, Icon i) : juce::Button (name), icon (i) {}
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
     void setAccented (bool nowAccented) { accented = nowAccented; } // filled with the accent colour: the one thing to press
@@ -234,9 +234,13 @@ public:
     int numBlocks() const { return blocks.size(); }
     BlockButton* getBlock (int i) { return blocks[i]; }
     void shiftGeneralOctave (int steps);
+    void showSettingsMenu();
     void askToReplace();  // Suggest was pressed and would overwrite chords: ask in the message line
     void cancelAsk();
     juce::Rectangle<int> getTrayBounds() const { return trayBounds; }
+    BarButton& getSettingsButton() { return settingsButton; }
+    const juce::String& getRegisterLabel() const { return registerLabel; }
+    void chooseRegister (int index); // Settings: Low (0), Mid (1) or High (2)
     BarButton& getOctaveUpButton() { return octaveUpButton; }
     BarButton& getOctaveDownButton() { return octaveDownButton; }
     const juce::String& getOctaveLabel() const { return octaveLabel; }
@@ -265,10 +269,11 @@ private:
     BarButton captureButton { "Capture", BarButton::Icon::None };
     BarButton quickTextButton { "Text", BarButton::Icon::Pencil };
     BarButton allowButton { "Allow", BarButton::Icon::None };
+    BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };
     juce::Rectangle<int> octaveLabelBounds;
-    juce::String octaveLabel;
+    juce::String octaveLabel, registerLabel;
     juce::TextEditor textEditor;
     std::unique_ptr<TextMarks> textMarks;
     bool textMode = false;

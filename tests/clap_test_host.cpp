@@ -394,11 +394,9 @@ clap_event_transport_t transportAt (bool playing, double beats, double bpm = 120
 }
 
 // The notes of a pad as the engine voices them (A Minor unless said otherwise), after the given earlier chords
-std::vector<int> expectedNotes (int pad, const Key& key = Key {}, const engine::Voicing* previous = nullptr, engine::Voicing* result = nullptr)
+std::vector<int> expectedNotes (int pad, const Key& key = Key {})
 {
-    const auto v = voiceChord (padChord (key.scale, pad), key.tonic, previous);
-    if (result != nullptr)
-        *result = v;
+    const auto v = voiceChord (padChord (key.scale, pad), key.tonic);
     return std::vector<int> (v.notes.begin(), v.notes.begin() + v.count);
 }
 
@@ -584,9 +582,8 @@ int main (int argc, char** argv)
         std::printf ("two pads that share notes: a note ends with the last pad that holds it\n");
         received.clear();
         Session s;
-        engine::Voicing first;
-        const auto am = expectedNotes (0, Key {}, nullptr, &first);   // A C E
-        const auto c = expectedNotes (2, Key {}, &first);             // C E G, voiced after Am
+        const auto am = expectedNotes (0); // A C E
+        const auto c = expectedNotes (2);  // C E G
         s.keyOn (keyOfPad (0));
         s.keyOn (keyOfPad (2));
         check (s.out.clean(), "no note is started twice");
@@ -794,16 +791,12 @@ int main (int argc, char** argv)
 
         // What the engine voices after each other: the loop's chords, one after the other
         std::vector<std::vector<int>> chain;
-        engine::Voicing previous;
-        bool havePrevious = false;
         const Key key { 9, ScaleId::Minor };
         for (int round = 0; round < 2; ++round)
             for (const auto& b : amFCG)
             {
-                engine::Voicing v = voiceChord ({ b.root, (ChordType) b.type, kAutoInversion }, key.tonic, havePrevious ? &previous : nullptr);
+                const engine::Voicing v = voiceChord ({ b.root, (ChordType) b.type, kAutoInversion }, key.tonic);
                 chain.push_back (sortedNotes (v));
-                previous = v;
-                havePrevious = true;
             }
 
         bool allRight = true;

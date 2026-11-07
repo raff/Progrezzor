@@ -48,6 +48,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
         voices.add (name);
     addParameter (moodParam = new juce::AudioParameterChoice ({ "mood", 1 }, "Mood", moods, (int) engine::Mood::Melancholic));
     addParameter (voiceParam = new juce::AudioParameterChoice ({ "voice", 1 }, "Voice", voices, 0));
+    addParameter (registerParam = new juce::AudioParameterChoice ({ "register", 1 }, "Register", juce::StringArray { "Low", "Mid", "High" }, 1));
     addParameter (octaveParam = new juce::AudioParameterInt ({ "octave", 1 }, "Octave", -engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, 0));
 
     for (auto& variant : padVariant)
@@ -169,28 +170,7 @@ public:
 
         owner.loopChord = chord;
         owner.loopTonic = tonic;
-        // The loop's chord is voiced from the start of the progression, the same way as the MIDI file, so it always sounds in the
-        // same place however the pads were played before: Suggest or a new loop never moves the register.
-        const auto voicing = loopVoicing (owner.loopIndex, tonic);
-        pressSource (loopSource, -1, chord, kLoopVelocity, position, &voicing);
-    }
-
-    // The voicing of block `index`, worked out from the first block, skipping the silent ones, exactly as the MIDI file is
-    engine::Voicing loopVoicing (int index, int tonic) const
-    {
-        const auto& snapshot = owner.loopBuffer.read();
-        const auto scale = (engine::ScaleId) owner.scaleParam->getIndex();
-        const bool lock = owner.lockParam->get();
-        engine::Voicing previous, result;
-        for (int i = 0; i <= index && i < snapshot.count; ++i)
-        {
-            const auto& block = snapshot.blocks[(size_t) i];
-            if (block.disabled && lock && ! engine::chordFitsScale (block.chord, scale))
-                continue;
-            result = engine::voiceChord (block.chord, tonic, previous.count > 0 ? &previous : nullptr);
-            previous = result;
-        }
-        return result;
+        pressSource (loopSource, -1, chord, kLoopVelocity, position);
     }
 
     // The loop starts the block at its first sample
@@ -213,15 +193,13 @@ public:
     }
 
     // `pad` is the pad that lights up (0 to 6), -1 for a chord that is not a pad
-    void pressSource (int source, int pad, const engine::Chord& chord, int velocity, int position, const engine::Voicing* fixedVoicing = nullptr)
+    void pressSource (int source, int pad, const engine::Chord& chord, int velocity, int position)
     {
         if (source < 0 || source >= engine::NoteTracker::kNumSources || pad >= kNumPads)
             return;
 
-        const auto voicing = fixedVoicing != nullptr ? *fixedVoicing
-                                                     : engine::voiceChord (chord, owner.keyParam->getIndex(),
-                                                                           owner.lastVoicing.count > 0 ? &owner.lastVoicing : nullptr);
-        owner.lastVoicing = voicing; // the voice leading goes on from the chord as it was, before the general register
+        // The same chord always has the same notes: only the key, the default register (Settings) and the Oct buttons count
+        const auto voicing = engine::voiceChord (chord, owner.keyParam->getIndex(), engine::registerCentre (owner.registerParam->getIndex()));
         const auto heard = engine::shiftedByOctaves (voicing, owner.octaveParam->get());
 
         if (pad >= 0)
@@ -644,7 +622,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto key = getKey();
 
     // What the file is made from. The same again gives the same file.
-    juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (octaveParam->get());
+    juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (octaveParam->get()) + "/" + juce::String (registerParam->getIndex());
     for (const auto& block : progression)
         madeFrom << (engine::isBlockDisabled (block, key.scale, lockParam->get()) ? "|-" : "|") << block.chord.root << "," << (int) block.chord.type << "," << block.chord.inversion << "," << block.chord.octave << "," << juce::String (block.beats, 4);
 
@@ -656,7 +634,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto ticks = [] (double beats) { return beats * kTicksPerQuarter; };
 
     juce::MidiMessageSequence sequence;
-    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), octaveParam->get()))
+    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), octaveParam->get(), engine::registerCentre (registerParam->getIndex())))
     {
         // All MIDI on channel 1. A note off comes before a note on at the same time, so that equal chords strike again.
         sequence.addEvent (juce::MidiMessage::noteOn (1, note.note, (juce::uint8) note.velocity).withTimeStamp (ticks (note.start)));
@@ -694,7 +672,7 @@ juce::File ProgrezzorProcessor::saveMidi()
 void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
 {
     juce::XmlElement xml ("Progrezzor");
-    xml.setAttribute ("version", 8);
+    xml.setAttribute ("version", 9);
     xml.setAttribute ("key", keyParam->getIndex());
     xml.setAttribute ("scale", scaleParam->getIndex());
     xml.setAttribute ("loop", loopParam->get() ? 1 : 0);
@@ -702,6 +680,7 @@ void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
     xml.setAttribute ("mood", moodParam->getIndex());
     xml.setAttribute ("voice", voiceParam->getIndex());
     xml.setAttribute ("octave", octaveParam->get());
+    xml.setAttribute ("register", registerParam->getIndex());
 
     for (int pad = 0; pad < kNumPads; ++pad)
         xml.setAttribute ("pad" + juce::String (pad), padVariant[(size_t) pad].load());
@@ -737,6 +716,7 @@ void ProgrezzorProcessor::setStateInformation (const void* data, int size)
     *lockParam = xml->getIntAttribute ("lock", 1) != 0; // and the lock
     set (*moodParam, xml->getIntAttribute ("mood", (int) engine::Mood::Melancholic)); // older projects: the mood they had
     set (*voiceParam, xml->getIntAttribute ("voice", 0));
+    set (*registerParam, xml->getIntAttribute ("register", 1));
     *octaveParam = juce::jlimit (-engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, xml->getIntAttribute ("octave", 0));
 
     for (int pad = 0; pad < kNumPads; ++pad)

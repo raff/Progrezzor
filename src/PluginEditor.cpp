@@ -295,6 +295,10 @@ void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
             g.drawLine (centre.x, centre.y - size, centre.x, centre.y + size, 2.4f);
             break;
 
+        case Icon::Gear:
+            drawGear (g, bounds.reduced (bounds.getWidth() * 0.12f), colour);
+            break;
+
         case Icon::Minus:
             g.drawLine (centre.x - size, centre.y, centre.x + size, centre.y, 2.4f);
             break;
@@ -808,6 +812,11 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     playButton.setTooltip ("Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
     addAndMakeVisible (playButton);
 
+    settingsButton.setTooltip ("Settings: the default register");
+    settingsButton.setComponentID ("settings");
+    settingsButton.onClick = [this] { showSettingsMenu(); };
+    addAndMakeVisible (settingsButton);
+
     octaveDownButton.setTooltip ("Lower everything by an octave: the pads, the progression and the MIDI file");
     octaveUpButton.setTooltip ("Raise everything by an octave: the pads, the progression and the MIDI file");
     octaveDownButton.setComponentID ("octave-down");
@@ -1071,9 +1080,12 @@ void ProgressionBar::updateButtons()
     // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
     const int octave = processor.getGeneralOctave();
     const juce::String label = "Oct " + (octave > 0 ? "+" + juce::String (octave) : juce::String (octave));
-    if (label != octaveLabel)
+    static const char* registerNames[engine::kNumRegisters] = { "Low", "Mid", "High" };
+    const juce::String registerName = registerNames[juce::jlimit (0, engine::kNumRegisters - 1, processor.getRegisterIndex())];
+    if (label != octaveLabel || registerName != registerLabel)
     {
         octaveLabel = label;
+        registerLabel = registerName;
         repaint (octaveLabelBounds);
     }
     octaveDownButton.setEnabled (octave > -engine::kMaxGeneralOctave);
@@ -1101,6 +1113,33 @@ void ProgressionBar::captureLastChords()
 }
 
 // Suggest would throw away chords the user has made: the bar asks first, in its message line (no dialog box)
+// Settings: where the chords sit. Low, Mid (the usual) or High, an octave apart. Oct- and Oct+ move it further from there.
+void ProgressionBar::chooseRegister (int index)
+{
+    auto& parameter = *processor.registerParam;
+    parameter.beginChangeGesture();
+    parameter.setValueNotifyingHost (parameter.convertTo0to1 ((float) juce::jlimit (0, engine::kNumRegisters - 1, index)));
+    parameter.endChangeGesture();
+    updateButtons();
+}
+
+void ProgressionBar::showSettingsMenu()
+{
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Register");
+    const char* names[engine::kNumRegisters] = { "Low  (deeper, warmer)", "Mid  (the usual)", "High  (brighter)" };
+    for (int i = 0; i < engine::kNumRegisters; ++i)
+        menu.addItem (i + 1, names[i], true, i == processor.getRegisterIndex());
+
+    juce::Component::SafePointer<ProgressionBar> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (190),
+                        [safe] (int result)
+                        {
+                            if (safe != nullptr && result > 0)
+                                safe->chooseRegister (result - 1);
+                        });
+}
+
 // The general register: everything that sounds and is exported, an octave up or down
 void ProgressionBar::shiftGeneralOctave (int steps)
 {
@@ -1406,9 +1445,14 @@ void ProgressionBar::paint (juce::Graphics& g)
         // The general register, between Oct- and Oct+
         if (! octaveLabelBounds.isEmpty())
         {
+            // Two lines: the default register from Settings (Low, Mid, High), and the Oct- and Oct+ steps from there
+            auto textArea = octaveLabelBounds;
+            g.setFont (l->labelFont (12.0f));
+            g.setColour (theme::dimText);
+            g.drawText (registerLabel, textArea.removeFromTop (textArea.getHeight() / 2 + 1), juce::Justification::centredBottom);
             g.setFont (l->titleFont (14.0f));
             g.setColour (processor.getGeneralOctave() != 0 ? theme::accent : theme::text.withAlpha (0.85f));
-            g.drawText (octaveLabel, octaveLabelBounds, juce::Justification::centred);
+            g.drawText (octaveLabel, textArea, juce::Justification::centredTop);
         }
 
         if (! textMode && slots.size() == (size_t) processor.getProgression().size())
@@ -1504,7 +1548,10 @@ void ProgressionBar::resized()
     auto right = area.removeFromRight (112).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromRight (10);
     const int rowHeight = (right.getHeight() - 10) / 3;
-    captureButton.setBounds (right.removeFromTop (rowHeight));
+    auto captureRow = right.removeFromTop (rowHeight);
+    settingsButton.setBounds (captureRow.removeFromRight ((right.getWidth() - 12) / 3));
+    captureRow.removeFromRight (6);
+    captureButton.setBounds (captureRow);
     right.removeFromTop (5);
     auto smallRow = right.removeFromTop (rowHeight);
     const int smallWidth = (smallRow.getWidth() - 12) / 3;

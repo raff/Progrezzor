@@ -8,8 +8,8 @@
 #include "ChordEngine.h"
 #include "Progression.h"
 
-// What goes into the MIDI file: the notes of the progression, worked out the same way as when it plays (smooth voice
-// leading from block to block, the first chord in root position unless an inversion was chosen). Pure C++, no JUCE.
+// What goes into the MIDI file: the notes of the progression, worked out the same way as when it plays (every chord has its
+// own fixed notes, in root position unless an inversion was chosen). Pure C++, no JUCE.
 namespace engine
 {
 constexpr int kExportVelocity = 100;
@@ -25,12 +25,11 @@ struct ExportNote
 
 // Every block strikes its chord at its start and lets go at its end, also when the next block has the same chord
 // A block that is silent (see isBlockDisabled) gives a rest of its length, as it does when the loop plays.
-// `octaveShift` is the general register (the Oct buttons): the file has the notes that are heard.
+// `octaveShift` (the Oct buttons) and `centreNote` (the default register in Settings): the file has the notes that are heard.
 inline std::vector<ExportNote> exportNotes (const Progression& progression, int tonic, ScaleId scale = ScaleId::Minor,
-                                            bool lockToScale = false, int octaveShift = 0)
+                                            bool lockToScale = false, int octaveShift = 0, int centreNote = kCentreNote)
 {
     std::vector<ExportNote> notes;
-    Voicing previous;
     double start = 0.0;
     for (const auto& block : progression)
     {
@@ -40,8 +39,7 @@ inline std::vector<ExportNote> exportNotes (const Progression& progression, int 
             continue;
         }
 
-        const auto voicing = voiceChord (block.chord, tonic, previous.count > 0 ? &previous : nullptr);
-        previous = voicing;
+        const auto voicing = voiceChord (block.chord, tonic, centreNote);
         const auto heard = shiftedByOctaves (voicing, octaveShift);
         for (int i = 0; i < heard.count; ++i)
             notes.push_back ({ start, block.beats, heard.notes[(size_t) i], kExportVelocity });

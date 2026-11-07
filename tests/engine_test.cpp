@@ -71,18 +71,6 @@ bool isSortedAndInRange (const Voicing& v)
     return std::is_sorted (v.notes.begin(), v.notes.begin() + v.count);
 }
 
-double distance (const Voicing& a, const Voicing& b)
-{
-    double total = 0.0;
-    for (int i = 0; i < b.count; ++i)
-    {
-        int nearest = 1000;
-        for (int j = 0; j < a.count; ++j)
-            nearest = std::min (nearest, std::abs (b.notes[(size_t) i] - a.notes[(size_t) j]));
-        total += nearest;
-    }
-    return total;
-}
 
 void testPads()
 {
@@ -161,18 +149,18 @@ void testVoicingBasics()
 
     for (int pad = 0; pad < 7; ++pad)
     {
-        const auto v = voiceChord (padChord (aMinor.scale, pad), aMinor.tonic, nullptr);
+        const auto v = voiceChord (padChord (aMinor.scale, pad), aMinor.tonic);
         check (isSortedAndInRange (v), "pad " + std::to_string (pad) + " is sorted and in range");
         check (v.count == 3, "pad " + std::to_string (pad) + " has three notes");
         const int lowest = v.notes[0];
         check (lowest >= 48 && lowest <= 71, "pad " + std::to_string (pad) + " sits near the centre");
     }
 
-    // Without a previous chord: root position, right notes
-    checkEqual (pitchClasses (voiceChord (padChord (aMinor.scale, 0), aMinor.tonic, nullptr)), "A C E", "Am notes");
-    checkEqual (pitchClasses (voiceChord (padChord (aMinor.scale, 5), aMinor.tonic, nullptr)), "F A C", "F notes");
+    // Root position, right notes
+    checkEqual (pitchClasses (voiceChord (padChord (aMinor.scale, 0), aMinor.tonic)), "A C E", "Am notes");
+    checkEqual (pitchClasses (voiceChord (padChord (aMinor.scale, 5), aMinor.tonic)), "F A C", "F notes");
     {
-        const auto v = voiceChord (padChord (aMinor.scale, 0), aMinor.tonic, nullptr);
+        const auto v = voiceChord (padChord (aMinor.scale, 0), aMinor.tonic);
         check (v.notes[0] % 12 == 9, "Am starts on A (root position)");
     }
 
@@ -183,7 +171,7 @@ void testVoicingBasics()
             for (int root = 0; root < 12; ++root)
             {
                 const Chord c { root, (ChordType) type, 0 };
-                const auto v = voiceChord (c, tonic, nullptr);
+                const auto v = voiceChord (c, tonic);
                 const auto& shape = shapeOf (c.type);
                 allRight &= v.count == shape.count && isSortedAndInRange (v);
                 for (int i = 0; i < v.count; ++i)
@@ -193,8 +181,8 @@ void testVoicingBasics()
 
     // Moving the key moves the progression
     const Chord am { 0, ChordType::Minor, kAutoInversion };
-    const auto inA = voiceChord (am, 9, nullptr);
-    const auto inB = voiceChord (am, 11, nullptr);
+    const auto inA = voiceChord (am, 9);
+    const auto inB = voiceChord (am, 11);
     checkEqual (pitchClasses (inA), "A C E", "same chord in A");
     checkEqual (pitchClasses (inB), "B D F#", "same chord in B");
 }
@@ -206,98 +194,92 @@ void testChosenInversion()
     const Chord first { 0, ChordType::Major, 1 };
     const Chord second { 0, ChordType::Major, 2 };
 
-    checkEqual (pitchClasses (voiceChord (first, 0, nullptr)), "E G C", "C first inversion, alone");
-    checkEqual (pitchClasses (voiceChord (second, 0, nullptr)), "G C E", "C second inversion, alone");
+    checkEqual (pitchClasses (voiceChord (first, 0)), "E G C", "C first inversion, alone");
+    checkEqual (pitchClasses (voiceChord (second, 0)), "G C E", "C second inversion, alone");
 
-    // It is kept, however far away the previous chord was
-    const auto far = voiceChord ({ 6, ChordType::Major, kAutoInversion }, 0, nullptr);
-    const auto after = voiceChord (second, 0, &far);
-    check (after.notes[0] % 12 == 7, "second inversion keeps G in the bass after another chord");
-    const auto seventh = voiceChord ({ 7, ChordType::Dom7, 3 }, 0, &far);
+    // It is kept, whatever else was played
+    const auto seventh = voiceChord ({ 7, ChordType::Dom7, 3 }, 0);
     check (seventh.notes[0] % 12 == 5, "third inversion of G7 has F in the bass");
     (void) c;
 }
 
-void testSmoothVoiceLeading()
+// No magic: a chord has the same notes every time, whatever was played before it
+void testPredictableVoicing()
 {
-    std::printf ("smooth voice leading\n");
+    std::printf ("predictable voicing\n");
     const Key aMinor { 9, ScaleId::Minor };
-    const int degrees[] = { 0, 5, 2, 6 }; // Am F C G
 
-    Voicing previous;
-    bool havePrevious = false;
-    double worstStep = 0.0;
-    int lowest = 1000, highest = 0;
+    // Written out by hand: root position, around the centre of the register
+    const auto notesOf = [&] (int degree, int centre = kCentreNote)
+    {
+        const auto v = voiceChord (padChord (aMinor.scale, degree), aMinor.tonic, centre);
+        std::string text;
+        for (int i = 0; i < v.count; ++i)
+            text += std::to_string (v.notes[(size_t) i]) + " ";
+        return text;
+    };
+    checkEqual (notesOf (0), std::string ("57 60 64 "), "Am is A3 C4 E4 (57 60 64)");
+    checkEqual (notesOf (5), std::string ("53 57 60 "), "F is F3 A3 C4 (53 57 60)");
+    checkEqual (notesOf (2), std::string ("60 64 67 "), "C is C4 E4 G4 (60 64 67)");
+    checkEqual (notesOf (6), std::string ("55 59 62 "), "G is G3 B3 D4 (55 59 62)");
 
-    for (int round = 0; round < 50; ++round)
-        for (int degree : degrees)
+    // Nothing played before has any say: a long run of random clicks, and every pad is the same notes every time
+    unsigned seed = 4242;
+    const auto next = [&] { seed = seed * 1664525u + 1013904223u; return (seed >> 16) & 0x7fff; };
+    for (int scaleIndex = 0; scaleIndex < kNumScales; ++scaleIndex)
+        for (int tonic : { 0, 3, 9, 11 })
         {
-            const auto v = voiceChord (padChord (aMinor.scale, degree), aMinor.tonic, havePrevious ? &previous : nullptr);
-            check (isSortedAndInRange (v), "progression chord in range");
-            if (havePrevious)
+            std::array<std::string, 7> first;
+            bool same = true, inBand = true;
+            for (int click = 0; click < 3000; ++click)
             {
-                worstStep = std::max (worstStep, distance (previous, v));
+                const int pad = (int) (next() % 7);
+                const auto v = voiceChord (padChord ((ScaleId) scaleIndex, pad), tonic);
+                std::string text;
+                double mean = 0.0;
+                for (int i = 0; i < v.count; ++i)
+                {
+                    text += std::to_string (v.notes[(size_t) i]) + " ";
+                    mean += v.notes[(size_t) i];
+                }
+                mean /= v.count;
+                inBand &= mean >= kCentreNote - 6.0 && mean <= kCentreNote + 6.0;
+                if (first[(size_t) pad].empty())
+                    first[(size_t) pad] = text;
+                else
+                    same &= first[(size_t) pad] == text;
             }
-            lowest = std::min (lowest, v.notes[0]);
-            highest = std::max (highest, v.notes[(size_t) v.count - 1]);
-            previous = v;
-            havePrevious = true;
+            check (same && inBand, std::string (scaleOf ((ScaleId) scaleIndex).name) + ", tonic " + std::to_string (tonic)
+                                       + ": 3000 random clicks, every pad always the same notes, all around the centre");
         }
 
-    check (worstStep <= 5.0, "no step in Am F C G moves the voices more than 5 semitones in total (was " + std::to_string (worstStep) + ")");
-    check (lowest >= 48 && highest <= 84, "the chords do not drift away from the centre");
+    // The register: Low, Mid and High are exactly an octave apart
+    bool octaves = true;
+    for (int degree = 0; degree < 7; ++degree)
+    {
+        const auto low = voiceChord (padChord (aMinor.scale, degree), aMinor.tonic, registerCentre (0));
+        const auto mid = voiceChord (padChord (aMinor.scale, degree), aMinor.tonic, registerCentre (1));
+        const auto high = voiceChord (padChord (aMinor.scale, degree), aMinor.tonic, registerCentre (2));
+        for (int i = 0; i < mid.count; ++i)
+            octaves &= low.notes[(size_t) i] == mid.notes[(size_t) i] - 12 && high.notes[(size_t) i] == mid.notes[(size_t) i] + 12;
+    }
+    check (octaves && registerCentre (1) == kCentreNote, "Low, Mid and High are an octave apart, Mid is the usual place");
 
-    // Compared to root position every time
-    double smooth = 0.0, plain = 0.0;
-    Voicing smoothPrev, plainPrev;
-    bool first = true;
-    for (int round = 0; round < 8; ++round)
-        for (int degree : degrees)
-        {
-            const auto chord = padChord (aMinor.scale, degree);
-            const auto s = voiceChord (chord, aMinor.tonic, first ? nullptr : &smoothPrev);
-            Chord root = chord;
-            root.inversion = 0;
-            const auto p = voiceChord (root, aMinor.tonic, nullptr);
-            if (! first)
-            {
-                smooth += distance (smoothPrev, s);
-                plain += distance (plainPrev, p);
-            }
-            smoothPrev = s;
-            plainPrev = p;
-            first = false;
-        }
-    check (smooth < plain, "smooth voicing moves less than root position every time");
-    std::printf ("  info: movement smooth %.0f, root position %.0f semitones\n", smooth, plain);
-
-    // The same input always gives the same notes
-    const auto a = voiceChord (padChord (aMinor.scale, 3), aMinor.tonic, &previous);
-    const auto b = voiceChord (padChord (aMinor.scale, 3), aMinor.tonic, &previous);
-    check (a.notes == b.notes && a.count == b.count, "voicing is deterministic");
-}
-
-void testNoDriftAnyChord()
-{
-    std::printf ("random chords stay in range\n");
-    unsigned seed = 12345;
-    auto next = [&seed] (int n) { seed = seed * 1664525u + 1013904223u; return (int) ((seed >> 8) % (unsigned) n); };
-
-    Voicing previous;
-    bool havePrevious = false;
+    // 20000 random chords, any type, any key: complete, sorted, playable
+    unsigned seed2 = 12345;
+    auto roll = [&seed2] (int n) { seed2 = seed2 * 1664525u + 1013904223u; return (int) ((seed2 >> 8) % (unsigned) n); };
     bool ok = true;
     for (int i = 0; i < 20000; ++i)
     {
-        const Chord c { next (12), (ChordType) next (kNumChordTypes), next (5) - 1 };
-        const auto v = voiceChord (c, next (12), havePrevious ? &previous : nullptr);
-        const bool good = isSortedAndInRange (v) && v.count == shapeOf (c.type).count;
+        const Chord c { roll (12), (ChordType) roll (kNumChordTypes), roll (5) - 1 };
+        const auto v = voiceChord (c, roll (12), registerCentre (roll (3)));
+        const bool good = std::is_sorted (v.notes.begin(), v.notes.begin() + v.count) && v.count == shapeOf (c.type).count
+                          && v.notes[0] >= kLowestNote - 12 && v.notes[(size_t) v.count - 1] <= kHighestNote + 12;
         if (ok && ! good)
-            std::printf ("  info: root %d type %d inversion %d count %d\n", c.root, (int) c.type, c.inversion, v.count);
+            std::printf ("  info: root %d type %d inversion %d: %d..%d\n", c.root, (int) c.type, c.inversion, v.notes[0], v.notes[(size_t) v.count - 1]);
         ok &= good;
-        previous = v;
-        havePrevious = true;
     }
-    check (ok, "20000 random chords are all sorted, complete and within C2 to C7");
+    check (ok, "20000 random chords, in any register, are all sorted, complete and within C1 to C8");
 }
 }
 
@@ -305,8 +287,8 @@ void testNoteTracker()
 {
     std::printf ("note tracker\n");
     const Key key { 9, ScaleId::Minor };
-    const auto am = voiceChord (padChord (key.scale, 0), key.tonic, nullptr);
-    const auto c = voiceChord (padChord (key.scale, 2), key.tonic, &am);
+    const auto am = voiceChord (padChord (key.scale, 0), key.tonic);
+    const auto c = voiceChord (padChord (key.scale, 2), key.tonic);
 
     std::vector<NoteEvent> events;
     const auto emit = [&events] (const NoteEvent& e) { events.push_back (e); };
@@ -366,9 +348,9 @@ void testNoteTracker()
 
     // The notes are released as they were started, whatever the key is now
     events.clear();
-    const auto inA = voiceChord (padChord (ScaleId::Minor, 0), 9, nullptr);
+    const auto inA = voiceChord (padChord (ScaleId::Minor, 0), 9);
     t.press (0, inA, 100, emit);
-    const auto inD = voiceChord (padChord (ScaleId::Major, 0), 2, nullptr); // the same pad in another key
+    const auto inD = voiceChord (padChord (ScaleId::Major, 0), 2); // the same pad in another key
     (void) inD;
     events.clear();
     t.release (0, emit);
@@ -852,13 +834,13 @@ void testExport()
     check (end == 16.0 && ordered && inRange, "the notes fill 16 beats, in order and in range");
     check (notes[3].start == 4.0 && notes[3].length == 4.0 && notes[6].start == 8.0 && notes[6].length == 2.0, "starts and lengths follow the blocks");
 
-    // The same as when it plays: the first chord without a previous one, the next smoothly after it
-    const auto first = voiceChord (p[0].chord, aMinor.tonic, nullptr);
-    Voicing second = voiceChord (p[1].chord, aMinor.tonic, &first);
+    // The same as when it plays: every chord has its own fixed notes
+    const auto first = voiceChord (p[0].chord, aMinor.tonic);
+    const Voicing second = voiceChord (p[1].chord, aMinor.tonic);
     bool same = true;
     for (int i = 0; i < 3; ++i)
         same &= notes[(size_t) i].note == first.notes[(size_t) i] && notes[(size_t) (3 + i)].note == second.notes[(size_t) i];
-    check (same, "the notes are the ones that play, with smooth voice leading");
+    check (same, "the notes are the ones that play");
     check (exportNotes ({}, 9).empty(), "nothing to export from an empty bar");
 }
 
@@ -1010,9 +992,9 @@ void testOctaves()
     const Chord amDown { 0, ChordType::Minor, kAutoInversion, -1 };
 
     // The same notes, a whole octave away
-    const auto base = voiceChord (am, tonic, nullptr);
-    const auto up = voiceChord (amUp, tonic, nullptr);
-    const auto down = voiceChord (amDown, tonic, nullptr);
+    const auto base = voiceChord (am, tonic);
+    const auto up = voiceChord (amUp, tonic);
+    const auto down = voiceChord (amDown, tonic);
     bool shifted = base.count == up.count && base.count == down.count && up.octave == 1 && down.octave == -1 && base.octave == 0;
     for (int i = 0; i < base.count; ++i)
         shifted = shifted && up.notes[(size_t) i] == base.notes[(size_t) i] + 12 && down.notes[(size_t) i] == base.notes[(size_t) i] - 12;
@@ -1020,29 +1002,18 @@ void testOctaves()
     check (! (am == amUp) && amUp == Chord { 0, ChordType::Minor, kAutoInversion, 1 }, "the octave is part of the chord");
     checkEqual (chordName (amUp, { tonic, ScaleId::Minor }), std::string ("Am"), "the name does not change");
 
-    // A chord that is moved does not pull the next one with it, and the next one is voiced as if nothing was moved
+    // A chord that is moved changes nothing for the others
     const Chord f { 8, ChordType::Major, kAutoInversion };
-    const auto afterBase = voiceChord (f, tonic, &base);
-    const auto afterUp = voiceChord (f, tonic, &up);
-    bool same = afterBase.count == afterUp.count;
-    for (int i = 0; same && i < afterBase.count; ++i)
-        same = afterBase.notes[(size_t) i] == afterUp.notes[(size_t) i];
-    check (same, "the chord after a moved chord is voiced as if nothing was moved");
-
-    // And a moved chord after a chord is smooth in its own register
-    const auto movedAfter = voiceChord (Chord { 8, ChordType::Major, kAutoInversion, 1 }, tonic, &base);
-    bool plus12 = movedAfter.count == afterBase.count;
-    for (int i = 0; plus12 && i < movedAfter.count; ++i)
-        plus12 = movedAfter.notes[(size_t) i] == afterBase.notes[(size_t) i] + 12;
-    check (plus12, "a moved chord after another is the smooth voicing, moved");
+    const auto fPlain = voiceChord (f, tonic);
+    check (fPlain.notes == voiceChord (f, tonic).notes && fPlain.octave == 0, "the other chords are not affected by a moved chord");
 
     // Out of range values and every chord stay inside what MIDI can play
-    bool range = voiceChord (Chord { 0, ChordType::Minor, kAutoInversion, 9 }, tonic, nullptr).octave == kMaxOctaveShift;
+    bool range = voiceChord (Chord { 0, ChordType::Minor, kAutoInversion, 9 }, tonic).octave == kMaxOctaveShift;
     for (int root = 0; root < 12; ++root)
         for (int t = 0; t < kNumChordTypes; ++t)
             for (int o = -kMaxOctaveShift; o <= kMaxOctaveShift; ++o)
             {
-                const auto v = voiceChord (Chord { root, (ChordType) t, kAutoInversion, o }, tonic, nullptr);
+                const auto v = voiceChord (Chord { root, (ChordType) t, kAutoInversion, o }, tonic);
                 range = range && v.notes[0] >= 0 && v.notes[(size_t) v.count - 1] <= 127;
             }
     check (range, "every chord, moved the most, is a playable MIDI note");
@@ -1086,50 +1057,8 @@ void testOctaves()
     check (parseQuickText ("Am-F-C-G", key, 4.0, true).blocks.size() == 4, "a hyphen still separates chords");
 }
 
-// Clicking around on the pads for a long time must never wander: the register stays where it is, in every scale, whatever the
-// order of the clicks. (Before this was fixed the same pad could sound three octaves away after enough clicks.)
-void testSteadyRegister()
-{
-    std::printf("steady register while clicking around\n");
-    for (int scaleIndex = 0; scaleIndex < kNumScales; ++scaleIndex)
-    {
-        const auto scale = (ScaleId) scaleIndex;
-        for (int tonic : { 0, 3, 9, 11 })
-        {
-            unsigned seed = 12345u + (unsigned) tonic;
-            const auto next = [&] { seed = seed * 1664525u + 1013904223u; return (seed >> 16) & 0x7fff; };
-            Voicing previous;
-            bool have = false;
-            double lowest = 1.0e9, highest = -1.0e9;
-            double lastMean[7] = {};
-            bool seen[7] = {};
-            int octaveJumps = 0;
-            for (int click = 0; click < 5000; ++click)
-            {
-                const int pad = (int) (next() % 7);
-                const auto voicing = voiceChord (padChord (scale, pad), tonic, have ? &previous : nullptr);
-                previous = voicing;
-                have = true;
-                double mean = 0.0;
-                for (int i = 0; i < voicing.count; ++i)
-                    mean += voicing.notes[(size_t) i];
-                mean /= voicing.count;
-                lowest = std::min (lowest, mean);
-                highest = std::max (highest, mean);
-                if (seen[pad] && std::abs (mean - lastMean[pad]) >= 9.0)
-                    ++octaveJumps;
-                lastMean[pad] = mean;
-                seen[pad] = true;
-            }
-            check (lowest >= kCentreNote - 6.0 && highest < kCentreNote + 6.0 && octaveJumps == 0,
-                   std::string (scaleOf (scale).name) + ", tonic " + std::to_string (tonic) + ": 5000 random pad clicks stay in one register, the same pad never jumps an octave");
-        }
-    }
-}
-
 int main()
 {
-    testSteadyRegister();
     testOctaves();
     testQuickText();
     testLoopPlan();
@@ -1145,8 +1074,7 @@ int main()
     testScaleFit();
     testVoicingBasics();
     testChosenInversion();
-    testSmoothVoiceLeading();
-    testNoDriftAnyChord();
+    testPredictableVoicing();
 
     std::printf ("%d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;

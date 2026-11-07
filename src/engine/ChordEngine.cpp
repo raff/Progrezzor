@@ -123,19 +123,6 @@ double meanOf (const Voicing& v)
     return sum / v.count;
 }
 
-// How far the voices have to move: each new note to the nearest note that sounded before. A shared note costs nothing.
-double movement (const Voicing& from, const Voicing& to)
-{
-    double total = 0.0;
-    for (int i = 0; i < to.count; ++i)
-    {
-        int nearest = 1000;
-        for (int j = 0; j < from.count; ++j)
-            nearest = std::min (nearest, std::abs (to.notes[(size_t) i] - from.notes[(size_t) j]));
-        total += nearest;
-    }
-    return total;
-}
 }
 
 Voicing shiftedByOctaves (Voicing voicing, int octaves)
@@ -151,65 +138,37 @@ Voicing shiftedByOctaves (Voicing voicing, int octaves)
     return voicing;
 }
 
-Voicing voiceChord (const Chord& chord, int tonic, const Voicing* previous)
+Voicing voiceChord (const Chord& chord, int tonic, int centreNote)
 {
-    // The voice leading works in the unmoved register: the chord that sounded before is taken back to where it was
-    Voicing unmoved;
-    if (previous != nullptr && previous->octave != 0)
-    {
-        unmoved = *previous;
-        for (int i = 0; i < unmoved.count; ++i)
-            unmoved.notes[(size_t) i] -= 12 * unmoved.octave;
-        unmoved.octave = 0;
-        previous = &unmoved;
-    }
-
+    // No magic: the notes of a chord depend only on the chord, the key and the register. Nothing that was played before has
+    // any say. Root position, or the inversion that was chosen; the octave is the one that puts the middle of the notes
+    // nearest the centre of the register.
     const int count = shapeOf (chord.type).count;
-    const bool autoInversion = chord.inversion < 0;
-    const int firstInversion = autoInversion ? 0 : chord.inversion % count;
-    const bool haveMovement = previous != nullptr && previous->count > 0;
-    // Alone, a chord is in root position. After another chord, any inversion may be the smoothest.
-    const int lastInversion = autoInversion ? (haveMovement ? count - 1 : 0) : firstInversion;
+    const int inversion = chord.inversion < 0 ? 0 : chord.inversion % count;
+    const Voicing base = invert (chord, tonic, inversion);
 
-    Voicing best;
-    double bestCost = 1.0e9;
-
-    // The register is fixed: every chord is placed so that the middle of its notes is within half an octave of the centre
-    // (C4). Without that the voice leading, which always takes the nearest notes, wanders: after enough clicks on the pads the
-    // same pad could sound more than three octaves higher or lower than before. Within the band an inversion has exactly
-    // one place, so the same chord is never an octave away from where it was, only turned a different way.
-    for (int pass = 0; pass < 2 && bestCost > 1.0e8; ++pass) // the second pass (no band) only if nothing fits the band
-    for (int inversion = firstInversion; inversion <= lastInversion; ++inversion)
+    Voicing best = base;
+    double bestDistance = 1.0e9;
+    bool found = false;
+    for (int pass = 0; pass < 2 && ! found; ++pass) // the second pass (ignoring the ends of the range) only if nothing fits
     {
-        const Voicing base = invert (chord, tonic, inversion);
-
-        for (int octave = 0; octave < 10; ++octave)
+        for (int octave = -4; octave < 10; ++octave)
         {
             Voicing candidate = base;
             for (int i = 0; i < candidate.count; ++i)
                 candidate.notes[(size_t) i] += 12 * octave;
 
-            if (candidate.notes[0] < kLowestNote || candidate.notes[(size_t) candidate.count - 1] > kHighestNote)
+            if (candidate.notes[0] < 0 || candidate.notes[(size_t) candidate.count - 1] > 127)
                 continue;
-            if (pass == 0)
-            {
-                const double middle = meanOf (candidate);
-                if (middle < kCentreNote - 6.0 || middle >= kCentreNote + 6.0)
-                    continue;
-            }
+            if (pass == 0 && (candidate.notes[0] < kLowestNote - 12 || candidate.notes[(size_t) candidate.count - 1] > kHighestNote + 12))
+                continue;
 
-            const double distanceFromCentre = std::abs (meanOf (candidate) - kCentreNote);
-            // A small cost for each inversion, so that root position wins when nothing else decides.
-            double cost = 0.25 * distanceFromCentre + (autoInversion ? 1.5 * inversion : 0.0);
-            if (haveMovement)
-                cost += movement (*previous, candidate);
-            else
-                cost += 0.75 * distanceFromCentre;
-
-            if (cost < bestCost)
+            const double distance = std::abs (meanOf (candidate) - (double) centreNote);
+            if (distance < bestDistance)
             {
-                bestCost = cost;
+                bestDistance = distance;
                 best = candidate;
+                found = true;
             }
         }
     }

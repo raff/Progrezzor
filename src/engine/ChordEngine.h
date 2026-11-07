@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <string>
 
@@ -111,11 +112,14 @@ constexpr int kLowestNote = 36;  // C2
 constexpr int kHighestNote = 96; // C7
 constexpr int kCentreNote = 60;  // the chords gather around C4
 
-// Turns a chord into MIDI notes. With `previous` (the voicing that sounded before) the chord is placed and inverted so
-// that the notes move as little as possible (an octave shift of the chord or of `previous` is left out of that, so a chord
-// moved up does not pull the next one up with it). Without it the chord is in root position near the centre, unless the
-// chord has a chosen inversion.
-Voicing voiceChord (const Chord& chord, int tonic, const Voicing* previous);
+// Turns a chord into MIDI notes. Always the same notes for the same chord, key and register: nothing that was played before
+// matters (no automatic voice leading). Root position, unless the chord has a chosen inversion, placed so that the middle of
+// the notes is nearest `centreNote`. The chord's own octave shift (Chord::octave) is added on top.
+Voicing voiceChord (const Chord& chord, int tonic, int centreNote = kCentreNote);
+
+// The default register (Settings): where the middle of the chords is. Low, Mid (the usual) and High, an octave apart.
+constexpr int kNumRegisters = 3;
+constexpr int registerCentre (int index) { return kCentreNote + 12 * (std::max (0, std::min (kNumRegisters - 1, index)) - 1); }
 
 // The general register: the whole voicing moved up or down by whole octaves (the Oct buttons), never past the ends of the
 // MIDI range. The voice leading works on the voicing before this, so the register never pulls the next chord with it.

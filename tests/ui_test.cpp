@@ -981,6 +981,46 @@ int main (int argc, char** argv)
             settle (30);
         }
         check (processor.getGeneralOctave() == -2 && ! barRef.getOctaveDownButton().isEnabled(), "it stops at two octaves down");
+        // Settings: the default register, with the Oct buttons on top of it
+        *processor.octaveParam = 0;
+        auto& settingsBar = static_cast<ProgrezzorEditor*> (editor.get())->getBar();
+        const auto midNotes = padNotes (0);
+        settingsBar.chooseRegister (2);
+        settle (50);
+        const auto highNotes = padNotes (0);
+        settingsBar.chooseRegister (0);
+        settle (50);
+        const auto lowNotes = padNotes (0);
+        bool registerOk = midNotes.size() == 3 && highNotes.size() == 3 && lowNotes.size() == 3;
+        for (size_t i = 0; registerOk && i < 3; ++i)
+            registerOk = highNotes[i] == midNotes[i] + 12 && lowNotes[i] == midNotes[i] - 12;
+        check (registerOk, "Settings: High and Low put the pads an octave above and below Mid");
+        check (settingsBar.getRegisterLabel() == "Low", "the right panel says which register it is");
+        *processor.octaveParam = 1;
+        const auto lowPlusOne = padNotes (0);
+        bool onTop = lowPlusOne.size() == 3;
+        for (size_t i = 0; onTop && i < 3; ++i)
+            onTop = lowPlusOne[i] == midNotes[i];
+        check (onTop, "Low with Oct +1 is the same place as Mid: the buttons count from the default register");
+
+        // The same pad is always the same notes, whatever was clicked before
+        *processor.octaveParam = 0;
+        settingsBar.chooseRegister (1);
+        const auto padTwoBefore = padNotes (2);
+        padNotes (6);
+        padNotes (0);
+        padNotes (4);
+        check (padNotes (2) == padTwoBefore, "a pad has the same notes after other pads were played (no automatic voice leading)");
+
+        // The project keeps the register, and the file follows it
+        settingsBar.chooseRegister (2);
+        juce::MemoryBlock registerState;
+        processor.getStateInformation (registerState);
+        ProgrezzorProcessor registerRestored;
+        registerRestored.setStateInformation (registerState.getData(), (int) registerState.getSize());
+        check (registerRestored.getRegisterIndex() == 2, "the default register comes back from a saved project");
+        settingsBar.chooseRegister (1);
+
         processor.setProgression ({});
         *processor.octaveParam = 0;
         settle (50);

@@ -91,7 +91,8 @@ Akkordlogik, stemmeføring, rundgange, Suggest og Quick-text er nyt. CI og relea
 - Akkordtyper: dur, m, 5, 7, m7, maj7, 9, m9, add9, sus2, sus4, dim og omvendinger.
 - Sus4 tilbydes med låsen til kun, hvis den rene kvart findes i skalaen. Sus2 kun, hvis den store sekund findes.
 - Akkordnavne staves efter tonearten (Bb frem for A#, når tonearten bruger b).
-- Blød stemmeføring er standard, så skift mellem akkorder ikke hopper rundt. En omvending, brugeren selv har valgt, respekteres.
+- Ingen automatisk stemmeføring og ingen magi (besluttet af Henrik 2026-11-07). En akkord har altid de samme toner, uanset hvad der blev spillet før: grundstilling, eller den omvending brugeren selv har valgt. Tonerne placeres omkring midten af det valgte toneleje.
+- Toneleje: Settings (tandhjulet i bjælkens højre side) vælger standardlejet: Low, Mid (standard) eller High, en oktav fra hinanden. Oct- og Oct+ i samme panel flytter alt yderligere en oktav ad gangen, -2 til +2, og panelet viser både lejet og Oct-trinnet. Lejet gælder pads, rundgang og MIDI-fil.
 
 ## Lock to scale
 
@@ -179,7 +180,7 @@ Reglen er: * betyder antal, og : betyder længde. Tekstfeltet viser altid blokke
 ## Milepæle
 
 0. Tomt plugin bygget som mulighed A. Knap sender en testakkord, og en simpel testtone viser, om preview-lyd slipper igennem. Test i Bitwig, REAPER og Ableton Live: Kan det indsættes, når MIDI frem til en synth, og kan man høre lyden? Prøv kun mulighed B, hvis A fejler. Skriv valget i denne fil, og vent på Henriks OK.
-1. ChordEngine med stemmeføring og enhedstest, uden GUI.
+1. ChordEngine (akkordernes toner) og enhedstest, uden GUI.
 2. 7 store pads, toneart, skala, Pad-stemmen, MIDI ud og keyboard-input. Ingen hængende noter.
 3. Rundgangsbjælken med blokke, 🎲 Suggest og et lille bibliotek til Melancholic. Her testes kvaliteten af forslag tidligt.
 4. Loop synkroniseret med DAW'en.

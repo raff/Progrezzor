@@ -55,6 +55,7 @@ public:
     juce::AudioParameterChoice* scaleParam = nullptr;
     juce::AudioParameterChoice* moodParam = nullptr;  // one of the 8 moods: it decides which progressions Suggest picks from
     juce::AudioParameterChoice* voiceParam = nullptr; // the preview sound: Pad, Strings, Keys, Organ, Stab, Pluck
+    juce::AudioParameterChoice* registerParam = nullptr; // the default register (Settings): Low, Mid or High
     juce::AudioParameterInt* octaveParam = nullptr;   // the general register: -2 to +2 octaves for everything that sounds and is exported
     juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)
@@ -146,6 +147,7 @@ public:
     int getVariantVersion() const { return variantVersion.load(); }
     bool isLockedToScale() const { return lockParam->get(); }
     int getGeneralOctave() const { return octaveParam->get(); }
+    int getRegisterIndex() const { return registerParam->getIndex(); }
     engine::Mood getMood() const { return (engine::Mood) moodParam->getIndex(); }
 
 private:
@@ -167,7 +169,6 @@ private:
 
     // Audio thread only
     engine::NoteTracker tracker;
-    engine::Voicing lastVoicing; // the chord that was played last, so that the next one is voiced smoothly after it
     std::array<int, engine::NoteTracker::kNumSources> sourcePad {}; // which pad a source is holding, -1 for a block
     std::array<int, kNumPads> padHolds {};                           // how many sources hold each pad
     PadSynth synth;
