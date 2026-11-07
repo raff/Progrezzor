@@ -63,7 +63,6 @@ public:
     juce::AudioParameterInt* arpStepsParam = nullptr;
     juce::AudioParameterInt* arpHitsParam = nullptr;
     juce::AudioParameterInt* arpRotationParam = nullptr;
-    juce::AudioParameterChoice* registerParam = nullptr; // the default register (Settings): Low, Mid or High
     juce::AudioParameterInt* octaveParam = nullptr;   // the general register: -2 to +2 octaves for everything that sounds and is exported
     juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)
@@ -160,7 +159,6 @@ public:
     // The arp as the parameters have it now. Safe to call from any thread.
     engine::ArpSettings getArpSettings() const;
     int getGeneralOctave() const { return octaveParam->get(); }
-    int getRegisterIndex() const { return registerParam->getIndex(); }
     engine::Mood getMood() const { return (engine::Mood) moodParam->getIndex(); }
 
 private:

@@ -254,18 +254,6 @@ void testPredictableVoicing()
                                        + ": 3000 random clicks, every pad always the same notes, all around the centre");
         }
 
-    // The register: Low, Mid and High are exactly an octave apart
-    bool octaves = true;
-    for (int degree = 0; degree < 7; ++degree)
-    {
-        const auto low = voiceChord (padChord (aMinor.scale, degree), aMinor.tonic, registerCentre (0));
-        const auto mid = voiceChord (padChord (aMinor.scale, degree), aMinor.tonic, registerCentre (1));
-        const auto high = voiceChord (padChord (aMinor.scale, degree), aMinor.tonic, registerCentre (2));
-        for (int i = 0; i < mid.count; ++i)
-            octaves &= low.notes[(size_t) i] == mid.notes[(size_t) i] - 12 && high.notes[(size_t) i] == mid.notes[(size_t) i] + 12;
-    }
-    check (octaves && registerCentre (1) == kCentreNote, "Low, Mid and High are an octave apart, Mid is the usual place");
-
     // 20000 random chords, any type, any key: complete, sorted, playable
     unsigned seed2 = 12345;
     auto roll = [&seed2] (int n) { seed2 = seed2 * 1664525u + 1013904223u; return (int) ((seed2 >> 8) % (unsigned) n); };
@@ -273,14 +261,14 @@ void testPredictableVoicing()
     for (int i = 0; i < 20000; ++i)
     {
         const Chord c { roll (12), (ChordType) roll (kNumChordTypes), roll (5) - 1 };
-        const auto v = voiceChord (c, roll (12), registerCentre (roll (3)));
+        const auto v = voiceChord (c, roll (12));
         const bool good = std::is_sorted (v.notes.begin(), v.notes.begin() + v.count) && v.count == shapeOf (c.type).count
                           && v.notes[0] >= kLowestNote - 12 && v.notes[(size_t) v.count - 1] <= kHighestNote + 12;
         if (ok && ! good)
             std::printf ("  info: root %d type %d inversion %d: %d..%d\n", c.root, (int) c.type, c.inversion, v.notes[0], v.notes[(size_t) v.count - 1]);
         ok &= good;
     }
-    check (ok, "20000 random chords, in any register, are all sorted, complete and within C1 to C8");
+    check (ok, "20000 random chords are all sorted, complete and within the range");
 }
 }
 

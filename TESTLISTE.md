@@ -21,12 +21,9 @@ retter de gamle linjer om mulighed A og B. Branchen merges ikke før du siger de
 ## 2. Ny oktav-styring (2026-11-07)
 
 - [ ] Oct- og Oct+ i bjælkens højre side: hæver og sænker alt (pads, rundgang, MIDI-fil) en oktav ad gangen, -2 til +2.
-- [ ] Mærket mellem knapperne viser, hvilket leje vi står i ("Oct 0", "Oct +1", "Oct -2"). Orange, når det ikke er 0.
+- [ ] Mærket mellem knapperne viser, hvilket leje vi står i ("Oct 0", "Oct +1", "Oct -2"). Orange, når det ikke er 0. (Settings og Low/Mid/High er fjernet.)
 - [ ] Klik rundt på padsene i lang tid og i tilfældig rækkefølge: hver pad lyder HELT ens hver gang. Ingen automatisk
       stemmeføring og ingen drift. (Før: op til ca. 4 oktaver forskel mellem samme pad.)
-- [ ] Settings (tandhjulet i bjælkens højre side): vælg Low, Mid eller High. Alt flyttes en oktav fra Mid. Panelet viser
-      lejet ("Low", "Mid", "High") over Oct-trinnet ("Oct 0", "Oct +1"). Oct-/Oct+ tæller fra det valgte standardleje.
-- [ ] Standardlejet huskes i projektet, og MIDI-filen har samme toner, som du hører.
 - [ ] Hold en pad nede, tryk Oct+/Oct- og slip: ingen hængende noter.
 - [ ] Spil rundgangen, tryk Suggest flere gange: akkorderne ligger altid i samme leje. De må ikke hoppe op og ned.
 - [ ] Træk MIDI-filen ud med Oct +1: filen har samme toner, som du hører.
@@ -49,9 +46,8 @@ retter de gamle linjer om mulighed A og B. Branchen merges ikke før du siger de
 ## 2c. Romertal og klaviaturet (2026-11-07)
 
 - [ ] Padsene og blokkene viser romertal (I, ii, III ...). Er de til at læse, og er de i vejen? Prøv også en anden toneart og skala (C Major: I ii iii IV V vi vii°).
-- [ ] Den lille klaviatur i højre panel: det lyse felt flytter sig, når du trykker Oct+/Oct- og vælger Low/Middle/High.
+- [ ] Den lille klaviatur i højre panel: det lyse felt flytter sig, når du trykker Oct+/Oct-.
 - [ ] Tonerne, der spiller, lyser grønt på klaviaturet (akkorder og arp).
-- [ ] Settings-menuen hedder nu "Where the chords sit" (Low, Middle, High).
 
 ## 3. Tidligere ting, der stadig venter
 

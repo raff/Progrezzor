@@ -1227,11 +1227,6 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     playButton.setTooltip ("Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
     addAndMakeVisible (playButton);
 
-    settingsButton.setTooltip ("Settings: where the chords sit, low, middle or high. The Oct buttons move them from there");
-    settingsButton.setComponentID ("settings");
-    settingsButton.onClick = [this] { showSettingsMenu(); };
-    addAndMakeVisible (settingsButton);
-
     octaveDownButton.setTooltip ("Lower everything by an octave: the pads, the progression and the MIDI file");
     octaveUpButton.setTooltip ("Raise everything by an octave: the pads, the progression and the MIDI file");
     octaveDownButton.setComponentID ("octave-down");
@@ -1496,15 +1491,14 @@ void ProgressionBar::updateButtons()
     // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
     const int octave = processor.getGeneralOctave();
     const juce::String label = "Oct " + (octave > 0 ? "+" + juce::String (octave) : juce::String (octave));
-    static const char* registerNames[engine::kNumRegisters] = { "Low", "Mid", "High" };
-    const juce::String registerName = registerNames[juce::jlimit (0, engine::kNumRegisters - 1, processor.getRegisterIndex())];
-    if (label != octaveLabel || registerName != registerLabel)
+    if (label != octaveLabel)
     {
         octaveLabel = label;
-        registerLabel = registerName;
         repaint (octaveLabelBounds);
         repaint (stripBounds); // the lit band on the little keyboard moves with it
     }
+    octaveDownButton.setEnabled (octave > -engine::kMaxGeneralOctave);
+    octaveUpButton.setEnabled (octave < engine::kMaxGeneralOctave);
 
     // The notes that sound light up on the little keyboard
     std::uint64_t soundingNow[2] = {};
@@ -1542,33 +1536,6 @@ void ProgressionBar::captureLastChords()
 }
 
 // Suggest would throw away chords the user has made: the bar asks first, in its message line (no dialog box)
-// Settings: where the chords sit. Low, Mid (the usual) or High, an octave apart. Oct- and Oct+ move it further from there.
-void ProgressionBar::chooseRegister (int index)
-{
-    auto& parameter = *processor.registerParam;
-    parameter.beginChangeGesture();
-    parameter.setValueNotifyingHost (parameter.convertTo0to1 ((float) juce::jlimit (0, engine::kNumRegisters - 1, index)));
-    parameter.endChangeGesture();
-    updateButtons();
-}
-
-void ProgressionBar::showSettingsMenu()
-{
-    juce::PopupMenu menu;
-    menu.addSectionHeader ("Where the chords sit");
-    const char* names[engine::kNumRegisters] = { "Low  (deeper and warmer)", "Middle  (the usual)", "High  (brighter)" };
-    for (int i = 0; i < engine::kNumRegisters; ++i)
-        menu.addItem (i + 1, names[i], true, i == processor.getRegisterIndex());
-
-    juce::Component::SafePointer<ProgressionBar> safe (this);
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (230),
-                        [safe] (int result)
-                        {
-                            if (safe != nullptr && result > 0)
-                                safe->chooseRegister (result - 1);
-                        });
-}
-
 // The general register: everything that sounds and is exported, an octave up or down
 void ProgressionBar::shiftGeneralOctave (int steps)
 {
@@ -1807,7 +1774,7 @@ void ProgressionBar::setPlayingBlock (int index)
 }
 
 // A little keyboard from the lowest to the highest note the chords can reach, with a lit band where the chords sit now. It
-// follows Settings (Low, Mid, High) and the Oct buttons, so that you see the pitch instead of reading it.
+// follows the Oct buttons, so that you see the pitch instead of reading it.
 void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> area) const
 {
     constexpr int firstNote = 12, lastNote = 108; // C0 to C8: the whole way the Oct buttons can take the chords
@@ -1839,7 +1806,7 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
     }
 
     // Where the chords sit: the centre of the chords, with room for the notes round it
-    const int centre = engine::registerCentre (processor.getRegisterIndex()) + 12 * processor.getGeneralOctave();
+    const int centre = engine::kCentreNote + 12 * processor.getGeneralOctave();
     const float left = xOf (juce::jlimit (firstNote, lastNote, centre - 9)), right = xOf (juce::jlimit (firstNote, lastNote, centre + 9));
     g.setColour (theme::accent.withAlpha (0.55f));
     g.fillRect (left, area.getY(), right - left, area.getHeight());
@@ -1933,14 +1900,9 @@ void ProgressionBar::paint (juce::Graphics& g)
         // The general register, between Oct- and Oct+
         if (! octaveLabelBounds.isEmpty())
         {
-            // Two lines: the default register from Settings (Low, Mid, High), and the Oct- and Oct+ steps from there
-            auto textArea = octaveLabelBounds;
-            g.setFont (l->labelFont (12.0f));
-            g.setColour (theme::dimText);
-            g.drawText (registerLabel, textArea.removeFromTop (textArea.getHeight() / 2 + 1), juce::Justification::centredBottom);
             g.setFont (l->titleFont (14.0f));
             g.setColour (processor.getGeneralOctave() != 0 ? theme::accent : theme::text.withAlpha (0.85f));
-            g.drawText (octaveLabel, textArea, juce::Justification::centredTop);
+            g.drawText (octaveLabel, octaveLabelBounds, juce::Justification::centred);
         }
 
         if (! textMode && slots.size() == (size_t) processor.getProgression().size())
@@ -2042,8 +2004,6 @@ void ProgressionBar::resized()
     area.removeFromRight (10);
     const int rowHeight = (right.getHeight() - 15) / 4;
     auto captureRow = right.removeFromTop (rowHeight);
-    settingsButton.setBounds (captureRow.removeFromRight ((right.getWidth() - 12) / 3));
-    captureRow.removeFromRight (6);
     captureButton.setBounds (captureRow);
     right.removeFromTop (5);
     auto smallRow = right.removeFromTop (rowHeight);

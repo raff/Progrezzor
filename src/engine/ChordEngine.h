@@ -122,10 +122,6 @@ constexpr int kCentreNote = 60;  // the chords gather around C4
 // the notes is nearest `centreNote`. The chord's own octave shift (Chord::octave) is added on top.
 Voicing voiceChord (const Chord& chord, int tonic, int centreNote = kCentreNote);
 
-// The default register (Settings): where the middle of the chords is. Low, Mid (the usual) and High, an octave apart.
-constexpr int kNumRegisters = 3;
-constexpr int registerCentre (int index) { return kCentreNote + 12 * (std::max (0, std::min (kNumRegisters - 1, index)) - 1); }
-
 // The general register: the whole voicing moved up or down by whole octaves (the Oct buttons), never past the ends of the
 // MIDI range. The voice leading works on the voicing before this, so the register never pulls the next chord with it.
 constexpr int kMaxGeneralOctave = 2;

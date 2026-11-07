@@ -55,7 +55,6 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     addParameter (arpStepsParam = new juce::AudioParameterInt ({ "arpSteps", 1 }, "Arp Rhythm Length", engine::kMinArpSteps, engine::kMaxArpSteps, 8));
     addParameter (arpHitsParam = new juce::AudioParameterInt ({ "arpHits", 1 }, "Arp Hits", 1, engine::kMaxArpSteps, 8));
     addParameter (arpRotationParam = new juce::AudioParameterInt ({ "arpRotation", 1 }, "Arp Rotation", 0, engine::kMaxArpSteps - 1, 0));
-    addParameter (registerParam = new juce::AudioParameterChoice ({ "register", 1 }, "Register", juce::StringArray { "Low", "Mid", "High" }, 1));
     addParameter (octaveParam = new juce::AudioParameterInt ({ "octave", 1 }, "Octave", -engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, 0));
 
     for (auto& variant : padVariant)
@@ -219,8 +218,8 @@ public:
         if (source < 0 || source >= engine::NoteTracker::kNumSources || pad >= kNumPads)
             return;
 
-        // The same chord always has the same notes: only the key, the default register (Settings) and the Oct buttons count
-        const auto voicing = engine::voiceChord (chord, owner.keyParam->getIndex(), engine::registerCentre (owner.registerParam->getIndex()));
+        // The same chord always has the same notes: only the key and the Oct buttons count
+        const auto voicing = engine::voiceChord (chord, owner.keyParam->getIndex());
         const auto heard = engine::shiftedByOctaves (voicing, owner.octaveParam->get());
 
         if (pad >= 0)
@@ -764,7 +763,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto key = getKey();
 
     // What the file is made from. The same again gives the same file.
-    juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (octaveParam->get()) + "/" + juce::String (registerParam->getIndex());
+    juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (octaveParam->get());
     const auto arp = getArpSettings();
     if (arp.on)
         madeFrom << "/arp" << arp.style << "," << arp.rate << "," << arp.octaves << "," << arp.steps << "," << arp.hits << "," << arp.rotation;
@@ -779,7 +778,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto ticks = [] (double beats) { return beats * kTicksPerQuarter; };
 
     juce::MidiMessageSequence sequence;
-    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), octaveParam->get(), engine::registerCentre (registerParam->getIndex()), arp))
+    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), octaveParam->get(), engine::kCentreNote, arp))
     {
         // All MIDI on channel 1. A note off comes before a note on at the same time, so that equal chords strike again.
         sequence.addEvent (juce::MidiMessage::noteOn (1, note.note, (juce::uint8) note.velocity).withTimeStamp (ticks (note.start)));
@@ -825,7 +824,6 @@ void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
     xml.setAttribute ("mood", moodParam->getIndex());
     xml.setAttribute ("voice", voiceParam->getIndex());
     xml.setAttribute ("octave", octaveParam->get());
-    xml.setAttribute ("register", registerParam->getIndex());
     xml.setAttribute ("arpOn", arpOnParam->get() ? 1 : 0);
     xml.setAttribute ("arpStyle", arpStyleParam->getIndex());
     xml.setAttribute ("arpRate", arpRateParam->getIndex());
@@ -868,7 +866,6 @@ void ProgrezzorProcessor::setStateInformation (const void* data, int size)
     *lockParam = xml->getIntAttribute ("lock", 1) != 0; // and the lock
     set (*moodParam, xml->getIntAttribute ("mood", (int) engine::Mood::Melancholic)); // older projects: the mood they had
     set (*voiceParam, xml->getIntAttribute ("voice", 0));
-    set (*registerParam, xml->getIntAttribute ("register", 1));
     *arpOnParam = xml->getIntAttribute ("arpOn", 0) != 0;
     set (*arpStyleParam, xml->getIntAttribute ("arpStyle", 0));
     set (*arpRateParam, xml->getIntAttribute ("arpRate", engine::kDefaultArpRate));

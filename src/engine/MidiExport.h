@@ -28,7 +28,7 @@ struct ExportNote
 // Every block strikes its chord at its start and lets go at its end, also when the next block has the same chord
 // A block that is silent (see isBlockDisabled) gives a rest of its length, as it does when the loop plays.
 // With `arp` on, a block gives the notes of the arpeggio instead of the chord, step by step as it plays.
-// `octaveShift` (the Oct buttons) and `centreNote` (the default register in Settings): the file has the notes that are heard.
+// `octaveShift` (the Oct buttons): the file has the notes that are heard.
 inline std::vector<ExportNote> exportNotes (const Progression& progression, int tonic, ScaleId scale = ScaleId::Minor,
                                             bool lockToScale = false, int octaveShift = 0, int centreNote = kCentreNote,
                                             ArpSettings arp = {})

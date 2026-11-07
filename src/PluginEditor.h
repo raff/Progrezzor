@@ -244,7 +244,6 @@ public:
     int numBlocks() const { return blocks.size(); }
     BlockButton* getBlock (int i) { return blocks[i]; }
     void shiftGeneralOctave (int steps);
-    void showSettingsMenu();
     void showArpPanel();
     std::unique_ptr<juce::Component> makeArpPanel(); // the panel behind the Arp button (also for the tests)
     void toggleArp();
@@ -253,10 +252,7 @@ public:
     void askToReplace();  // Suggest was pressed and would overwrite chords: ask in the message line
     void cancelAsk();
     juce::Rectangle<int> getTrayBounds() const { return trayBounds; }
-    BarButton& getSettingsButton() { return settingsButton; }
     ArpToggle& getArpButton() { return arpButton; }
-    const juce::String& getRegisterLabel() const { return registerLabel; }
-    void chooseRegister (int index); // Settings: Low (0), Mid (1) or High (2)
     BarButton& getOctaveUpButton() { return octaveUpButton; }
     BarButton& getOctaveDownButton() { return octaveDownButton; }
     const juce::String& getOctaveLabel() const { return octaveLabel; }
@@ -287,12 +283,11 @@ private:
     BarButton allowButton { "Allow", BarButton::Icon::None };
     ArpToggle arpButton;
     BarButton arpOptionsButton { "Arp options", BarButton::Icon::Dots };
-    BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };
     juce::Rectangle<int> octaveLabelBounds, stripBounds;
     std::uint64_t lastSounding[2] = { 0, 0 };
-    juce::String octaveLabel, registerLabel;
+    juce::String octaveLabel;
     juce::TextEditor textEditor;
     std::unique_ptr<TextMarks> textMarks;
     bool textMode = false;

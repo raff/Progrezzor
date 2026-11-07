@@ -91,9 +91,9 @@ Akkordlogik, stemmeføring, rundgange, Suggest og Quick-text er nyt. CI og relea
 - Akkordtyper: dur, m, 5, 7, m7, maj7, 9, m9, add9, sus2, sus4, dim og omvendinger.
 - Sus4 tilbydes med låsen til kun, hvis den rene kvart findes i skalaen. Sus2 kun, hvis den store sekund findes.
 - Akkordnavne staves efter tonearten (Bb frem for A#, når tonearten bruger b).
-- Ingen automatisk stemmeføring og ingen magi (besluttet af Henrik 2026-11-07). En akkord har altid de samme toner, uanset hvad der blev spillet før: grundstilling, eller den omvending brugeren selv har valgt. Tonerne placeres omkring midten af det valgte toneleje.
-- En lille klaviatur i højre panel viser, hvor akkorderne ligger (det lyse felt, som flytter sig med Settings og Oct-knapperne) og lyser grønt for de toner, der spiller lige nu.
-- Toneleje: Settings (tandhjulet i bjælkens højre side) vælger standardlejet: Low, Mid (standard) eller High, en oktav fra hinanden. Oct- og Oct+ i samme panel flytter alt yderligere en oktav ad gangen, -2 til +2, og panelet viser både lejet og Oct-trinnet. Lejet gælder pads, rundgang og MIDI-fil.
+- Ingen automatisk stemmeføring og ingen magi (besluttet af Henrik 2026-11-07). En akkord har altid de samme toner, uanset hvad der blev spillet før: grundstilling, eller den omvending brugeren selv har valgt. Tonerne placeres omkring midten af tonelejet (midt-C).
+- En lille klaviatur i højre panel viser, hvor akkorderne ligger (det lyse felt, som flytter sig med Oct-knapperne) og lyser grønt for de toner, der spiller lige nu.
+- Toneleje: Oct- og Oct+ i højre panel flytter alt (pads, rundgang og MIDI-fil) en oktav ad gangen, -2 til +2. Panelet viser trinnet (Oct 0, Oct +1). Der er ingen Settings-menu og ingen Low/Mid/High (fjernet efter Henriks ønske 2026-11-07: det var svært at forstå).
 
 ## Lock to scale
 
