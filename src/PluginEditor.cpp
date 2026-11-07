@@ -259,9 +259,10 @@ void SuggestButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isBut
 void LockToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonDown)
 {
     const bool on = getToggleState();
-    const auto face = theme::drawKey (g, getLocalBounds().toFloat(), on ? theme::accent : theme::pad, 10.0f, 4.0f, isButtonDown, isMouseOver);
+    // Grey like the other buttons, with the same light grey icon; the shackle is closed when the lock is on, open when it is off
+    const auto face = theme::drawKey (g, getLocalBounds().toFloat(), theme::pad, 10.0f, 4.0f, isButtonDown, isMouseOver);
     drawLock (g, face.withSizeKeepingCentre (face.getHeight() * 0.58f, face.getHeight() * 0.58f),
-              juce::Colours::white, on);
+              isMouseOver ? theme::text : theme::dimText.brighter (0.2f), on);
 }
 
 // ---- PlayToggle ----------------------------------------------------------------------------------------------------
@@ -273,7 +274,7 @@ void PlayToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButton
     if (on)
         theme::drawGlow (g, bounds.reduced (5.0f, 6.0f), theme::go, 7.0f, 14.0f, 0.3f);
     const bool usable = isEnabled();
-    const auto face = theme::drawKey (g, bounds.reduced (3.0f, 2.0f), on ? theme::go : (usable ? theme::pad : theme::pad.darker (0.3f)), 14.0f, 6.0f,
+    const auto face = theme::drawKey (g, bounds.reduced (3.0f, 0.0f), on ? theme::go : (usable ? theme::pad : theme::pad.darker (0.3f)), 14.0f, 6.0f,
                                       isButtonDown && usable, isMouseOver && usable);
 
     // The icon says what a click does: a triangle (start) while it is stopped, a square (stop) while it plays
@@ -2394,7 +2395,7 @@ void ProgressionBar::resized()
     auto left = area.removeFromLeft (64).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromLeft (10);
     auto learnRow = left.removeFromBottom (46);
-    left.removeFromBottom (4);
+    left.removeFromBottom (8); // Play's key has a deeper lip, so this gap is 2 more to look the same as the one above Arp
     auto arpRow = left.removeFromBottom (36);
     left.removeFromBottom (6);
     playButton.setBounds (left);
