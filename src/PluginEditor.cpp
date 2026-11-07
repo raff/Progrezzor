@@ -137,7 +137,7 @@ void PadButton::paint (juce::Graphics& g)
     // A small light in the corner, and grip dots at the bottom, like the keys of a drum machine
     const float led = 5.5f;
     const juce::Rectangle<float> light (face.getX() + 14.0f, face.getY() + 14.0f, led * 2.0f, led * 2.0f);
-    g.setColour (on ? juce::Colours::white.withAlpha (0.9f) : base.darker (0.5f));
+    g.setColour (on ? theme::shine.withAlpha (0.9f) : base.darker (0.5f));
     g.fillEllipse (light);
     g.setColour (theme::textOn (base).withAlpha (0.22f));
     for (int dot = -2; dot <= 2; ++dot)
@@ -148,7 +148,7 @@ void PadButton::paint (juce::Graphics& g)
         g.setFont (l->titleFont (height));
     const auto textArea = face.reduced (6.0f, 10.0f).toNearestInt();
     const auto ink = theme::textOn (base);
-    g.setColour (juce::Colours::black.withAlpha (ink.getBrightness() > 0.5f ? 0.28f : 0.0f));
+    g.setColour (theme::shade.withAlpha (ink.getBrightness() > 0.5f ? 0.28f : 0.0f));
     g.drawFittedText (chordName, textArea.translated (0, 2), juce::Justification::centred, 1, 0.6f);
     g.setColour (ink);
     g.drawFittedText (chordName, textArea, juce::Justification::centred, 1, 0.6f);
@@ -233,13 +233,13 @@ void SuggestButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isBut
     // From warm orange to hot pink, across the key
     g.setGradientFill (juce::ColourGradient (theme::accent.withAlpha (0.0f), face.getX(), 0.0f, theme::hotPink.withAlpha (0.85f), face.getRight(), 0.0f, false));
     g.fillRoundedRectangle (face, 12.0f);
-    g.setColour (juce::Colours::white.withAlpha (0.28f));
+    g.setColour (theme::shine.withAlpha (0.28f));
     g.fillRoundedRectangle (face.getX() + 8.0f, face.getY() + 2.0f, face.getWidth() - 16.0f, 2.2f, 1.1f);
 
     // A die: a white rounded square with five dots
     const float size = std::min (face.getHeight() - 10.0f, 26.0f);
     const juce::Rectangle<float> die (face.getX() + 14.0f, face.getCentreY() - size * 0.5f, size, size);
-    g.setColour (juce::Colours::white);
+    g.setColour (theme::shine);
     g.fillRoundedRectangle (die, size * 0.24f);
     g.setColour (theme::onAccent);
     const float dot = size * 0.1f;
@@ -387,7 +387,7 @@ void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
                 g.setFont (l->titleFont (15.0f));
             {
                 const auto labelArea = bounds.toNearestInt();
-                g.setColour (juce::Colours::black.withAlpha (accented ? 0.0f : 0.35f));
+                g.setColour (theme::shade.withAlpha (accented ? 0.0f : 0.35f));
                 g.drawText (getButtonText().isEmpty() ? getName() : getButtonText(), labelArea.translated (0, 1), juce::Justification::centred);
                 g.setColour (colour);
                 g.drawText (getButtonText().isEmpty() ? getName() : getButtonText(), labelArea, juce::Justification::centred);
@@ -431,7 +431,7 @@ void DragTile::paint (juce::Graphics& g)
         g.setGradientFill (juce::ColourGradient (theme::chordColour (7), page.getX(), page.getY(), theme::chordColour (9), page.getRight(), page.getBottom(), false));
         g.fillPath (rounded);
     }
-    const auto colour = ready ? juce::Colours::white : theme::dimText.withAlpha (0.45f);
+    const auto colour = ready ? theme::shine : theme::dimText.withAlpha (0.45f);
     g.setColour (colour);
     g.strokePath (rounded, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved));
 
@@ -608,12 +608,12 @@ void BlockButton::paint (juce::Graphics& g)
     // block have their own outlines.
     if (playing && ! lit)
     {
-        g.setColour (juce::Colours::white);
+        g.setColour (theme::shine);
         g.drawRoundedRectangle (body.expanded (0.5f), 9.5f, 3.0f);
         const auto light = juce::Rectangle<float> (9.0f, 9.0f).withCentre ({ bounds.getRight() - 12.0f, bounds.getY() + 12.0f });
         g.setColour (theme::go);
         g.fillEllipse (light);
-        g.setColour (juce::Colours::black.withAlpha (0.45f));
+        g.setColour (theme::shade.withAlpha (0.45f));
         g.drawEllipse (light, 1.0f);
     }
     if (dropTarget)
@@ -1818,7 +1818,7 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
     g.reduceClipRegion (clip);
 
     // The keys: white, with the black ones as short dark marks
-    g.setColour (juce::Colour (0xffd9d4ee));
+    g.setColour (theme::keyWhite);
     g.fillRect (area);
     for (int note = firstNote; note < lastNote; ++note)
     {
@@ -1826,12 +1826,12 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
         const bool black = inOctave == 1 || inOctave == 3 || inOctave == 6 || inOctave == 8 || inOctave == 10;
         if (black)
         {
-            g.setColour (juce::Colour (0xff2a2545));
+            g.setColour (theme::keyBlack);
             g.fillRect (xOf (note), area.getY(), std::max (1.0f, perNote), area.getHeight() * 0.62f);
         }
         else if (inOctave == 0) // a thin line at every C
         {
-            g.setColour (juce::Colour (0xff8f8aa8));
+            g.setColour (theme::keyLine);
             g.fillRect (xOf (note), area.getY(), 1.0f, area.getHeight());
         }
     }
@@ -1850,7 +1850,7 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
         {
             g.setColour (theme::go);
             g.fillRect (xOf (note), area.getY(), std::max (2.5f, perNote), area.getHeight());
-            g.setColour (juce::Colours::black.withAlpha (0.5f));
+            g.setColour (theme::shade.withAlpha (0.5f));
             g.drawRect (xOf (note), area.getY(), std::max (2.5f, perNote), area.getHeight(), 0.8f);
         }
 
@@ -1870,7 +1870,7 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
         g.drawText (text, label.toNearestInt(), juce::Justification::centred);
     }
 
-    g.setColour (juce::Colour (0xff3a3560));
+    g.setColour (theme::keyEdge);
     g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.2f);
 }
 
@@ -1879,7 +1879,7 @@ void ProgressionBar::paint (juce::Graphics& g)
     // A card of its own, lighter than the window, with the blocks in a darker tray inside it. A stripe of colour along the
     // top edge, from the first note to the last.
     const auto card = getLocalBounds().toFloat().reduced (0.5f);
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff25214a), 0.0f, card.getY(), juce::Colour (0xff1a1731), 0.0f, card.getBottom(), false));
+    g.setGradientFill (juce::ColourGradient (theme::cardTop, 0.0f, card.getY(), theme::cardBottom, 0.0f, card.getBottom(), false));
     g.fillRoundedRectangle (card, 14.0f);
     {
         juce::Graphics::ScopedSaveState state (g);
@@ -1892,12 +1892,12 @@ void ProgressionBar::paint (juce::Graphics& g)
         g.setGradientFill (rainbow);
         g.fillRect (card.getX(), card.getY(), card.getWidth(), 4.0f);
     }
-    g.setColour (juce::Colour (0xff3d376a));
+    g.setColour (theme::cardEdge);
     g.drawRoundedRectangle (card, 14.0f, 1.6f);
     if (! trayBounds.isEmpty())
     {
         const auto tray = trayBounds.toFloat();
-        g.setColour (juce::Colour (0xff0d0b1a));
+        g.setColour (theme::tray);
         g.fillRoundedRectangle (tray, 10.0f);
         {
             // A faint diagonal weave in the tray
@@ -1905,11 +1905,11 @@ void ProgressionBar::paint (juce::Graphics& g)
             juce::Path clip;
             clip.addRoundedRectangle (tray, 10.0f);
             g.reduceClipRegion (clip);
-            g.setColour (juce::Colours::white.withAlpha (0.025f));
+            g.setColour (theme::trayWeave);
             for (float x = tray.getX() - tray.getHeight(); x < tray.getRight(); x += 14.0f)
                 g.drawLine (x, tray.getBottom(), x + tray.getHeight(), tray.getY(), 1.0f);
         }
-        g.setColour (juce::Colour (0xff2a2550));
+        g.setColour (theme::trayEdge);
         g.drawRoundedRectangle (tray.reduced (0.5f), 10.0f, 1.4f);
     }
 
@@ -2497,15 +2497,15 @@ void ProgrezzorEditor::paint (juce::Graphics& g)
     const auto all = getLocalBounds().toFloat();
 
     // A deep indigo backdrop with two soft colour washes and a faint grid of dots
-    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff17122e), 0.0f, 0.0f, theme::background, 0.0f, all.getHeight(), false));
+    g.setGradientFill (juce::ColourGradient (theme::backgroundTop, 0.0f, 0.0f, theme::background, 0.0f, all.getHeight(), false));
     g.fillAll();
-    g.setGradientFill (juce::ColourGradient (theme::chordColour (9).withAlpha (0.20f), all.getWidth() * 0.12f, -20.0f,
+    g.setGradientFill (juce::ColourGradient (theme::chordColour (9).withAlpha (0.20f * theme::washStrength), all.getWidth() * 0.12f, -20.0f,
                                              theme::chordColour (9).withAlpha (0.0f), all.getWidth() * 0.12f, all.getHeight() * 0.55f, true));
     g.fillRect (all);
-    g.setGradientFill (juce::ColourGradient (theme::chordColour (0).withAlpha (0.12f), all.getWidth() * 0.95f, all.getHeight() * 0.35f,
+    g.setGradientFill (juce::ColourGradient (theme::chordColour (0).withAlpha (0.12f * theme::washStrength), all.getWidth() * 0.95f, all.getHeight() * 0.35f,
                                              theme::chordColour (0).withAlpha (0.0f), all.getWidth() * 0.55f, all.getHeight() * 0.35f, true));
     g.fillRect (all);
-    g.setColour (juce::Colours::white.withAlpha (0.045f));
+    g.setColour (theme::backdropDot);
     for (float y = 10.0f; y < all.getHeight(); y += 22.0f)
         for (float x = 10.0f; x < all.getWidth(); x += 22.0f)
             g.fillRect (x, y, 1.6f, 1.6f);

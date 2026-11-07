@@ -8,29 +8,91 @@
 // a control looks like comes from here, so the editor code only lays things out.
 namespace theme
 {
-inline const juce::Colour background (0xff0e0c1b);   // deep indigo-black
-inline const juce::Colour panel (0xff1a1731);
-inline const juce::Colour outline (0xff35305a);
-inline const juce::Colour field (0xff211d3c);
-inline const juce::Colour pad (0xff2f2b4d);        // a neutral key at rest
-inline const juce::Colour padHover (0xff3c3763);
-inline const juce::Colour text (0xfff4f1ff);
-inline const juce::Colour dimText (0xff9b97bd);
-inline const juce::Colour accent (0xffffb347);     // what is lit
-inline const juce::Colour hotPink (0xffff5fa8);        // the other end of the Suggest gradient
-inline const juce::Colour go (0xff3fd98a);         // Play is on
-inline const juce::Colour onAccent (0xff1b1118);   // text on the bright colours
-inline const juce::Colour warn (0xffff6b5e);       // a block that is outside the scale
-inline const juce::Colour block (0xff3a3358);      // (the blocks of the progression take the colour of their chord)
-inline const juce::Colour blockHover (0xff48406c);
-inline const juce::Colour blockEdge (0xff5a5080);
+// Every colour of the editor is here: the editor's own code names no colour, it only asks for these. apply() sets them for a
+// look, and the values they start with are Midnight's.
+inline juce::Colour background (0xff0e0c1b);
+inline juce::Colour backgroundTop (0xff17122e);   // the top of the backdrop, which fades into `background`
+inline juce::Colour panel (0xff1a1731);
+inline juce::Colour outline (0xff35305a);
+inline juce::Colour field (0xff211d3c);
+inline juce::Colour pad (0xff2f2b4d);              // a neutral key at rest
+inline juce::Colour padHover (0xff3c3763);
+inline juce::Colour text (0xfff4f1ff);
+inline juce::Colour dimText (0xff9b97bd);
+inline juce::Colour accent (0xffffb347);           // what is lit
+inline juce::Colour hotPink (0xffff5fa8);          // the other end of the Suggest gradient
+inline juce::Colour go (0xff3fd98a);               // Play is on, and the notes that sound
+inline juce::Colour onAccent (0xff1b1118);         // text on the bright colours
+inline juce::Colour warn (0xffff6b5e);             // a block that is outside the scale
+inline juce::Colour block (0xff3a3358);
+inline juce::Colour blockHover (0xff48406c);
+inline juce::Colour blockEdge (0xff5a5080);
+inline juce::Colour cardTop (0xff25214a);          // the card of the progression bar
+inline juce::Colour cardBottom (0xff1a1731);
+inline juce::Colour cardEdge (0xff3d376a);
+inline juce::Colour tray (0xff0d0b1a);             // the tray the blocks sit in
+inline juce::Colour trayEdge (0xff2a2550);
+inline juce::Colour trayWeave (0x06ffffff);        // the faint diagonal lines in the tray
+inline juce::Colour keyWhite (0xffd9d4ee);         // the little keyboard
+inline juce::Colour keyBlack (0xff2a2545);
+inline juce::Colour keyLine (0xff8f8aa8);
+inline juce::Colour keyEdge (0xff3a3560);
+inline juce::Colour popup (0xff1c1838);            // menus and the Arp panel
+inline juce::Colour backdropDot (0x0bffffff);      // the grid of dots on the backdrop
+inline float washStrength = 1.0f;                  // how strong the soft colour washes on the backdrop are
+inline float chordSaturation = 1.0f;               // how colourful the chord colours are (0 is grey)
+inline float chordBrightness = 1.0f;
+
+// The two looks that are defined. Midnight is the one in use. There is no switch for it: another look is only a reason to
+// change apply() below (a switch in Settings is in BACKLOG.md, for if users ask for it).
+constexpr int kNumThemes = 2;
+constexpr const char* themeNames[kNumThemes] = { "Midnight", "Syre" };
+
+inline const juce::Colour shine = juce::Colours::white; // highlights and light marks, in every look
+inline const juce::Colour shade = juce::Colours::black; // shadows and dark outlines, in every look
+
+inline void apply (int index)
+{
+    const auto c = [] (juce::uint32 argb) { return juce::Colour (argb); };
+    switch (index)
+    {
+        case 1: // Syre: the look of SubForge and SeqVerse, graphite with teal, and softer chord colours
+            background = c (0xff0b0d0c); backgroundTop = c (0xff141716); panel = c (0xff141716); outline = c (0xff232826);
+            field = c (0xff1c201e); pad = c (0xff29302c); padHover = c (0xff343c38);
+            text = c (0xffe8ede6); dimText = c (0xff8a938d); accent = c (0xff3dd6c6); hotPink = c (0xff7ce38b); go = c (0xff5be37a);
+            onAccent = c (0xff0b0d0c); warn = c (0xffff6b5e);
+            block = c (0xff2a312d); blockHover = c (0xff353d38); blockEdge = c (0xff46514b);
+            cardTop = c (0xff1c211f); cardBottom = c (0xff141716); cardEdge = c (0xff2f3835);
+            tray = c (0xff090b0a); trayEdge = c (0xff232826); trayWeave = c (0x05ffffff);
+            keyWhite = c (0xffdfe6e0); keyBlack = c (0xff27302c); keyLine = c (0xff8a948e); keyEdge = c (0xff2f3835);
+            popup = c (0xff161a18); backdropDot = c (0x08ffffff);
+            washStrength = 0.35f; chordSaturation = 0.62f; chordBrightness = 0.97f;
+            break;
+
+
+
+        default: // Midnight: deep indigo and bright chord colours
+            background = c (0xff0e0c1b); backgroundTop = c (0xff17122e); panel = c (0xff1a1731); outline = c (0xff35305a);
+            field = c (0xff211d3c); pad = c (0xff2f2b4d); padHover = c (0xff3c3763);
+            text = c (0xfff4f1ff); dimText = c (0xff9b97bd); accent = c (0xffffb347); hotPink = c (0xffff5fa8); go = c (0xff3fd98a);
+            onAccent = c (0xff1b1118); warn = c (0xffff6b5e);
+            block = c (0xff3a3358); blockHover = c (0xff48406c); blockEdge = c (0xff5a5080);
+            cardTop = c (0xff25214a); cardBottom = c (0xff1a1731); cardEdge = c (0xff3d376a);
+            tray = c (0xff0d0b1a); trayEdge = c (0xff2a2550); trayWeave = c (0x06ffffff);
+            keyWhite = c (0xffd9d4ee); keyBlack = c (0xff2a2545); keyLine = c (0xff8f8aa8); keyEdge = c (0xff3a3560);
+            popup = c (0xff1c1838); backdropDot = c (0x0bffffff);
+            washStrength = 1.0f; chordSaturation = 1.0f; chordBrightness = 1.0f;
+            break;
+    }
+}
 
 // Every chord has its own colour, from its root note, so that F is the same colour on a pad, in the bar and in any key.
+// The look decides how colourful they are.
 inline juce::Colour chordColour (int pitchClass)
 {
     static const juce::uint32 palette[12] = { 0xffff5d6c, 0xffff7a3d, 0xffffa629, 0xffffd23f, 0xffb9e03a, 0xff4fd36b,
                                               0xff25c9a5, 0xff2fb8ec, 0xff4a8dff, 0xff8e6bff, 0xffd261ff, 0xffff5fa8 };
-    return juce::Colour (palette[((pitchClass % 12) + 12) % 12]);
+    return juce::Colour (palette[((pitchClass % 12) + 12) % 12]).withMultipliedSaturation (chordSaturation).withMultipliedBrightness (chordBrightness);
 }
 
 // Black or near-black text on bright faces, white on dark ones
@@ -107,12 +169,21 @@ public:
         labelFace = juce::Typeface::createSystemTypefaceFor (BinaryData::ChakraPetchSemiBold_ttf, BinaryData::ChakraPetchSemiBold_ttfSize);
         titleFace = juce::Typeface::createSystemTypefaceFor (BinaryData::ChakraPetchBold_ttf, BinaryData::ChakraPetchBold_ttfSize);
 
+        refreshColours();
+    }
+
+    // Takes the colours of the look in use now (see theme::apply)
+    void refreshColours()
+    {
         setColourScheme ({ background, field, panel, outline, text, accent, onAccent, accent, text });
         setColour (juce::ResizableWindow::backgroundColourId, background);
         setColour (juce::Label::textColourId, dimText);
         setColour (juce::ComboBox::textColourId, text);
         setColour (juce::PopupMenu::textColourId, text);
         setColour (juce::PopupMenu::highlightedTextColourId, text);
+        setColour (juce::TooltipWindow::backgroundColourId, popup);
+        setColour (juce::TooltipWindow::textColourId, text);
+        setColour (juce::TooltipWindow::outlineColourId, outline);
     }
 
     juce::Font labelFont (float height) const { return juce::Font (juce::FontOptions (labelFace).withHeight (height)); }
@@ -141,7 +212,7 @@ public:
     // The panel that opens from the Arp button: the same dark card as the rest, with a warm edge
     void drawCallOutBoxBackground (juce::CallOutBox&, juce::Graphics& g, const juce::Path& path, juce::Image&) override
     {
-        g.setColour (juce::Colour (0xff1c1838));
+        g.setColour (popup);
         g.fillPath (path);
         g.setColour (accent.withAlpha (0.7f));
         g.strokePath (path, juce::PathStrokeType (2.0f));
