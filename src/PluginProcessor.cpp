@@ -1,0 +1,755 @@
+#include "PluginProcessor.h"
+#include "PluginEditor.h"
+
+#include <cmath>
+
+namespace
+{
+const char* const keyNames[engine::kNumKeys] = { "C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab", "A", "A#/Bb", "B" };
+
+// The white keys of a keyboard play pad 1 to 7. -1 for the black keys.
+constexpr int padOfPitchClass[12] = { 0, -1, 1, -1, 2, 3, -1, 4, -1, 5, -1, 6 };
+
+// A message from the host, kept so that the MIDI buffer can be emptied before the notes are written
+struct InputMessage
+{
+    int position;
+    int kind; // see below
+    int note;
+    int velocity;
+};
+enum { noteOnMessage, noteOffMessage, allNotesOffMessage };
+
+constexpr int kLoopVelocity = 100;
+constexpr double kFallbackBpm = 120.0;
+}
+
+ProgrezzorProcessor::ProgrezzorProcessor()
+    // A stereo output from day one: it carries the preview sound, and some hosts (Bitwig) do not run a plug-in
+    // without audio ports.
+    : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+{
+    juce::StringArray keys, scales;
+    for (const char* name : keyNames)
+        keys.add (name);
+    for (const auto& scale : engine::scales)
+        scales.add (scale.name);
+
+    // Defaults: A Minor
+    addParameter (keyParam = new juce::AudioParameterChoice ({ "key", 1 }, "Key", keys, 9));
+    addParameter (scaleParam = new juce::AudioParameterChoice ({ "scale", 1 }, "Scale", scales, (int) engine::ScaleId::Minor));
+    addParameter (loopParam = new juce::AudioParameterBool ({ "loop", 1 }, "Play", true)); // added last: earlier projects keep theirs
+    addParameter (lockParam = new juce::AudioParameterBool ({ "lock", 1 }, "Lock to scale", true));
+
+    juce::StringArray moods, voices;
+    for (const char* name : engine::moodNames)
+        moods.add (name);
+    for (const char* name : { "Pad", "Strings", "Keys", "Organ", "Stab", "Pluck" })
+        voices.add (name);
+    addParameter (moodParam = new juce::AudioParameterChoice ({ "mood", 1 }, "Mood", moods, (int) engine::Mood::Melancholic));
+    addParameter (voiceParam = new juce::AudioParameterChoice ({ "voice", 1 }, "Voice", voices, 0));
+
+    for (auto& variant : padVariant)
+        variant.store (-1);
+    for (auto& entry : history)
+        entry.store (0);
+}
+
+void ProgrezzorProcessor::prepareToPlay (double newSampleRate, int)
+{
+    sampleRate = newSampleRate;
+    synth.prepare (sampleRate);
+    wasPlaying = false;
+    wasHostPlaying = false;
+    internalRun.store (false);
+    loopIndex = -1;
+    internalPpq = 0.0;
+    // The host may have been off for a while. Whatever was sounding gets its note off in the first block.
+    flushNeeded = true;
+}
+
+bool ProgrezzorProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+{
+    return layouts.getMainInputChannelSet().isDisabled()
+        && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
+}
+
+void ProgrezzorProcessor::pressPad (int pad)
+{
+    sendGuiEvent ({ engine::NoteTracker::padSource (pad), true, pad, {} });
+}
+
+void ProgrezzorProcessor::releasePad (int pad)
+{
+    sendGuiEvent ({ engine::NoteTracker::padSource (pad), false, pad, {} });
+}
+
+void ProgrezzorProcessor::pressBlock (int block, const engine::Chord& chord)
+{
+    sendGuiEvent ({ engine::NoteTracker::blockSource (block), true, -1, chord });
+}
+
+void ProgrezzorProcessor::releaseBlock (int block)
+{
+    sendGuiEvent ({ engine::NoteTracker::blockSource (block), false, -1, {} });
+}
+
+void ProgrezzorProcessor::sendGuiEvent (GuiEvent event)
+{
+    if (event.source < 0 || event.source >= engine::NoteTracker::kNumSources)
+        return;
+
+    const auto write = fifo.write (1);
+    if (write.blockSize1 > 0)
+        queue[(size_t) write.startIndex1] = event;
+    else if (write.blockSize2 > 0)
+        queue[(size_t) write.startIndex2] = event;
+    // A full queue drops the event. 64 mouse presses within one audio block does not happen.
+}
+
+// One block of work. It is a class of its own only to keep processBlock readable: it holds the output and the
+// position, and turns pad presses into notes.
+class ProgrezzorProcessor::AudioWork
+{
+public:
+    AudioWork (ProgrezzorProcessor& p, juce::AudioBuffer<float>& b, juce::MidiBuffer& m)
+        : owner (p), buffer (b), midi (m), numSamples (b.getNumSamples())
+    {
+    }
+
+    void render (int upTo)
+    {
+        if (upTo > cursor)
+        {
+            auto* right = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : buffer.getWritePointer (0);
+            owner.synth.render (buffer.getWritePointer (0), right, cursor, upTo);
+            cursor = upTo;
+        }
+    }
+
+    // The sound and the MIDI follow every note on or off at the position it has
+    void emit (const engine::NoteEvent& e, int position)
+    {
+        render (position);
+        if (e.on)
+        {
+            midi.addEvent (juce::MidiMessage::noteOn (1, e.note, (juce::uint8) e.velocity), position);
+            owner.synth.noteOn (e.note, e.velocity);
+        }
+        else
+        {
+            midi.addEvent (juce::MidiMessage::noteOff (1, e.note), position);
+            owner.synth.noteOff (e.note);
+        }
+    }
+
+    // The loop: which block sounds. Call it whenever the block, the user's hands or the key may have changed.
+    void syncLoop (int position, bool again = false)
+    {
+        const auto& snapshot = owner.loopBuffer.read();
+        bool wanted = owner.loopActive && owner.userHolds == 0 && owner.loopIndex >= 0 && owner.loopIndex < snapshot.count;
+        if (wanted) // a block that Quick-text disabled (a chord outside the scale, with the lock on) keeps its time but is silent
+        {
+            const auto& block = snapshot.blocks[(size_t) owner.loopIndex];
+            wanted = ! (block.disabled && owner.lockParam->get() && ! engine::chordFitsScale (block.chord, (engine::ScaleId) owner.scaleParam->getIndex()));
+        }
+        const int loopSource = engine::NoteTracker::loopSource();
+
+        if (! wanted)
+        {
+            releaseSource (loopSource, position);
+            return;
+        }
+
+        const auto chord = snapshot.blocks[(size_t) owner.loopIndex].chord;
+        const int tonic = owner.keyParam->getIndex();
+        if (! again && owner.tracker.isHeld (loopSource) && owner.loopChord == chord && owner.loopTonic == tonic)
+            return;
+
+        owner.loopChord = chord;
+        owner.loopTonic = tonic;
+        pressSource (loopSource, -1, chord, kLoopVelocity, position);
+    }
+
+    // The loop starts the block at its first sample
+    void beginLoop (int index)
+    {
+        owner.loopIndex = index;
+        nextChange = 0;
+        syncLoop (0, owner.loopPlan.startsOnLine); // a block that starts here sounds anew, even with the same chord
+    }
+
+    // The loop goes through the block changes that fall before `position`
+    void advanceLoop (int position)
+    {
+        while (nextChange < owner.loopPlan.numChanges && owner.loopPlan.changes[(size_t) nextChange].sample < position)
+        {
+            const auto change = owner.loopPlan.changes[(size_t) nextChange++];
+            owner.loopIndex = change.index;
+            syncLoop (change.sample, true); // every block change strikes the chord again, also when it is the same chord
+        }
+    }
+
+    // `pad` is the pad that lights up (0 to 6), -1 for a chord that is not a pad
+    void pressSource (int source, int pad, const engine::Chord& chord, int velocity, int position)
+    {
+        if (source < 0 || source >= engine::NoteTracker::kNumSources || pad >= kNumPads)
+            return;
+
+        const auto voicing = engine::voiceChord (chord, owner.keyParam->getIndex(),
+                                                 owner.lastVoicing.count > 0 ? &owner.lastVoicing : nullptr);
+        owner.lastVoicing = voicing;
+
+        if (pad >= 0)
+            owner.recordPlayed (chord); // every chord played on a pad goes in the history
+
+        pressingAgain = true; // the loop is not heard in between
+        releaseSource (source, position); // a source that is pressed again lets go of its first pad
+        pressingAgain = false;
+        owner.sourcePad[(size_t) source] = pad;
+        if (pad >= 0)
+            ++owner.padHolds[(size_t) pad];
+        const bool user = source != engine::NoteTracker::loopSource();
+        if (user)
+            ++owner.userHolds;
+        owner.tracker.press (source, voicing, velocity, [&] (const engine::NoteEvent& e) { emit (e, position); });
+
+        if (user) // what the user plays comes before the loop, which is silent as long as a hand is on a pad
+            syncLoop (position);
+    }
+
+    void releaseSource (int source, int position)
+    {
+        if (source < 0 || source >= engine::NoteTracker::kNumSources || ! owner.tracker.isHeld (source))
+            return;
+
+        if (const int pad = owner.sourcePad[(size_t) source]; pad >= 0)
+            --owner.padHolds[(size_t) pad];
+        const bool user = source != engine::NoteTracker::loopSource();
+        if (user)
+            --owner.userHolds;
+        owner.tracker.release (source, [&] (const engine::NoteEvent& e) { emit (e, position); });
+
+        if (user && ! pressingAgain) // the last hand lets go: the loop is heard again
+            syncLoop (position);
+    }
+
+    // Everything stops, the loop too. The loop is heard again at the next block change.
+    void releaseEverything (int position)
+    {
+        owner.tracker.releaseAll ([&] (const engine::NoteEvent& e) { emit (e, position); });
+        owner.padHolds.fill (0);
+        owner.userHolds = 0;
+    }
+
+    void finish()
+    {
+        render (numSamples);
+
+        unsigned mask = 0;
+        for (int pad = 0; pad < kNumPads; ++pad)
+            if (owner.padHolds[(size_t) pad] > 0)
+                mask |= 1u << pad;
+        owner.lit.store (mask);
+        owner.soundingCount.store (owner.tracker.soundingNotes());
+        owner.playingBlock.store (owner.loopActive && owner.loopIndex >= 0 ? owner.loopIndex : -1);
+
+        // Nothing louder than full scale can leave, whatever is played
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        {
+            auto* data = buffer.getWritePointer (channel);
+            for (int i = 0; i < numSamples; ++i)
+                data[i] = juce::jlimit (-1.0f, 1.0f, data[i]);
+        }
+    }
+
+private:
+    ProgrezzorProcessor& owner;
+    juce::AudioBuffer<float>& buffer;
+    juce::MidiBuffer& midi;
+    int numSamples;
+    int cursor = 0;
+    int nextChange = 0;
+    bool pressingAgain = false;
+};
+
+void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ScopedNoDenormals noDenormals;
+    buffer.clear();
+
+    // Read the incoming MIDI first and empty the buffer: the notes that go out are written into the same buffer, and
+    // the notes that came in are not passed on.
+    std::array<InputMessage, 256> input;
+    int numInput = 0;
+    for (const auto metadata : midi)
+    {
+        if (numInput == (int) input.size())
+            break;
+
+        const auto message = metadata.getMessage();
+        if (message.isNoteOn())
+            input[(size_t) numInput++] = { metadata.samplePosition, noteOnMessage, message.getNoteNumber(), message.getVelocity() };
+        else if (message.isNoteOff())
+            input[(size_t) numInput++] = { metadata.samplePosition, noteOffMessage, message.getNoteNumber(), 0 };
+        else if (message.isAllNotesOff() || message.isAllSoundOff())
+            input[(size_t) numInput++] = { metadata.samplePosition, allNotesOffMessage, 0, 0 };
+    }
+    midi.clear();
+
+    AudioWork work (*this, buffer, midi);
+    synth.setVoice (voiceParam->getIndex());
+
+    if (flushNeeded)
+    {
+        work.releaseEverything (0);
+        flushNeeded = false;
+    }
+
+    // The host's transport: playing or not, where it is (in quarter notes), its tempo and bars
+    bool hostPlaying = wasHostPlaying;
+    double bpm = kFallbackBpm;
+    double startBeat = internalPpq;
+    if (auto* transport = getPlayHead())
+        if (const auto position = transport->getPosition())
+        {
+            hostPlaying = position->getIsPlaying();
+            bpm = position->getBpm().orFallback (kFallbackBpm);
+            startBeat = position->getPpqPosition().orFallback (internalPpq);
+            if (const auto signature = position->getTimeSignature())
+                if (signature->numerator > 0 && signature->denominator > 0)
+                    hostBarBeats.store (4.0 * signature->numerator / signature->denominator);
+        }
+    if (bpm <= 0.0)
+        bpm = kFallbackBpm;
+
+    // Two clocks: the host's when it plays (the loop follows its position), otherwise the plug-in's own, which the Play
+    // button starts from the beginning of the progression. When the host starts, it takes over.
+    wasHostPlaying = hostPlaying;
+    hostIsPlaying.store (hostPlaying);
+    if (hostPlaying)
+        internalRun.store (false);
+    const bool ownClock = ! hostPlaying && internalRun.load();
+    if (ownClock)
+        startBeat = internalPpq; // 0 when it has just been started
+    const bool playing = hostPlaying || ownClock;
+
+    // Transport stop stops everything that sounds
+    if (wasPlaying && ! playing)
+    {
+        work.releaseEverything (0);
+        loopIndex = -1;
+    }
+    wasPlaying = playing;
+
+    const double beatsPerSample = bpm / 60.0 / sampleRate;
+    internalPpq = playing ? startBeat + buffer.getNumSamples() * beatsPerSample : 0.0;
+
+    // The loop plays while the host plays and Play is on, or on its own clock when Play was pressed with the host stopped
+    loopBuffer.update();
+    loopActive = playing && (ownClock || loopParam->get()) && loopBuffer.read().count > 0;
+    loopPlan = loopActive ? engine::planLoop (loopBuffer.read(), startBeat, beatsPerSample, buffer.getNumSamples()) : engine::LoopPlan();
+    if (! loopActive)
+        loopIndex = -1;
+
+    // The mouse first (it arrived before this block), then the MIDI keyboard in the order of the buffer. What the user
+    // plays comes before the loop, which is silent as long as a hand is on a pad.
+    for (;;)
+    {
+        const auto read = fifo.read (1);
+        const int index = read.blockSize1 > 0 ? read.startIndex1 : (read.blockSize2 > 0 ? read.startIndex2 : -1);
+        if (index < 0)
+            break;
+
+        const auto event = queue[(size_t) index];
+        if (event.down)
+            work.pressSource (event.source, event.pad,
+                              event.pad >= 0 ? getPadChord (event.pad) : event.chord,
+                              kMouseVelocity, 0);
+        else
+            work.releaseSource (event.source, 0);
+    }
+
+    if (loopActive)
+        work.beginLoop (loopPlan.startIndex);
+    else
+        work.syncLoop (0); // lets go of the loop's chord if Play was turned off or the progression emptied
+
+    for (int i = 0; i < numInput; ++i)
+    {
+        const auto& message = input[(size_t) i];
+        work.advanceLoop (message.position);
+
+        if (message.kind == allNotesOffMessage)
+        {
+            work.releaseEverything (message.position);
+            continue;
+        }
+
+        const int pad = padOfPitchClass[message.note % 12];
+        if (pad < 0)
+            continue; // a black key
+
+        const int source = engine::NoteTracker::keySource (message.note);
+        if (message.kind == noteOnMessage)
+            work.pressSource (source, pad, getPadChord (pad),
+                              juce::jlimit (1, 127, message.velocity), message.position);
+        else
+            work.releaseSource (source, message.position);
+    }
+
+    work.advanceLoop (buffer.getNumSamples());
+    work.finish();
+}
+
+void ProgrezzorProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+{
+    juce::ScopedNoDenormals noDenormals;
+    buffer.clear();
+    midi.clear(); // incoming notes are not passed on
+
+    // Bypass must never leave a note hanging: everything that sounds gets its note off now
+    AudioWork work (*this, buffer, midi);
+    work.releaseEverything (0);
+    synth.allNotesOff();
+    loopIndex = -1;
+    loopActive = false;
+    internalPpq = 0.0;
+    internalRun.store (false);
+    work.finish();
+    wasPlaying = false;
+    wasHostPlaying = false;
+}
+
+void ProgrezzorProcessor::togglePlay()
+{
+    if (hostIsPlaying.load())
+        loopParam->setValueNotifyingHost (loopParam->get() ? 0.0f : 1.0f);
+    else
+        internalRun.store (! internalRun.load());
+}
+
+void ProgrezzorProcessor::setProgression (engine::Progression newProgression)
+{
+    if (newProgression.size() > (size_t) engine::kMaxBlocks)
+        newProgression.resize ((size_t) engine::kMaxBlocks);
+
+    progression = std::move (newProgression);
+
+    // The loop on the audio thread gets its own copy
+    loopBuffer.writeSlot() = engine::makeSnapshot (progression);
+    loopBuffer.publish();
+
+    ++progressionVersion;
+}
+
+void ProgrezzorProcessor::editProgression (engine::Progression newProgression)
+{
+    if (newProgression.size() > (size_t) engine::kMaxBlocks)
+        newProgression.resize ((size_t) engine::kMaxBlocks);
+    if (newProgression == progression)
+        return;
+
+    undoStack.push_back (progression);
+    if (undoStack.size() > kMaxUndo)
+        undoStack.erase (undoStack.begin());
+    redoStack.clear();
+    setProgression (std::move (newProgression));
+}
+
+void ProgrezzorProcessor::undo()
+{
+    if (undoStack.empty())
+        return;
+
+    redoStack.push_back (progression);
+    auto previous = std::move (undoStack.back());
+    undoStack.pop_back();
+    setProgression (std::move (previous));
+}
+
+void ProgrezzorProcessor::redo()
+{
+    if (redoStack.empty())
+        return;
+
+    undoStack.push_back (progression);
+    auto next = std::move (redoStack.back());
+    redoStack.pop_back();
+    setProgression (std::move (next));
+}
+
+bool ProgrezzorProcessor::isBlockSilent (int index) const
+{
+    return index >= 0 && index < (int) progression.size()
+        && engine::isBlockDisabled (progression[(size_t) index], (engine::ScaleId) scaleParam->getIndex(), lockParam->get());
+}
+
+void ProgrezzorProcessor::allowOutsideScale()
+{
+    // The silent blocks are allowed for good: they keep playing if the lock is turned on again (one step for Undo)
+    auto allowed = progression;
+    for (int i = 0; i < (int) allowed.size(); ++i)
+        if (isBlockSilent (i))
+            allowed[(size_t) i].disabled = false;
+    editProgression (std::move (allowed));
+
+    lockParam->beginChangeGesture();
+    lockParam->setValueNotifyingHost (0.0f);
+    lockParam->endChangeGesture();
+}
+
+void ProgrezzorProcessor::suggestProgression()
+{
+    // The chords of a suggestion are stored as distances from the tonic, so they follow the key by themselves
+    auto suggestion = engine::suggest (getKey(), getMood(), (unsigned) random.nextInt(), lastSuggestion);
+    lastSuggestion = suggestion.index;
+
+    // The library counts a bar as 4 beats; in the host's time signature a bar is what it is (3 beats in 3/4)
+    const double barBeats = getHostBarBeats();
+    for (auto& block : suggestion.blocks)
+        block.beats = juce::jlimit (engine::kMinBlockBeats, engine::kMaxBlockBeats, block.beats / engine::kBeatsPerBar * barBeats);
+
+    // Pad variants the user has chosen (B changed to B7) are used in the suggestion, also outside the scale
+    std::array<engine::Chord, kNumPads> pads;
+    for (int pad = 0; pad < kNumPads; ++pad)
+        pads[(size_t) pad] = getPadChord (pad);
+    suggestion.blocks = engine::withPadVariants (std::move (suggestion.blocks), (engine::ScaleId) scaleParam->getIndex(), pads);
+
+    editProgression (engine::keepingLocked (progression, std::move (suggestion.blocks)));
+    suggestedVersion = progressionVersion.load();
+}
+
+bool ProgrezzorProcessor::suggestWouldOverwrite() const
+{
+    if (progressionVersion.load() == suggestedVersion)
+        return false;
+    for (const auto& block : progression)
+        if (! block.locked)
+            return true;
+    return false;
+}
+
+// A chord in one int: root, type and inversion
+static int packChord (const engine::Chord& chord)
+{
+    return chord.root | ((int) chord.type << 4) | ((chord.inversion + 1) << 8) | ((chord.octave + engine::kMaxOctaveShift) << 12);
+}
+
+static engine::Chord unpackChord (int packed)
+{
+    engine::Chord chord;
+    chord.root = engine::wrap12 (packed & 15);
+    chord.type = (engine::ChordType) juce::jlimit (0, engine::kNumChordTypes - 1, (packed >> 4) & 15);
+    chord.inversion = ((packed >> 8) & 15) - 1;
+    chord.octave = juce::jlimit (-engine::kMaxOctaveShift, engine::kMaxOctaveShift, ((packed >> 12) & 15) - engine::kMaxOctaveShift);
+    return chord;
+}
+
+void ProgrezzorProcessor::recordPlayed (const engine::Chord& chord)
+{
+    const unsigned n = historyCount.load (std::memory_order_relaxed);
+    history[n % kHistorySize].store (packChord (chord), std::memory_order_relaxed);
+    historyCount.store (n + 1, std::memory_order_release);
+}
+
+std::vector<engine::Chord> ProgrezzorProcessor::recentChords (int count) const
+{
+    const unsigned n = historyCount.load (std::memory_order_acquire);
+    const int available = (int) std::min<unsigned> (n, (unsigned) kHistorySize);
+    const int take = juce::jlimit (0, available, count);
+
+    std::vector<engine::Chord> chords;
+    for (unsigned i = n - (unsigned) take; i != n; ++i)
+        chords.push_back (unpackChord (history[i % kHistorySize].load (std::memory_order_relaxed)));
+    return chords;
+}
+
+bool ProgrezzorProcessor::capture (int count)
+{
+    const auto captured = engine::fromHistory (recentChords (count), count, getHostBarBeats());
+    if (captured.empty())
+        return false;
+
+    editProgression (captured);
+    return true;
+}
+
+engine::Chord ProgrezzorProcessor::getPadChord (int pad) const
+{
+    auto chord = engine::padChord ((engine::ScaleId) scaleParam->getIndex(), juce::jlimit (0, kNumPads - 1, pad));
+    const int variant = padVariant[(size_t) juce::jlimit (0, kNumPads - 1, pad)].load();
+    if (variant >= 0)
+    {
+        chord.type = (engine::ChordType) juce::jlimit (0, engine::kNumChordTypes - 1, variant >> 4);
+        chord.inversion = (variant & 15) - 1;
+    }
+    return chord;
+}
+
+void ProgrezzorProcessor::setPadVariant (int pad, engine::ChordType type, int inversion)
+{
+    if (pad < 0 || pad >= kNumPads)
+        return;
+
+    padVariant[(size_t) pad].store ((int) type * 16 + juce::jlimit (engine::kAutoInversion, 4, inversion) + 1);
+    ++variantVersion;
+}
+
+void ProgrezzorProcessor::clearPadVariant (int pad)
+{
+    if (pad < 0 || pad >= kNumPads)
+        return;
+
+    padVariant[(size_t) pad].store (-1);
+    ++variantVersion;
+}
+
+juce::File ProgrezzorProcessor::getExportFolder()
+{
+    const auto fromEnvironment = juce::SystemStats::getEnvironmentVariable ("PROGREZZOR_EXPORT_FOLDER", {});
+    if (fromEnvironment.isNotEmpty())
+        return juce::File (fromEnvironment);
+
+    return juce::File::getSpecialLocation (juce::File::userMusicDirectory).getChildFile ("Progrezzor");
+}
+
+juce::File ProgrezzorProcessor::saveMidi()
+{
+    constexpr int kTicksPerQuarter = 960;
+    const auto key = getKey();
+
+    // What the file is made from. The same again gives the same file.
+    juce::String madeFrom = juce::String (key.tonic);
+    for (const auto& block : progression)
+        madeFrom << (engine::isBlockDisabled (block, key.scale, lockParam->get()) ? "|-" : "|") << block.chord.root << "," << (int) block.chord.type << "," << block.chord.inversion << "," << juce::String (block.beats, 4);
+
+    if (progression.empty())
+        return {};
+    if (madeFrom == lastExportKey && lastExport.existsAsFile())
+        return lastExport;
+
+    const auto ticks = [] (double beats) { return beats * kTicksPerQuarter; };
+
+    juce::MidiMessageSequence sequence;
+    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get()))
+    {
+        // All MIDI on channel 1. A note off comes before a note on at the same time, so that equal chords strike again.
+        sequence.addEvent (juce::MidiMessage::noteOn (1, note.note, (juce::uint8) note.velocity).withTimeStamp (ticks (note.start)));
+        sequence.addEvent (juce::MidiMessage::noteOff (1, note.note).withTimeStamp (ticks (note.start + note.length)));
+    }
+    sequence.addEvent (juce::MidiMessage::endOfTrack().withTimeStamp (ticks (engine::totalBeats (progression))));
+    sequence.sort();
+    sequence.updateMatchedPairs();
+
+    juce::MidiFile midiFile; // a new one for every export
+    midiFile.setTicksPerQuarterNote (kTicksPerQuarter);
+    midiFile.addTrack (sequence);
+
+    const auto folder = getExportFolder();
+    const auto file = folder.getChildFile (juce::File::createLegalFileName (juce::String (engine::exportFileName (progression, key)))).getNonexistentSibling();
+
+    bool written = false;
+    if (folder.createDirectory().wasOk())
+        if (juce::FileOutputStream stream (file); stream.openedOk())
+        {
+            stream.setPosition (0);
+            stream.truncate();
+            written = midiFile.writeTo (stream);
+        }
+
+    if (! written)
+        return file.getParentDirectory().getChildFile ("not-written"); // does not exist
+
+    lastExport = file;
+    lastExportKey = madeFrom;
+    return file;
+}
+
+// The key, scale, progression and pad variants as XML (version 2 added the progression, version 3 the pad variants, version 4 Lock to scale, version 5 disabled blocks, version 6 octaves).
+void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
+{
+    juce::XmlElement xml ("Progrezzor");
+    xml.setAttribute ("version", 7);
+    xml.setAttribute ("key", keyParam->getIndex());
+    xml.setAttribute ("scale", scaleParam->getIndex());
+    xml.setAttribute ("loop", loopParam->get() ? 1 : 0);
+    xml.setAttribute ("lock", lockParam->get() ? 1 : 0);
+    xml.setAttribute ("mood", moodParam->getIndex());
+    xml.setAttribute ("voice", voiceParam->getIndex());
+
+    for (int pad = 0; pad < kNumPads; ++pad)
+        xml.setAttribute ("pad" + juce::String (pad), padVariant[(size_t) pad].load());
+
+    for (const auto& block : progression)
+    {
+        auto* element = xml.createNewChildElement ("Block");
+        element->setAttribute ("root", block.chord.root);
+        element->setAttribute ("type", (int) block.chord.type);
+        element->setAttribute ("inversion", block.chord.inversion);
+        element->setAttribute ("octave", block.chord.octave);
+        element->setAttribute ("beats", block.beats);
+        element->setAttribute ("locked", block.locked ? 1 : 0);
+        element->setAttribute ("disabled", block.disabled ? 1 : 0);
+    }
+    copyXmlToBinary (xml, destination);
+}
+
+void ProgrezzorProcessor::setStateInformation (const void* data, int size)
+{
+    const auto xml = getXmlFromBinary (data, size);
+    if (xml == nullptr || ! xml->hasTagName ("Progrezzor"))
+        return;
+
+    const auto set = [] (juce::AudioParameterChoice& parameter, int index)
+    {
+        parameter = juce::jlimit (0, parameter.choices.size() - 1, index);
+    };
+    set (*keyParam, xml->getIntAttribute ("key", 9));
+    set (*scaleParam, xml->getIntAttribute ("scale", (int) engine::ScaleId::Minor));
+
+    *loopParam = xml->getIntAttribute ("loop", 1) != 0; // projects saved before the loop have it on
+    *lockParam = xml->getIntAttribute ("lock", 1) != 0; // and the lock
+    set (*moodParam, xml->getIntAttribute ("mood", (int) engine::Mood::Melancholic)); // older projects: the mood they had
+    set (*voiceParam, xml->getIntAttribute ("voice", 0));
+
+    for (int pad = 0; pad < kNumPads; ++pad)
+    {
+        const int variant = xml->getIntAttribute ("pad" + juce::String (pad), -1);
+        padVariant[(size_t) pad].store (variant >= 0 && (variant >> 4) < engine::kNumChordTypes ? variant : -1);
+    }
+    ++variantVersion;
+
+    engine::Progression loaded;
+    for (auto* element : xml->getChildWithTagNameIterator ("Block"))
+    {
+        if ((int) loaded.size() >= engine::kMaxBlocks)
+            break;
+
+        engine::Block block;
+        block.chord.root = engine::wrap12 (element->getIntAttribute ("root", 0));
+        block.chord.type = (engine::ChordType) juce::jlimit (0, engine::kNumChordTypes - 1, element->getIntAttribute ("type", 0));
+        block.chord.inversion = juce::jlimit (engine::kAutoInversion, 4, element->getIntAttribute ("inversion", engine::kAutoInversion));
+        block.chord.octave = juce::jlimit (-engine::kMaxOctaveShift, engine::kMaxOctaveShift, element->getIntAttribute ("octave", 0));
+        block.beats = juce::jlimit (engine::kMinBlockBeats, engine::kMaxBlockBeats, element->getDoubleAttribute ("beats", engine::kDefaultBlockBeats));
+        block.locked = element->getIntAttribute ("locked", 0) != 0;
+        block.disabled = element->getIntAttribute ("disabled", 0) != 0;
+        loaded.push_back (block);
+    }
+    undoStack.clear(); // a loaded project starts with a clean history
+    redoStack.clear();
+    setProgression (std::move (loaded));
+
+    // Tells the host that every parameter may have changed, so that it reads them all again (as SeqVerse does)
+    updateHostDisplay (ChangeDetails().withProgramChanged (true));
+}
+
+juce::AudioProcessorEditor* ProgrezzorProcessor::createEditor()
+{
+    return new ProgrezzorEditor (*this);
+}
+
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new ProgrezzorProcessor();
+}

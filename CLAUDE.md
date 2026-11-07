@@ -1,0 +1,205 @@
+# Progrezzor
+
+Jam. Capture. Drag. Done.
+
+Et meget nemt MIDI-akkordværktøj til alle genrer: jam, find en rundgang, træk MIDI ud, færdig.
+Brugeren skal ikke kunne musikteori.
+
+## Fokus
+
+To ting vejer tungere end alt andet:
+
+1. Visuelt enkelt at overskue og meget let at bruge. Inspirationen må aldrig forsvinde, fordi værktøjet er besværligt.
+2. Rigtig gode forslag til brugbare rundgange.
+
+Testen for hver funktion: Kan man bruge den uden at tænke? Hvis ikke, skal den gemmes væk eller ud.
+
+## Arbejdsform
+
+- Henrik er produktejer. Han har begrænset C++-erfaring, så forklar valg enkelt.
+- Arbejd i én milepæl ad gangen. Stop efter hver milepæl, fortæl hvad han skal teste, og vent på hans OK.
+- Tilføj ikke funktioner uden for den aktuelle milepæl. Skriv ideer i BACKLOG.md i stedet.
+- Søsterprojekter må læses, men aldrig ændres: ../SubForge, ../SpaceForge og ../seqverse.
+- Genbrug CI, release-opsætning, JUCE-version og clap-juce-extensions-version fra SubForge. Opdater ikke versionerne på eget initiativ.
+- Skriv altid til filer i dette projekt, aldrig i søsterprojekterne.
+
+## Licens og tekster
+
+- AGPLv3, som SubForge og SpaceForge.
+- Kun lovligt licenseret kode og lyd.
+- Biblioteket med rundgange skrives fra bunden. Kopier aldrig presets, akkordpakker, lister, tekster eller design fra andre plugins.
+- Forslag må ikke navngives efter eller efterligne bestemte sange eller kunstnere.
+- Ingen varemærker i brugerrettede tekster (GUI, tooltips, dokumentation, changelog).
+- Mac-builds er usignerede, og ingen tekst må antyde, at det ændrer sig.
+- Tekster i plugin'et er på engelsk og uden musikteori-sprog, hvor det kan undgås.
+
+## Skærmen
+
+Alt ligger på én skærm uden faner.
+
+- Topbjælke: Toneart og skala, Lock to scale (🔒), Mood, stemme og en tydelig 🎲 Suggest-knap.
+- Midten: 7 store pads, der fylder hele bredden og næsten halvdelen af vinduet. De skal kunne hamres på med mus eller MIDI.
+- Bund: Rundgangsbjælken, et kort for sig med en mørk bakke til blokkene: Play, blokke (ombrydes i flere rækker), Capture, Fortryd, Gendan, ✏️ Quick-text (fast plads i højre side) og Drag.
+
+Regler:
+
+- Første klik på en pad giver lyd, uden routing eller opsætning.
+- Gode standarder, så man kan spille med det samme. Standard er A Minor.
+- Pads viser kun akkordnavne, ikke romertal eller teoriord.
+- Pads lyser op, når de spilles, både fra mus og MIDI.
+- Avancerede ting er skjulte. ⚙️ på pads og 🔒 på blokke vises først ved mouseover.
+- Ingen dialogbokse i det normale flow. Fortryd og gendan virker altid.
+
+## Teknisk fundament
+
+- C++ med JUCE 8 og CMake.
+- Formater: VST3 og CLAP. Linux og Windows først, macOS som eksperimentel build. AU er ikke med i første version.
+- Plugin'ets hovedopgave er at generere MIDI, ligesom Seqverse. Preview-lyden er en hjælp.
+- Faste flag: NEEDS_MIDI_INPUT TRUE, NEEDS_MIDI_OUTPUT TRUE, IS_MIDI_EFFECT FALSE. Stereo-output findes fra dag ét, så preview-lyden har en vej ud.
+- Plugin-type afgøres i milepæl 0. Mulighed A, som Seqverse: IS_SYNTH FALSE og CLAP-feature note-effect. Mulighed B: IS_SYNTH TRUE og CLAP-feature instrument.
+- Byg A først. Skift kun til B, hvis Ableton Live eller preview-lyden driller. Vælg den mulighed, der virker bedst i de fleste DAW'er, og skriv routingen til resten i guiden.
+- Al MIDI-output ligger på kanal 1.
+
+## Genbrug fra Seqverse
+
+Kopier det, der genbruges, ind i dette projekt, og tilpas det. Læs kun de filer, der er brug for i den aktuelle milepæl.
+
+- src/Music.h: tangenter, skalaer og noteNumber(). Tag ikke arpeggio- og rytmedelene med.
+- src/Take.h og filskrivningen i src/PluginProcessor.cpp: MIDI-fil, takes-mappe og træk til DAW'en.
+- Tidslogikken i src/PluginProcessor.cpp: låsning til DAW'ens PPQ-position.
+- tests/clap_test_host.cpp: test af noter og hængende noter uden DAW. Tilpas scenarierne til Progrezzor.
+- tests/ui_test.cpp: test af GUI og PNG-billeder af vinduet uden at åbne et vindue.
+- CMakeLists.txt: opsætning af VST3, CLAP og test.
+- src/DarkLookAndFeel.h og resources/fonts: tema og skrifttyper. Skrifttypernes licens følger med.
+
+Akkordlogik, stemmeføring, rundgange, Suggest og Quick-text er nyt. CI og release kommer fra SubForge.
+
+## Arkitektur
+
+- ChordEngine, tekstparseren og biblioteket er ren C++ uden JUCE-afhængigheder og har enhedstest.
+- Audio-tråden må ikke allokere, låse eller vente. GUI og audio-tråd taler sammen via lock-free køer.
+- En akkord gemmes som: afstand fra tonika i halvtoner, akkordtype, omvending. Aldrig som pad-nummer eller færdige MIDI-noter.
+- Blokke skal kunne rumme alle akkorder, også dem uden for skalaen.
+- En rundgang flytter med, når toneart ændres, og ændrer sig ikke, når en pad får en ny variant.
+- Længder gemmes i beats. Mindstelængden er én samlet konstant, så ¼ takt kan tilføjes senere uden at bryde gamle projekter.
+- Al tilstand gemmes og hentes med DAW-projektet.
+
+## Akkordregler
+
+- De 7 pads bygges ved at stable skalatoner, så de altid passer til skalaen.
+- Skalaer i første version: Minor (standard), Major, Dorian, Phrygian.
+- Akkordtyper: dur, m, 5, 7, m7, maj7, 9, m9, add9, sus2, sus4, dim og omvendinger.
+- Sus4 tilbydes med låsen til kun, hvis den rene kvart findes i skalaen. Sus2 kun, hvis den store sekund findes.
+- Akkordnavne staves efter tonearten (Bb frem for A#, når tonearten bruger b).
+- Blød stemmeføring er standard, så skift mellem akkorder ikke hopper rundt. En omvending, brugeren selv har valgt, respekteres.
+
+## Lock to scale
+
+- Slået til som standard.
+- Pads følger altid skalaen. 🎲 vælger kun rundgange i skalaen. Pad-varianter, brugeren selv har valgt, bruges alligevel.
+- ⚙️ viser kun passende varianter, når låsen er til, og alle varianter, når den er fra.
+- Quick-text: En akkord uden for skalaen bliver en markeret, deaktiveret blok, når låsen er til. Vis en kort besked med en Allow-knap, der slår låsen fra, så akkorden spiller med det samme.
+- Plugin'et må aldrig selv rette en akkord til en anden.
+- Skift af toneart eller skala ændrer ikke eksisterende blokke uden for skalaen. De bliver kun markeret.
+
+## Mood
+
+Én menu med 8 stemninger, navngivet efter følelser og brugbar på tværs af genrer:
+
+- Bright: glad og åben, rene treklange.
+- Warm: tryg og blød, treklange, add9, maj7.
+- Dreamy: svævende, maj7, 9, sus2.
+- Melancholic: trist og smuk, mol, m7, add9.
+- Dark: tung og truende, mol, få toner, tæt på tonika.
+- Deep: hypnotisk og rummelig, m7, m9, sus.
+- Driving: fremad og energisk, treklange og powerchords.
+- Soulful: rig og varm, 7, m7, 9.
+
+Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Mood ændrer aldrig toneart, skala eller stemme.
+
+## Forslag
+
+- 🎲 Suggest lægger med ét klik en hel rundgang i bjælken. Blokke med 🔒 bliver liggende, og resten skiftes ud.
+- Biblioteket er håndskrevet og gemt som data, uafhængigt af toneart.
+- Mål: cirka 20 rundgange pr. stemning, både til dur og mol.
+- Dorian og Phrygian bruger de rundgange fra mol, der passer ind i skalaen.
+- Pads, der passer godt efter den sidste akkord, lyser op. Reglerne ligger i en håndskrevet tabel. Højst 3 pads lyser ad gangen, og alle pads virker altid.
+- Kvalitetsmål: Af 10 klik på 🎲 skal mindst 8 give noget, Henrik faktisk gider bruge.
+
+## Regler for MIDI
+
+- Hængende noter må aldrig forekomme.
+- Hver note har en tæller. Note off sendes først, når den sidste kilde slipper noten.
+- Note off sendes for præcis de noter, der blev startet, også hvis toneart eller variant ændres, mens en pad holdes.
+- Alle aktive noter stoppes ved transport stop, bypass og når plugin'et lukkes.
+- Keyboard: Hvide tangenter i alle oktaver spiller pad 1 til 7 (C til B). Sorte tangenter ignoreres. Inputnoter sendes ikke videre. Anslagsstyrken bruges.
+
+## Rundgangen
+
+- Hver afspillet akkord kommer i historikken. Samme akkord to gange i træk tæller som to.
+- Capture er én knap uden menu: den lægger de sidste 8 akkorder i bjælken (færre, hvis der er spillet færre). Hver akkord får 1 takt. Fortryd bringer den gamle bjælke tilbage. (Besluttet af Henrik efter test af milepæl 7.)
+- Standardlængde er 1 takt. Mindste længde er ½ takt, største er 8 takter. Længder ændres ved at trække i blokkens højre kant med trin på ½ takt.
+- Rundgangen kan have alle samlede længder, også ulige antal takter.
+- Træk en blok for at flytte den. Hold Ctrl (Option på Mac) nede for at duplikere.
+- Træk en pad ned i bjælken: mellem blokke eller yderst i en blok indsætter den, over midten af en blok erstatter den (blokken lyser op). Et klik på en pad erstatter aldrig noget. Der er ingen +-knap.
+- Højreklik eller Delete sletter.
+- Play-knappen bestemmer alt: Play slukket = rundgangen kan redigeres (der er ingen Edit-knap). Play tændt = blokkene spiller kun deres akkord, når de trykkes, og intet kan ændres.
+- Kører DAW'en, følger loopet DAW'ens position (PPQ). Det skal klare DAW-loops, hop i tid og tempoændringer. Står DAW'en stille, starter Play plug-in'ens eget ur fra første akkord (DAW'ens tempo, ellers 120 BPM). Starter DAW'en, overtager den.
+- Suggest spørger i bjælkens beskedlinje (Replace-knap, ingen dialogboks), før den overskriver akkorder, brugeren selv har lavet. Den spørger ikke, når bjælken er tom, kun har låste blokke, eller stadig er det, Suggest selv lagde der.
+- Akkordskift skal lande præcis på taktstregen, også midt i en audio-buffer.
+- Holdes en pad, mens loopet kører, har pad'en forrang, og loopet tier imens.
+
+## Quick-text
+
+✏️ gør bjælken til en tekstlinje med de aktuelle akkorder. Enter anvender, Esc fortryder. Teksten ændrer kun rundgangen, ikke de 7 pads.
+
+- Am: 1 blok på 1 takt.
+- Am*2: genvej til Am Am, altså 2 blokke på 1 takt hver.
+- Am:2: 1 blok på 2 takter.
+- Am:0.5: 1 blok på ½ takt.
+- Am:0.5*2: 2 blokke på ½ takt hver.
+
+Reglen er: * betyder antal, og : betyder længde. Tekstfeltet viser altid blokkene præcis, som de er, så en blok på 2 takter vises som Am:2. En stavefejl markeres med rødt og stopper ikke resten.
+
+## Stemmer
+
+- Preview-lyde bygges som små indbyggede synths uden samples. MIDI-filen indeholder kun noter.
+- Pad er standard og kommer først.
+- Derefter Strings, Keys (FM), Organ, Stab og Pluck.
+- Klaver er droppet for nu.
+
+## MIDI-eksport
+
+- Gem altid i en fast, synlig mappe. Slet ikke filen efter træk, for DAW'en kan læse den senere.
+- Byg en ny MidiFile for hver eksport.
+- Filnavn indeholder akkorderne, fx Am-F-C-G.mid.
+- Træk-og-slip bruges, hvor det virker. Knapperne Save MIDI og Open Folder findes på alle platforme.
+- Filen skal bekræftes importeret korrekt i Bitwig, REAPER og Ableton Live.
+
+## Milepæle
+
+0. Tomt plugin bygget som mulighed A. Knap sender en testakkord, og en simpel testtone viser, om preview-lyd slipper igennem. Test i Bitwig, REAPER og Ableton Live: Kan det indsættes, når MIDI frem til en synth, og kan man høre lyden? Prøv kun mulighed B, hvis A fejler. Skriv valget i denne fil, og vent på Henriks OK.
+1. ChordEngine med stemmeføring og enhedstest, uden GUI.
+2. 7 store pads, toneart, skala, Pad-stemmen, MIDI ud og keyboard-input. Ingen hængende noter.
+3. Rundgangsbjælken med blokke, 🎲 Suggest og et lille bibliotek til Melancholic. Her testes kvaliteten af forslag tidligt.
+4. Loop synkroniseret med DAW'en.
+5. Redigering: længder, træk, duplikér, tilføj, slet, 🔒, fortryd og gendan, Capture og variant-menu.
+6. MIDI-eksport.
+7. Lock to scale og lysende pads.
+8. Quick-text.
+9. Alle 8 stemninger med fuldt bibliotek og de øvrige preview-stemmer.
+
+## Beslutning fra milepæl 0
+
+Mulighed A er valgt: IS_SYNTH FALSE og CLAP-feature note-effect. Testet på Linux i Bitwig og REAPER: Plugin'et kan indsættes på et MIDI-spor, MIDI kommer ud til en synth efter det, og testtonen kan høres. Ableton Live og Windows er ikke testet endnu (Ableton findes ikke på Linux) og testes, når CI kan bygge en Windows-release. Se BACKLOG.md. Indtil da udvikles og testes kun på Linux.
+
+## Beslutning fra milepæl 3
+
+Suggest bruger kun akkorder, der også findes som pads (de 7 treklange). Alt i bjælken kan dermed spilles direkte på en pad. Biblioteket har stadig m7-, maj7- og add9-rundgange, men Suggest vælger dem ikke. De kan bruges, når variant-menuen kommer i milepæl 5. Besluttet af Henrik efter test af milepæl 3.
+
+## Definition på færdig
+
+- Bygger uden nye advarsler.
+- Enhedstest er grønne.
+- pluginval består på højeste niveau, som SubForge-opsætningen tillader.
+- Henrik har fået en kort testliste og godkendt milepælen.

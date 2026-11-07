@@ -1,0 +1,1111 @@
+// Copyright (C) 2026 Henrik Juhl. Part of Progrezzor, licensed under the GNU AGPLv3 (see LICENSE).
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// Unit tests of the chord engine. No JUCE, no plugin. Exit code 0 = all checks passed.
+
+#include "../src/engine/ChordEngine.h"
+#include "../src/engine/Library.h"
+#include "../src/engine/LoopPlan.h"
+#include "../src/engine/TripleBuffer.h"
+#include "../src/engine/NoteTracker.h"
+#include "../src/engine/ProgressionEdit.h"
+#include "../src/engine/MidiExport.h"
+#include "../src/engine/NextPads.h"
+#include "../src/engine/QuickText.h"
+
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <atomic>
+#include <cmath>
+#include <string>
+#include <thread>
+#include <vector>
+
+using namespace engine;
+
+namespace
+{
+int failures = 0;
+int checks = 0;
+
+void check (bool ok, const std::string& what)
+{
+    ++checks;
+    if (! ok)
+    {
+        ++failures;
+        std::printf ("  FAIL: %s\n", what.c_str());
+    }
+}
+
+template <typename A, typename B>
+void checkEqual (const A& actual, const B& expected, const std::string& what)
+{
+    const bool ok = actual == expected;
+    check (ok, what);
+    if (! ok)
+        std::printf ("        got '%s', expected '%s'\n", std::string (actual).c_str(), std::string (expected).c_str());
+}
+
+std::string padNames (const Key& key)
+{
+    std::string result;
+    for (int pad = 0; pad < 7; ++pad)
+        result += (pad > 0 ? " " : "") + chordName (padChord (key.scale, pad), key);
+    return result;
+}
+
+std::string pitchClasses (const Voicing& v)
+{
+    std::string s;
+    for (int i = 0; i < v.count; ++i)
+        s += (i > 0 ? " " : "") + noteName (v.notes[(size_t) i], false);
+    return s;
+}
+
+bool isSortedAndInRange (const Voicing& v)
+{
+    if (v.count < 2 || v.notes[0] < kLowestNote || v.notes[(size_t) v.count - 1] > kHighestNote)
+        return false;
+    return std::is_sorted (v.notes.begin(), v.notes.begin() + v.count);
+}
+
+double distance (const Voicing& a, const Voicing& b)
+{
+    double total = 0.0;
+    for (int i = 0; i < b.count; ++i)
+    {
+        int nearest = 1000;
+        for (int j = 0; j < a.count; ++j)
+            nearest = std::min (nearest, std::abs (b.notes[(size_t) i] - a.notes[(size_t) j]));
+        total += nearest;
+    }
+    return total;
+}
+
+void testPads()
+{
+    std::printf ("pads\n");
+    checkEqual (padNames ({ 9, ScaleId::Minor }), "Am Bdim C Dm Em F G", "A Minor pads");
+    checkEqual (padNames ({ 0, ScaleId::Major }), "C Dm Em F G Am Bdim", "C Major pads");
+    checkEqual (padNames ({ 2, ScaleId::Dorian }), "Dm Em F G Am Bdim C", "D Dorian pads");
+    checkEqual (padNames ({ 4, ScaleId::Phrygian }), "Em F G Am Bdim C Dm", "E Phrygian pads");
+
+    // Every pad of every key and scale fits the scale
+    bool allFit = true;
+    for (int s = 0; s < kNumScales; ++s)
+        for (int pad = 0; pad < 7; ++pad)
+            allFit &= chordFitsScale (padChord ((ScaleId) s, pad), (ScaleId) s);
+    check (allFit, "all pads fit their scale");
+
+    check (padChord (ScaleId::Minor, 7) == padChord (ScaleId::Minor, 0), "pad numbers wrap round");
+}
+
+void testNames()
+{
+    std::printf ("names\n");
+    checkEqual (padNames ({ 5, ScaleId::Major }), "F Gm Am Bb C Dm Edim", "F Major uses Bb, not A#");
+    checkEqual (padNames ({ 7, ScaleId::Major }), "G Am Bm C D Em F#dim", "G Major uses F#");
+    // Every note is spelled either with flats or with sharps, never C-flat or E-sharp, so Cb is written B.
+    checkEqual (padNames ({ 3, ScaleId::Minor }).substr (0, 22), "Ebm Fdim Gb Abm Bbm B ", "Eb Minor pads use flats");
+}
+
+void testNames3()
+{
+    check (keyUsesFlats ({ 10, ScaleId::Major }), "Bb Major uses flats");
+    check (keyUsesFlats ({ 3, ScaleId::Minor }), "Eb Minor uses flats");
+    check (! keyUsesFlats ({ 9, ScaleId::Minor }), "A Minor uses sharps");
+    check (! keyUsesFlats ({ 6, ScaleId::Major }), "F# Major uses sharps");
+    check (keyUsesFlats ({ 2, ScaleId::Minor }), "D Minor uses flats (F Major)");
+    check (keyUsesFlats ({ 7, ScaleId::Dorian }) , "G Dorian uses flats (F Major)");
+    check (! keyUsesFlats ({ 4, ScaleId::Phrygian }), "E Phrygian uses sharps (C Major)");
+    checkEqual (keyName ({ 10, ScaleId::Minor }), "Bb", "key name Bb");
+
+    const Chord am7 { 0, ChordType::Min7, kAutoInversion };
+    checkEqual (chordName (am7, { 9, ScaleId::Minor }), "Am7", "Am7");
+    checkEqual (chordName ({ 1, ChordType::Maj7, kAutoInversion }, { 5, ScaleId::Major }), "Gbmaj7", "Gbmaj7 in F Major (flat key)");
+    checkEqual (chordName ({ 0, ChordType::Major, 1 }, { 0, ScaleId::Major }), "C/E", "first inversion shows the bass");
+    checkEqual (chordName ({ 0, ChordType::Major, 2 }, { 0, ScaleId::Major }), "C/G", "second inversion shows the bass");
+    checkEqual (chordName ({ 0, ChordType::Major, 3 }, { 0, ScaleId::Major }), "C", "inversion wraps to root position");
+    checkEqual (chordName ({ 7, ChordType::Dom9, kAutoInversion }, { 0, ScaleId::Major }), "G9", "G9");
+    checkEqual (chordName ({ 0, ChordType::Power5, kAutoInversion }, { 4, ScaleId::Minor }), "E5", "E5");
+    checkEqual (chordName ({ 2, ChordType::Sus4, kAutoInversion }, { 0, ScaleId::Major }), "Dsus4", "Dsus4");
+}
+
+void testScaleFit()
+{
+    std::printf ("lock to scale\n");
+    const ScaleId minor = ScaleId::Minor;
+    check (chordFitsScale ({ 0, ChordType::Min7, -1 }, minor), "Am7 fits A Minor");
+    check (chordFitsScale ({ 0, ChordType::Add9, -1 }, minor) == false, "Aadd9 does not fit A Minor (it has C#)");
+    check (chordFitsScale ({ 0, ChordType::Minor, -1 }, minor), "Am fits");
+    check (! chordFitsScale ({ 7, ChordType::Dom7, -1 }, minor), "E7 does not fit A Minor (G#)");
+    check (chordFitsScale ({ 10, ChordType::Dom7, -1 }, minor), "G7 fits A Minor");
+    check (chordFitsScale ({ 8, ChordType::Maj7, -1 }, minor), "Fmaj7 fits A Minor");
+    check (chordFitsScale ({ 0, ChordType::Sus4, -1 }, minor), "Asus4 fits (the pure fourth D is in the scale)");
+    check (chordFitsScale ({ 0, ChordType::Sus2, -1 }, minor), "Asus2 fits (B is in the scale)");
+    check (! chordFitsScale ({ 2, ChordType::Sus2, -1 }, minor), "Bsus2 does not fit (C# missing)");
+
+    // Phrygian has no major second: sus2 on the tonic is out, sus4 is in
+    check (! chordFitsScale ({ 0, ChordType::Sus2, -1 }, ScaleId::Phrygian), "Phrygian: no sus2 on the tonic");
+    check (chordFitsScale ({ 0, ChordType::Sus4, -1 }, ScaleId::Phrygian), "Phrygian: sus4 on the tonic");
+    check (noteInScale (ScaleId::Major, 12) && noteInScale (ScaleId::Major, -12), "octaves of the tonic are in the scale");
+    check (! noteInScale (ScaleId::Major, 1), "C# is not in C Major");
+}
+
+void testVoicingBasics()
+{
+    std::printf ("voicing\n");
+    const Key aMinor { 9, ScaleId::Minor };
+
+    for (int pad = 0; pad < 7; ++pad)
+    {
+        const auto v = voiceChord (padChord (aMinor.scale, pad), aMinor.tonic, nullptr);
+        check (isSortedAndInRange (v), "pad " + std::to_string (pad) + " is sorted and in range");
+        check (v.count == 3, "pad " + std::to_string (pad) + " has three notes");
+        const int lowest = v.notes[0];
+        check (lowest >= 48 && lowest <= 71, "pad " + std::to_string (pad) + " sits near the centre");
+    }
+
+    // Without a previous chord: root position, right notes
+    checkEqual (pitchClasses (voiceChord (padChord (aMinor.scale, 0), aMinor.tonic, nullptr)), "A C E", "Am notes");
+    checkEqual (pitchClasses (voiceChord (padChord (aMinor.scale, 5), aMinor.tonic, nullptr)), "F A C", "F notes");
+    {
+        const auto v = voiceChord (padChord (aMinor.scale, 0), aMinor.tonic, nullptr);
+        check (v.notes[0] % 12 == 9, "Am starts on A (root position)");
+    }
+
+    // Every chord type, in the key of every tonic, has the right notes
+    bool allRight = true;
+    for (int tonic = 0; tonic < 12; ++tonic)
+        for (int type = 0; type < kNumChordTypes; ++type)
+            for (int root = 0; root < 12; ++root)
+            {
+                const Chord c { root, (ChordType) type, 0 };
+                const auto v = voiceChord (c, tonic, nullptr);
+                const auto& shape = shapeOf (c.type);
+                allRight &= v.count == shape.count && isSortedAndInRange (v);
+                for (int i = 0; i < v.count; ++i)
+                    allRight &= wrap12 (v.notes[(size_t) i] - tonic - root) == wrap12 (shape.intervals[i]);
+            }
+    check (allRight, "all 12 types in all keys on all roots give the right notes in root position");
+
+    // Moving the key moves the progression
+    const Chord am { 0, ChordType::Minor, kAutoInversion };
+    const auto inA = voiceChord (am, 9, nullptr);
+    const auto inB = voiceChord (am, 11, nullptr);
+    checkEqual (pitchClasses (inA), "A C E", "same chord in A");
+    checkEqual (pitchClasses (inB), "B D F#", "same chord in B");
+}
+
+void testChosenInversion()
+{
+    std::printf ("chosen inversion\n");
+    const Key c { 0, ScaleId::Major };
+    const Chord first { 0, ChordType::Major, 1 };
+    const Chord second { 0, ChordType::Major, 2 };
+
+    checkEqual (pitchClasses (voiceChord (first, 0, nullptr)), "E G C", "C first inversion, alone");
+    checkEqual (pitchClasses (voiceChord (second, 0, nullptr)), "G C E", "C second inversion, alone");
+
+    // It is kept, however far away the previous chord was
+    const auto far = voiceChord ({ 6, ChordType::Major, kAutoInversion }, 0, nullptr);
+    const auto after = voiceChord (second, 0, &far);
+    check (after.notes[0] % 12 == 7, "second inversion keeps G in the bass after another chord");
+    const auto seventh = voiceChord ({ 7, ChordType::Dom7, 3 }, 0, &far);
+    check (seventh.notes[0] % 12 == 5, "third inversion of G7 has F in the bass");
+    (void) c;
+}
+
+void testSmoothVoiceLeading()
+{
+    std::printf ("smooth voice leading\n");
+    const Key aMinor { 9, ScaleId::Minor };
+    const int degrees[] = { 0, 5, 2, 6 }; // Am F C G
+
+    Voicing previous;
+    bool havePrevious = false;
+    double worstStep = 0.0;
+    int lowest = 1000, highest = 0;
+
+    for (int round = 0; round < 50; ++round)
+        for (int degree : degrees)
+        {
+            const auto v = voiceChord (padChord (aMinor.scale, degree), aMinor.tonic, havePrevious ? &previous : nullptr);
+            check (isSortedAndInRange (v), "progression chord in range");
+            if (havePrevious)
+            {
+                worstStep = std::max (worstStep, distance (previous, v));
+            }
+            lowest = std::min (lowest, v.notes[0]);
+            highest = std::max (highest, v.notes[(size_t) v.count - 1]);
+            previous = v;
+            havePrevious = true;
+        }
+
+    check (worstStep <= 5.0, "no step in Am F C G moves the voices more than 5 semitones in total (was " + std::to_string (worstStep) + ")");
+    check (lowest >= 48 && highest <= 84, "the chords do not drift away from the centre");
+
+    // Compared to root position every time
+    double smooth = 0.0, plain = 0.0;
+    Voicing smoothPrev, plainPrev;
+    bool first = true;
+    for (int round = 0; round < 8; ++round)
+        for (int degree : degrees)
+        {
+            const auto chord = padChord (aMinor.scale, degree);
+            const auto s = voiceChord (chord, aMinor.tonic, first ? nullptr : &smoothPrev);
+            Chord root = chord;
+            root.inversion = 0;
+            const auto p = voiceChord (root, aMinor.tonic, nullptr);
+            if (! first)
+            {
+                smooth += distance (smoothPrev, s);
+                plain += distance (plainPrev, p);
+            }
+            smoothPrev = s;
+            plainPrev = p;
+            first = false;
+        }
+    check (smooth < plain, "smooth voicing moves less than root position every time");
+    std::printf ("  info: movement smooth %.0f, root position %.0f semitones\n", smooth, plain);
+
+    // The same input always gives the same notes
+    const auto a = voiceChord (padChord (aMinor.scale, 3), aMinor.tonic, &previous);
+    const auto b = voiceChord (padChord (aMinor.scale, 3), aMinor.tonic, &previous);
+    check (a.notes == b.notes && a.count == b.count, "voicing is deterministic");
+}
+
+void testNoDriftAnyChord()
+{
+    std::printf ("random chords stay in range\n");
+    unsigned seed = 12345;
+    auto next = [&seed] (int n) { seed = seed * 1664525u + 1013904223u; return (int) ((seed >> 8) % (unsigned) n); };
+
+    Voicing previous;
+    bool havePrevious = false;
+    bool ok = true;
+    for (int i = 0; i < 20000; ++i)
+    {
+        const Chord c { next (12), (ChordType) next (kNumChordTypes), next (5) - 1 };
+        const auto v = voiceChord (c, next (12), havePrevious ? &previous : nullptr);
+        const bool good = isSortedAndInRange (v) && v.count == shapeOf (c.type).count;
+        if (ok && ! good)
+            std::printf ("  info: root %d type %d inversion %d count %d\n", c.root, (int) c.type, c.inversion, v.count);
+        ok &= good;
+        previous = v;
+        havePrevious = true;
+    }
+    check (ok, "20000 random chords are all sorted, complete and within C2 to C7");
+}
+}
+
+void testNoteTracker()
+{
+    std::printf ("note tracker\n");
+    const Key key { 9, ScaleId::Minor };
+    const auto am = voiceChord (padChord (key.scale, 0), key.tonic, nullptr);
+    const auto c = voiceChord (padChord (key.scale, 2), key.tonic, &am);
+
+    std::vector<NoteEvent> events;
+    const auto emit = [&events] (const NoteEvent& e) { events.push_back (e); };
+    const auto onsOf = [&events] { int n = 0; for (auto& e : events) n += e.on; return n; };
+
+    NoteTracker t;
+    t.press (NoteTracker::padSource (0), am, 100, emit);
+    check (onsOf() == 3 && t.soundingNotes() == 3, "a chord starts three notes");
+
+    events.clear();
+    t.press (NoteTracker::padSource (2), c, 90, emit);
+    int shared = 0;
+    for (int i = 0; i < am.count; ++i)
+        for (int j = 0; j < c.count; ++j)
+            shared += am.notes[(size_t) i] == c.notes[(size_t) j];
+    check (onsOf() == c.count - shared, "a note that already sounds is not started again");
+
+    events.clear();
+    t.release (NoteTracker::padSource (0), emit);
+    int expectedOffs = 0;
+    for (int i = 0; i < am.count; ++i)
+    {
+        bool inC = false;
+        for (int j = 0; j < c.count; ++j)
+            inC |= am.notes[(size_t) i] == c.notes[(size_t) j];
+        expectedOffs += inC ? 0 : 1;
+    }
+    check ((int) events.size() == expectedOffs, "releasing one pad stops only the notes that the other does not hold");
+
+    events.clear();
+    t.release (NoteTracker::padSource (2), emit);
+    check (t.soundingNotes() == 0, "the last release stops everything");
+
+    events.clear();
+    t.release (NoteTracker::padSource (2), emit);
+    t.release (99, emit);
+    t.release (-1, emit);
+    check (events.empty(), "releasing what is not held does nothing");
+
+    // Pressing a source twice lets go of the first chord first
+    events.clear();
+    t.press (NoteTracker::keySource (60), am, 100, emit);
+    t.press (NoteTracker::keySource (60), c, 100, emit);
+    t.release (NoteTracker::keySource (60), emit);
+    check (t.soundingNotes() == 0, "a source pressed twice still ends silent");
+
+    // releaseAll
+    events.clear();
+    t.press (NoteTracker::keySource (60), am, 100, emit);
+    t.press (NoteTracker::keySource (62), c, 100, emit);
+    t.press (NoteTracker::padSource (4), am, 100, emit);
+    t.releaseAll (emit);
+    check (t.soundingNotes() == 0, "releaseAll stops everything");
+    int ons = 0, offs = 0;
+    for (auto& e : events) { ons += e.on; offs += ! e.on; }
+    check (ons == offs, "as many note offs as note ons");
+
+    // The notes are released as they were started, whatever the key is now
+    events.clear();
+    const auto inA = voiceChord (padChord (ScaleId::Minor, 0), 9, nullptr);
+    t.press (0, inA, 100, emit);
+    const auto inD = voiceChord (padChord (ScaleId::Major, 0), 2, nullptr); // the same pad in another key
+    (void) inD;
+    events.clear();
+    t.release (0, emit);
+    bool same = events.size() == (size_t) inA.count;
+    for (size_t i = 0; same && i < events.size(); ++i)
+        same &= events[i].note == inA.notes[i] && ! events[i].on;
+    check (same, "the note offs are exactly the notes that were started");
+
+    // Notes outside MIDI range are never sent
+    events.clear();
+    Voicing wild;
+    wild.count = 2;
+    wild.notes = { -5, 200 };
+    t.press (1, wild, 100, emit);
+    check (events.empty(), "notes outside 0 to 127 are not sent");
+}
+
+std::string namesOf (const Progression& p, const Key& key)
+{
+    std::string s;
+    for (const auto& b : p)
+        s += (s.empty() ? "" : " ") + chordName (b.chord, key);
+    return s;
+}
+
+void testLibraryMood (Mood mood)
+{
+    std::printf ("library and Suggest: %s\n", moodNames[(int) mood]);
+    const std::string name = moodNames[(int) mood];
+
+    for (bool major : { false, true })
+    {
+        const int count = libraryCount (mood, major);
+        check (count >= 20, name + " " + (major ? "major" : "minor") + ": a library of at least 20 progressions (has " + std::to_string (count) + ")");
+
+        std::vector<std::string> seen;
+        bool allFit = true, lengthsOk = true, sizesOk = true, noEmpty = true;
+        for (int i = 0; i < count; ++i)
+        {
+            const auto p = libraryProgression (mood, major, i, Key {});
+            if (major)
+                allFit &= libraryEntryFits (mood, major, i, ScaleId::Major);
+            else // a minor-list progression fits at least one of Minor, Dorian and Phrygian
+                allFit &= libraryEntryFits (mood, major, i, ScaleId::Minor) || libraryEntryFits (mood, major, i, ScaleId::Dorian)
+                          || libraryEntryFits (mood, major, i, ScaleId::Phrygian);
+            sizesOk &= p.size() >= 2 && p.size() <= 8;
+            noEmpty &= ! p.empty();
+            for (const auto& b : p)
+                lengthsOk &= b.beats >= kMinBlockBeats && b.beats <= kMaxBlockBeats && b.chord.root >= 0 && b.chord.root < 12;
+
+            std::string key;
+            for (const auto& b : p)
+                key += std::to_string (b.chord.root) + ":" + std::to_string ((int) b.chord.type) + ":" + std::to_string ((int) b.beats) + " ";
+            check (std::find (seen.begin(), seen.end(), key) == seen.end(), "progression " + std::to_string (i) + " is not a copy of an earlier one");
+            seen.push_back (key);
+        }
+        check (allFit, std::string (major ? "major" : "minor") + ": every progression fits a scale it is written for");
+        check (lengthsOk && sizesOk && noEmpty, std::string (major ? "major" : "minor") + ": 2 to 8 chords, lengths within limits");
+    }
+
+    if (mood == Mood::Melancholic)
+    {
+        // Written out by hand: the first minor progression in A Minor and the first major in C Major
+        checkEqual (namesOf (libraryProgression (mood, false, 0, Key {}), { 9, ScaleId::Minor }), "Am F C G", "first minor progression in A Minor");
+        checkEqual (namesOf (libraryProgression (mood, true, 0, Key {}), { 0, ScaleId::Major }), "Am F C G", "first major progression in C Major");
+        checkEqual (namesOf (libraryProgression (mood, false, 0, Key {}), { 10, ScaleId::Minor }), "Bbm Gb Db Ab", "it moves with the key (Bb Minor)");
+    }
+
+    // Suggest, for every key and scale, with many different random values
+    bool allPads = true, allFits = true, nonEmpty = true, avoids = true, deterministic = true, inKeyRange = true;
+    for (int tonic = 0; tonic < 12; ++tonic)
+        for (int scale = 0; scale < kNumScales; ++scale)
+        {
+            const Key key { tonic, (ScaleId) scale };
+            for (unsigned r = 0; r < 60; ++r)
+            {
+                const auto a = suggest (key, mood, r * 2654435761u, -1);
+                const auto b = suggest (key, mood, r * 2654435761u, -1);
+                nonEmpty &= ! a.blocks.empty();
+                deterministic &= namesOf (a.blocks, key) == namesOf (b.blocks, key);
+                for (const auto& block : a.blocks)
+                {
+                    allPads &= isPadChord (block.chord, key.scale);
+                    allFits &= chordFitsScale (block.chord, key.scale);
+                    inKeyRange &= block.chord.root >= 0 && block.chord.root < 12 && block.beats >= kMinBlockBeats;
+                }
+                const auto next = suggest (key, mood, r * 2654435761u, a.index);
+                if (a.index >= 0)
+                    avoids &= next.index != a.index || false;
+            }
+        }
+    check (nonEmpty, "Suggest gives something in every key and scale");
+    check (allFits, "everything Suggest gives fits the scale (Lock to scale is safe)");
+    check (allPads, "every chord Suggest gives is one of the seven pads");
+    check (inKeyRange && deterministic, "and it is predictable");
+    check (avoids, "the progression from last time is not suggested again");
+
+    for (int scale = 0; scale < kNumScales; ++scale)
+    {
+        int fitting = 0;
+        const bool major = (ScaleId) scale == ScaleId::Major;
+        for (int i = 0; i < libraryCount (mood, major); ++i)
+            fitting += libraryEntryOnPads (mood, major, i, (ScaleId) scale);
+        std::printf ("  info: %s: %d of %d progressions can be suggested\n", scaleOf ((ScaleId) scale).name, fitting, libraryCount (mood, major));
+        check (fitting >= 5, name + " " + scaleOf ((ScaleId) scale).name + ": at least 5 library progressions can be suggested, so Suggest does not run dry");
+    }
+
+    // Variety in the usual key
+    std::vector<std::string> distinct;
+    for (unsigned r = 0; r < 400; ++r)
+    {
+        const auto s = suggest ({ 9, ScaleId::Minor }, mood, (r * 2654435761u) >> 7, -1);
+        const auto n = namesOf (s.blocks, { 9, ScaleId::Minor });
+        if (std::find (distinct.begin(), distinct.end(), n) == distinct.end())
+            distinct.push_back (n);
+    }
+    check (distinct.size() >= 12, name + ": 400 suggestions in A Minor give plenty of variety (" + std::to_string (distinct.size()) + " different)");
+}
+
+void testLibrary()
+{
+    for (int m = 0; m < kNumMoods; ++m)
+        testLibraryMood ((Mood) m);
+}
+
+Progression fourBlocks (double beats = 4.0)
+{
+    Progression p;
+    for (int i = 0; i < 4; ++i)
+        p.push_back ({ { i * 2, ChordType::Major, kAutoInversion }, beats, false });
+    return p;
+}
+
+void testLoopPlan()
+{
+    std::printf ("loop plan\n");
+    const double bps = 1.0 / 24000.0; // 120 BPM at 48 kHz: a quarter note is 24000 samples
+    const auto four = makeSnapshot (fourBlocks()); // four bars of four beats: 16 beats
+
+    {
+        const auto plan = planLoop (four, 0.0, bps, 512);
+        check (plan.startIndex == 0 && plan.numChanges == 0, "the start of the timeline plays block 1 from the first sample");
+    }
+    {
+        // A block that ends 480 samples after the bar line at beat 4 (0.02 beat = 480 samples before it)
+        const double start = 4.0 - 480.0 * bps;
+        const auto plan = planLoop (four, start, bps, 512);
+        check (plan.startIndex == 0 && plan.numChanges == 1 && plan.changes[0].sample == 480 && plan.changes[0].index == 1,
+               "the change lands exactly on the bar line, in the middle of the buffer (sample 480)");
+    }
+    {
+        const auto plan = planLoop (four, 4.0, bps, 512);
+        check (plan.startIndex == 1 && plan.numChanges == 0, "a block that starts on the bar line is already in the next block");
+    }
+    {
+        // Rounding noise just below the line must not push the change to the block before
+        const auto plan = planLoop (four, 4.0 - 1.0e-12, bps, 512);
+        check (plan.startIndex == 1 && plan.numChanges == 0, "noise just below the bar line counts as being on it");
+    }
+    {
+        // The loop wraps: from the last block to the first
+        const auto plan = planLoop (four, 16.0 - 100.0 * bps, bps, 512);
+        check (plan.startIndex == 3 && plan.numChanges == 1 && plan.changes[0].sample == 100 && plan.changes[0].index == 0,
+               "the last block is followed by the first, at the exact sample");
+    }
+    {
+        const auto plan = planLoop (four, 16.0, bps, 512);
+        check (plan.startIndex == 0, "position 16 is the start of the loop again");
+        const auto later = planLoop (four, 1600.0 + 8.0, bps, 512);
+        check (later.startIndex == 2, "far into the song, the position is taken modulo the length of the loop");
+    }
+    {
+        // Count-in: before beat 0 nothing plays, and the loop starts at beat 0
+        const auto plan = planLoop (four, -100.0 * bps, bps, 512);
+        check (plan.startIndex == -1 && plan.numChanges == 1 && plan.changes[0].sample == 100 && plan.changes[0].index == 0,
+               "before the start of the timeline the loop begins at beat 0");
+        const auto before = planLoop (four, -4.0, bps, 512);
+        check (before.startIndex == -1 && before.numChanges == 0, "nothing plays before the start");
+    }
+    {
+        // Odd total lengths and half bars: 2 + 4 + 6 = 12 beats
+        Progression p;
+        p.push_back ({ { 0, ChordType::Minor, kAutoInversion }, 2.0, false });
+        p.push_back ({ { 5, ChordType::Major, kAutoInversion }, 4.0, false });
+        p.push_back ({ { 7, ChordType::Major, kAutoInversion }, 6.0, false });
+        const auto s = makeSnapshot (p);
+        check (planLoop (s, 1.9, bps, 512).startIndex == 0, "a half bar block ends at beat 2");
+        check (planLoop (s, 2.0, bps, 512).startIndex == 1, "the second block begins at beat 2");
+        check (planLoop (s, 6.0, bps, 512).startIndex == 2, "the third at beat 6");
+        check (planLoop (s, 12.0, bps, 512).startIndex == 0, "and it starts over at beat 12");
+        check (planLoop (s, 12.0 + 3.0, bps, 512).startIndex == 1, "second round: beat 15 is in the second block");
+    }
+    {
+        // A huge buffer holds several changes, in order
+        Progression p;
+        for (int i = 0; i < 4; ++i)
+            p.push_back ({ { i, ChordType::Major, kAutoInversion }, 2.0, false });
+        const auto plan = planLoop (makeSnapshot (p), 0.0, bps, 24000 * 9);
+        check (plan.numChanges == 4, "nine beats hold four changes when the blocks are two beats (at 2, 4, 6 and 8)");
+        bool ordered = plan.numChanges > 1;
+        for (int i = 1; i < plan.numChanges; ++i)
+            ordered &= plan.changes[(size_t) i].sample > plan.changes[(size_t) i - 1].sample
+                       && plan.changes[(size_t) i].index == (plan.changes[(size_t) i - 1].index + 1) % 4;
+        check (ordered, "the changes come in order and go through the blocks one by one");
+    }
+    {
+        // A tempo change: at 60 BPM a beat is twice as many samples
+        const double slow = 1.0 / 48000.0;
+        const auto plan = planLoop (four, 4.0 - 480.0 * slow, slow, 512);
+        check (plan.numChanges == 1 && plan.changes[0].sample == 480, "the sample of the line follows the tempo");
+    }
+    {
+        // Nothing to play
+        LoopSnapshot empty;
+        check (planLoop (empty, 0.0, bps, 512).startIndex == -1, "an empty progression plays nothing");
+        check (planLoop (four, 0.0, 0.0, 512).startIndex == -1, "a tempo of zero plays nothing");
+        check (planLoop (four, std::nan (""), bps, 512).startIndex == -1, "a position that is not a number plays nothing");
+    }
+    {
+        // Walk through two loops of a song in blocks of 512 samples: every bar line is hit, one change each, on the right sample
+        bool exact = true;
+        int changes = 0;
+        int current = 0; // the block that plays, as the host would hear it
+        double position = 0.0;
+        long long absolute = 0;
+        for (int block = 0; block < 2 * 4 * 188; ++block)
+        {
+            const auto plan = planLoop (four, position, bps, 512);
+            if (plan.startIndex != current) // a bar line that falls exactly on the first sample of a block
+            {
+                ++changes;
+                exact &= absolute % 96000 == 0 && plan.startIndex == (int) ((absolute / 96000) % 4);
+                current = plan.startIndex;
+            }
+            for (int i = 0; i < plan.numChanges; ++i)
+            {
+                ++changes;
+                const long long at = absolute + plan.changes[(size_t) i].sample;
+                exact &= at % 96000 == 0; // a bar is 96000 samples
+                exact &= plan.changes[(size_t) i].index == (int) ((at / 96000) % 4);
+                current = plan.changes[(size_t) i].index;
+            }
+            position += 512 * bps;
+            absolute += 512;
+        }
+        check (exact, "over two rounds every change lands exactly on a bar line, on the right block");
+        check (changes == 8, "and there are as many changes as bar lines (" + std::to_string (changes) + ")");
+    }
+}
+
+void testTripleBuffer()
+{
+    std::printf ("triple buffer\n");
+    TripleBuffer<int> buffer;
+    check (! buffer.update(), "nothing new at first");
+    buffer.writeSlot() = 7;
+    buffer.publish();
+    check (buffer.update() && buffer.read() == 7, "the reader gets what was published");
+    check (! buffer.update() && buffer.read() == 7, "and nothing more until the writer publishes again");
+    buffer.writeSlot() = 8;
+    buffer.publish();
+    buffer.writeSlot() = 9;
+    buffer.publish();
+    check (buffer.update() && buffer.read() == 9, "if the writer published twice, the reader gets the newest");
+
+    // Two threads: the reader only ever sees whole values that were published, and never goes back in time
+    struct Pair { int a = 0; int b = 0; };
+    TripleBuffer<Pair> pairs;
+    std::atomic<bool> stop { false };
+    bool torn = false; // the reader thread only (this one)
+    std::thread writer ([&]
+    {
+        for (int i = 1; i <= 200000; ++i)
+        {
+            pairs.writeSlot() = { i, i };
+            pairs.publish();
+        }
+        stop = true;
+    });
+    int last = 0;
+    bool backwards = false;
+    while (! stop.load())
+        if (pairs.update())
+        {
+            torn |= pairs.read().a != pairs.read().b;
+            backwards |= pairs.read().a < last;
+            last = pairs.read().a;
+        }
+    writer.join();
+    if (pairs.update())
+        last = pairs.read().a;
+    check (! torn, "a value is never half written");
+    check (! backwards, "values never come back in the wrong order");
+    check (last == 200000, "the last value is always delivered");
+}
+
+// ---- Editing the progression -------------------------------------------------------------------------------------
+
+Progression threeBlocks()
+{
+    Progression p;
+    for (int i = 0; i < 3; ++i)
+    {
+        Block b;
+        b.chord = { i * 2, ChordType::Minor, kAutoInversion };
+        p.push_back (b);
+    }
+    return p;
+}
+
+void testEditing()
+{
+    // Lengths snap to half bars and stay between half a bar and eight bars
+    check (snapBeats (4.0) == 4.0 && snapBeats (5.1) == 6.0 && snapBeats (4.9) == 4.0, "length snaps to steps of half a bar");
+    check (snapBeats (0.1) == kMinBlockBeats && snapBeats (500.0) == kMaxBlockBeats, "length stays between the smallest and largest");
+    check (withLength (threeBlocks(), 1, 6.1)[1].beats == 6.0, "withLength sets a snapped length");
+    check (withLength (threeBlocks(), 7, 6.0).size() == 3, "withLength ignores a block that is not there");
+
+    const auto p = threeBlocks();
+
+    auto moved = withMoved (p, 0, 3);
+    check (moved[0].chord.root == 2 && moved[1].chord.root == 4 && moved[2].chord.root == 0, "a block moves to the end");
+    moved = withMoved (p, 2, 0);
+    check (moved[0].chord.root == 4 && moved[1].chord.root == 0, "a block moves to the front");
+    check (withMoved (p, 1, 1)[1].chord.root == 2 && withMoved (p, 1, 2)[1].chord.root == 2, "a gap next to the block changes nothing");
+    check (withMoved (p, 1, 3).size() == 3, "moving never changes how many blocks there are");
+
+    auto copy = withDuplicated (withLockToggled (p, 1), 1, 3);
+    check (copy.size() == 4 && copy[3].chord == p[1].chord && ! copy[3].locked && copy[1].locked, "a copy is added and is not locked");
+
+    auto inserted = withInserted (p, 1, { 7, ChordType::Major, kAutoInversion });
+    check (inserted.size() == 4 && inserted[1].chord.root == 7 && inserted[1].beats == kDefaultBlockBeats, "insert adds one bar at the gap");
+    check (inserted[2].chord == p[1].chord, "and the rest moves along");
+    check (withInserted (p, 99, { 7, ChordType::Major, kAutoInversion }).back().chord.root == 7, "a far gap means the end");
+
+    Progression full;
+    for (int i = 0; i < kMaxBlocks; ++i)
+        full.push_back (Block());
+    check (withInserted (full, 0, {}).size() == (size_t) kMaxBlocks && withDuplicated (full, 0, 0).size() == (size_t) kMaxBlocks,
+           "a full bar takes no more blocks");
+
+    check (withErased (p, 1).size() == 2 && withErased (p, 1)[1].chord == p[2].chord, "erase removes the block");
+    check (withErased (p, 5).size() == 3, "erase ignores a block that is not there");
+
+    const Chord other { 5, ChordType::Maj7, 1 };
+    const auto replaced = withReplaced (p, 2, other);
+    check (replaced[2].chord == other && replaced[2].beats == p[2].beats && replaced[0].chord == p[0].chord, "replace changes only the chord");
+
+    // Capture
+    std::vector<Chord> history;
+    for (int i = 0; i < 10; ++i)
+        history.push_back ({ i, ChordType::Major, kAutoInversion });
+    const auto captured = fromHistory (history, 4);
+    check (captured.size() == 4 && captured[0].chord.root == 6 && captured[3].chord.root == 9, "capture takes the last chords, oldest first");
+    check (captured[0].beats == kBeatsPerBar, "each captured chord gets one bar");
+    check (fromHistory (history, 8).size() == 8 && fromHistory ({ history[0], history[1] }, 4).size() == 2 && fromHistory ({}, 4).empty(),
+           "capture takes fewer if fewer were played");
+    history[9] = history[8];
+    check (fromHistory (history, 4)[2].chord == fromHistory (history, 4)[3].chord, "the same chord twice in a row counts twice");
+    check (fromHistory (history, 4, 3.0)[0].beats == 3.0, "and a bar is as long as the host's bar");
+
+    // Suggest keeps locked blocks
+    Progression old = threeBlocks();
+    old[1].locked = true;
+    old[1].beats = 8.0;
+    Progression fresh;
+    for (int i = 0; i < 4; ++i)
+    {
+        Block b;
+        b.chord = { 11 - i, ChordType::Major, kAutoInversion };
+        fresh.push_back (b);
+    }
+    auto kept = keepingLocked (old, fresh);
+    check (kept.size() == 4 && kept[1] == old[1] && kept[0] == fresh[0] && kept[2] == fresh[2], "a locked block stays where it was");
+    old[2].locked = true;
+    kept = keepingLocked (old, { fresh[0] });
+    check (kept.size() == 3 && kept[1] == old[1] && kept[2] == old[2], "locked blocks past the end of a short suggestion are added");
+    check (keepingLocked (threeBlocks(), fresh).size() == 4, "nothing locked: the suggestion is used as it is");
+
+    // Suggest respects pad variants
+    {
+        std::array<Chord, 7> pads;
+        for (int i = 0; i < 7; ++i)
+            pads[(size_t) i] = padChord (ScaleId::Minor, i);
+        const int bRoot = pads[6].root; // the last pad
+        pads[6].type = ChordType::Dom7;
+
+        Progression sugg;
+        sugg.push_back ({ { bRoot, ChordType::Major, kAutoInversion }, 6.0, false });
+        sugg.push_back ({ { pads[0].root, ChordType::Minor, kAutoInversion }, 2.0, false });
+        sugg.push_back ({ { bRoot, ChordType::Major, kAutoInversion }, 4.0, true });
+        const auto out = withPadVariants (sugg, ScaleId::Minor, pads);
+        check (out[0].chord.type == ChordType::Dom7 && out[0].chord.root == bRoot, "a pad variant is used in the suggestion");
+        check (out[1] == sugg[1], "a pad without a variant leaves its block as it is");
+        check (out[2] == sugg[2], "a locked block is not touched");
+        check (out[0].beats == 6.0 && out[1].beats == 2.0 && out[2].beats == 4.0, "lengths are kept");
+    }
+}
+
+void testNextPads()
+{
+    // Every scale and every pad: at most three, all different, all real pads, never the same pad again, and at least one
+    for (int s = 0; s < kNumScales; ++s)
+        for (int pad = 0; pad < kScaleSize; ++pad)
+        {
+            const auto scale = (ScaleId) s;
+            const auto next = nextPadsAfter (padChord (scale, pad), scale);
+            bool sane = next.count >= 1 && next.count <= kMaxGlowingPads;
+            for (int i = 0; i < next.count; ++i)
+            {
+                sane = sane && next.pads[(size_t) i] >= 0 && next.pads[(size_t) i] < kScaleSize && next.pads[(size_t) i] != pad;
+                for (int j = i + 1; j < next.count; ++j)
+                    sane = sane && next.pads[(size_t) i] != next.pads[(size_t) j];
+            }
+            check (sane, "the follow-ups of every pad are one to three other pads");
+        }
+
+    // A pad with another kind of chord counts as the same pad; a root outside the scale gives none
+    auto variant = padChord (ScaleId::Minor, 0);
+    variant.type = ChordType::Min7;
+    const auto plain = nextPadsAfter (padChord (ScaleId::Minor, 0), ScaleId::Minor);
+    const auto fromVariant = nextPadsAfter (variant, ScaleId::Minor);
+    check (plain.count == fromVariant.count && plain.pads == fromVariant.pads, "a variant gives the same follow-ups as its pad");
+    check (nextPadsAfter ({ 1, ChordType::Major, kAutoInversion }, ScaleId::Minor).count == 0, "a root outside the scale gives none");
+}
+
+void testExport()
+{
+    const Key aMinor { 9, ScaleId::Minor };
+    Progression p;
+    const auto add = [&] (int root, ChordType type, double beats, int inversion = kAutoInversion)
+    {
+        Block b;
+        b.chord = { root, type, inversion };
+        b.beats = beats;
+        p.push_back (b);
+    };
+    add (0, ChordType::Minor, 4.0);
+    add (8, ChordType::Major, 4.0);
+    add (3, ChordType::Major, 2.0);
+    add (10, ChordType::Major, 6.0);
+
+    checkEqual (exportFileName (p, aMinor), std::string ("Am-F-C-G.mid"), "the file is named after the chords");
+    checkEqual (exportFileName ({}, aMinor), std::string ("Progression.mid"), "an empty bar has a plain name");
+    Progression inverted;
+    inverted.push_back ({ { 0, ChordType::Minor, 1 }, 4.0, false });
+    checkEqual (exportFileName (inverted, aMinor), std::string ("Am_C.mid"), "a slash never reaches the file name");
+
+    // Only a-z, A-Z, 0-9, hyphen and underscore: # is "sharp", a slash is an underscore
+    {
+        const auto one = [] (const Chord& chord) { return Progression { { chord, 4.0, false } }; };
+        checkEqual (exportFileName (one ({ 4, ChordType::Major, kAutoInversion }), { 9, ScaleId::Major }), std::string ("Csharp.mid"), "C# is written Csharp");
+        checkEqual (exportFileName (one ({ 0, ChordType::Major, kAutoInversion }), { 10, ScaleId::Major }), std::string ("Bb.mid"), "Bb stays Bb");
+        checkEqual (exportFileName (one ({ 0, ChordType::Minor, 1 }), { 9, ScaleId::Minor }), std::string ("Am_C.mid"), "Am/C is written Am_C");
+
+        Progression q = one ({ 4, ChordType::Min7, kAutoInversion }); // C#m7
+        q.push_back ({ { 11, ChordType::Major, kAutoInversion }, 4.0, false }); // G#
+        q.push_back ({ { 0, ChordType::Minor, 2 }, 4.0, false });               // Am/E
+        const auto name = exportFileName (q, { 9, ScaleId::Major });
+        checkEqual (name, std::string ("Csharpm7-Gsharp-Am_E.mid"), "in a longer progression");
+        bool safe = true;
+        for (size_t i = 0; i + 4 < name.size(); ++i) // everything before ".mid"
+            safe &= (name[i] >= 'a' && name[i] <= 'z') || (name[i] >= 'A' && name[i] <= 'Z') || (name[i] >= '0' && name[i] <= '9') || name[i] == '-' || name[i] == '_';
+        check (safe, "every character before .mid is safe");
+    }
+
+    Progression many (30);
+    check (exportFileName (many, aMinor).size() < 80, "a long progression gets a short name");
+
+    const auto notes = exportNotes (p, aMinor.tonic);
+    check (notes.size() == 3 + 3 + 3 + 3, "one note per chord note");
+    double end = 0.0;
+    bool ordered = true, inRange = true;
+    for (const auto& n : notes)
+    {
+        end = std::max (end, n.start + n.length);
+        inRange &= n.note >= kLowestNote && n.note <= kHighestNote && n.velocity > 0;
+    }
+    for (size_t i = 1; i < notes.size(); ++i)
+        ordered &= notes[i].start >= notes[i - 1].start;
+    check (end == 16.0 && ordered && inRange, "the notes fill 16 beats, in order and in range");
+    check (notes[3].start == 4.0 && notes[3].length == 4.0 && notes[6].start == 8.0 && notes[6].length == 2.0, "starts and lengths follow the blocks");
+
+    // The same as when it plays: the first chord without a previous one, the next smoothly after it
+    const auto first = voiceChord (p[0].chord, aMinor.tonic, nullptr);
+    Voicing second = voiceChord (p[1].chord, aMinor.tonic, &first);
+    bool same = true;
+    for (int i = 0; i < 3; ++i)
+        same &= notes[(size_t) i].note == first.notes[(size_t) i] && notes[(size_t) (3 + i)].note == second.notes[(size_t) i];
+    check (same, "the notes are the ones that play, with smooth voice leading");
+    check (exportNotes ({}, 9).empty(), "nothing to export from an empty bar");
+}
+
+void testQuickText()
+{
+    const Key aMinor { 9, ScaleId::Minor };
+    const auto read = [&] (const std::string& text, bool lock = true) { return parseQuickText (text, aMinor, 4.0, lock); };
+    const auto am = Chord { 0, ChordType::Minor, kAutoInversion };
+    const auto f = Chord { 8, ChordType::Major, kAutoInversion };
+
+    // The five forms of the CLAUDE.md
+    {
+        auto r = read ("Am");
+        check (r.problems.empty() && r.blocks.size() == 1 && r.blocks[0].chord == am && r.blocks[0].beats == 4.0, "Am: one block of one bar");
+        r = read ("Am*2");
+        check (r.blocks.size() == 2 && r.blocks[0] == r.blocks[1] && r.blocks[1].beats == 4.0, "Am*2: two blocks of one bar");
+        r = read ("Am:2");
+        check (r.blocks.size() == 1 && r.blocks[0].beats == 8.0, "Am:2: one block of two bars");
+        r = read ("Am:0.5");
+        check (r.blocks.size() == 1 && r.blocks[0].beats == 2.0, "Am:0.5: one block of half a bar");
+        r = read ("Am:0.5*2");
+        check (r.blocks.size() == 2 && r.blocks[0].beats == 2.0 && r.blocks[1].beats == 2.0, "Am:0.5*2: two half bars");
+        r = read ("Am*2:0.5");
+        check (r.blocks.size() == 2 && r.blocks[0].beats == 2.0, "the order of * and : does not matter");
+        r = read ("Am F, C-G");
+        check (r.problems.empty() && r.blocks.size() == 4 && r.blocks[1].chord == f, "space, comma and hyphen separate chords");
+    }
+
+    // Names: the key decides the root (stored as the distance from the tonic), all the chord types, lower case roots
+    {
+        check (read ("C").blocks[0].chord.root == 3, "C in A minor is 3 above the tonic");
+        check (read ("a").blocks[0].chord.type == ChordType::Major && read ("am").blocks[0].chord == am, "a lower case root is read");
+        check (read ("Bb").blocks[0].chord.root == 1 && read ("A#").blocks[0].chord.root == 1, "Bb and A# are the same chord");
+        bool allTypes = true;
+        for (int t = 0; t < kNumChordTypes; ++t)
+        {
+            const auto r = read ("D" + std::string (chordShapes[t].suffix));
+            allTypes &= r.problems.empty() && r.blocks.size() == 1 && (int) r.blocks[0].chord.type == t && r.blocks[0].chord.root == 5;
+        }
+        check (allTypes, "every chord type is read from the name the pads show");
+        check (read ("Amin").blocks[0].chord == am && read ("Cmaj").blocks[0].chord.type == ChordType::Major, "min and maj are understood");
+    }
+
+    // Slash: a chosen inversion
+    {
+        const auto r = read ("Am/C");
+        check (r.problems.empty() && r.blocks[0].chord.inversion == 1, "Am/C is the first inversion");
+        check (read ("Am/E").blocks[0].chord.inversion == 2 && read ("Am/A").blocks[0].chord.inversion == 0, "Am/E and Am/A");
+        check (read ("Am/D").problems.size() == 1 && read ("Am/D").blocks.empty(), "a bass note outside the chord is a problem");
+    }
+
+    // Problems are marked where they are, and the rest is still read
+    {
+        const std::string text = "Am Xq F";
+        const auto r = read (text);
+        check (r.problems.size() == 1 && r.problems[0].start == 3 && r.problems[0].end == 5, "the problem is at the right place");
+        check (r.blocks.size() == 2 && r.blocks[0].chord == am && r.blocks[1].chord == f, "the words around it are read");
+        check (read ("Am:0.3").problems.size() == 1 && read ("Am:9").problems.size() == 1 && read ("Am:0").problems.size() == 1, "lengths must be 0.5 to 8 in half steps");
+        check (read ("Am*0").problems.size() == 1 && read ("Am*1.5").problems.size() == 1 && read ("Am*").problems.size() == 1, "* needs a whole number");
+        check (read ("Am:").problems.size() == 1 && read ("Am:2:3").problems.size() == 1 && read ("Am*2*3").problems.size() == 1, "empty and doubled endings");
+        check (read ("Am7b5").problems.size() == 1 && read ("H").problems.size() == 1, "unknown chords");
+        check (read ("").blocks.empty() && read ("   ").problems.empty(), "empty text is nothing, not a problem");
+    }
+
+    // The bar holds 32 blocks
+    {
+        auto r = read ("Am*30 F*2");
+        check (r.blocks.size() == 32 && r.problems.empty(), "32 blocks fit");
+        r = read ("Am*30 F*3 C");
+        check (r.blocks.size() == 31 && r.problems.size() == 1 && r.problems[0].start == 6, "a word that does not fit is a problem, the next one still fits");
+    }
+
+    // The lock: a chord outside the scale becomes a disabled block. Nothing is changed into another chord.
+    {
+        auto r = read ("Am A7 C");
+        check (r.outsideScale == 1 && ! r.blocks[0].disabled && r.blocks[1].disabled && ! r.blocks[2].disabled, "A7 is outside A minor");
+        check (r.blocks[1].chord.type == ChordType::Dom7 && r.blocks[1].chord.root == 0, "the chord is exactly what was typed");
+        check (isBlockDisabled (r.blocks[1], ScaleId::Minor, true) && ! isBlockDisabled (r.blocks[1], ScaleId::Minor, false),
+               "silent with the lock on, playing with it off");
+        check (! isBlockDisabled (r.blocks[0], ScaleId::Minor, true), "a chord in the scale is never disabled");
+        r = read ("Am A7", false);
+        check (r.outsideScale == 0 && ! r.blocks[1].disabled, "with the lock off nothing is disabled");
+        check (read ("A").blocks[0].disabled && ! isBlockDisabled (read ("A").blocks[0], ScaleId::Major, true), "A is outside A minor but fits A major, so it plays after the scale changes");
+    }
+
+    // Text from blocks, exactly as they are
+    {
+        Progression p;
+        p.push_back ({ am, 4.0 });
+        p.push_back ({ am, 4.0 });
+        p.push_back ({ f, 8.0 });
+        p.push_back ({ Chord { 3, ChordType::Major, kAutoInversion }, 2.0 });
+        p.push_back ({ Chord { 0, ChordType::Min7, 1 }, 6.0 });
+        checkEqual (formatQuickText (p, aMinor, 4.0), std::string ("Am Am F:2 C:0.5 Am7/C:1.5"), "the text shows every block as it is");
+        const auto back = read (formatQuickText (p, aMinor, 4.0));
+        check (back.problems.empty() && back.blocks.size() == p.size(), "the text can be read back");
+        bool same = true;
+        for (size_t i = 0; i < p.size(); ++i)
+            same &= back.blocks[i].chord == p[i].chord && back.blocks[i].beats == p[i].beats;
+        check (same, "and gives the same blocks");
+        checkEqual (formatQuickText ({}, aMinor, 4.0), std::string(), "an empty bar is empty text");
+
+        // Another key spells the names with flats, and reads them back
+        const Key fMinor { 5, ScaleId::Minor };
+        Progression q;
+        q.push_back ({ Chord { 3, ChordType::Major, kAutoInversion }, 4.0 });
+        checkEqual (formatQuickText (q, fMinor, 4.0), std::string ("Ab"), "named after the key");
+        check (parseQuickText ("Ab", fMinor, 4.0, true).blocks[0].chord == q[0].chord, "and read after the key");
+
+        // A bar of 3 beats
+        check (parseQuickText ("Am:2", aMinor, 3.0, true).blocks[0].beats == 6.0, "a bar is what the host says");
+    }
+
+    // What the text cannot say is kept when the block is unchanged
+    {
+        Progression old;
+        Block locked { am, 4.0 };
+        locked.locked = true;
+        Block rootPosition { f, 4.0 };
+        rootPosition.chord.inversion = 0;
+        Block outside { Chord { 0, ChordType::Dom7, kAutoInversion }, 4.0 };
+        old = { locked, rootPosition, outside };
+
+        auto read2 = keepingBlockState (old, read ("Am F A7").blocks);
+        check (read2[0].locked, "the lock stays");
+        check (read2[1].chord.inversion == 0, "a chosen root position stays");
+        check (! read2[2].disabled, "a chord that was playing outside the scale is not silenced by an unchanged text");
+
+        read2 = keepingBlockState (old, read ("F Am E7").blocks);
+        check (! read2[1].locked && read2[0].chord.inversion == kAutoInversion, "a block that moved is a new block");
+        check (read2[2].disabled, "a new chord outside the scale is disabled");
+    }
+
+    // A disabled block is a rest in the MIDI file
+    {
+        const auto r = read ("Am A7 C");
+        const auto notes = exportNotes (r.blocks, aMinor.tonic, ScaleId::Minor, true);
+        check (notes.size() == 6 && notes[3].start == 8.0, "the silent block gives no notes, and the next one starts on time");
+        check (exportNotes (r.blocks, aMinor.tonic, ScaleId::Minor, false).size() == 3 + 4 + 3, "with the lock off it is in the file");
+    }
+}
+
+
+void testOctaves()
+{
+    const int tonic = 9; // A
+    const Chord am { 0, ChordType::Minor, kAutoInversion };
+    const Chord amUp { 0, ChordType::Minor, kAutoInversion, 1 };
+    const Chord amDown { 0, ChordType::Minor, kAutoInversion, -1 };
+
+    // The same notes, a whole octave away
+    const auto base = voiceChord (am, tonic, nullptr);
+    const auto up = voiceChord (amUp, tonic, nullptr);
+    const auto down = voiceChord (amDown, tonic, nullptr);
+    bool shifted = base.count == up.count && base.count == down.count && up.octave == 1 && down.octave == -1 && base.octave == 0;
+    for (int i = 0; i < base.count; ++i)
+        shifted = shifted && up.notes[(size_t) i] == base.notes[(size_t) i] + 12 && down.notes[(size_t) i] == base.notes[(size_t) i] - 12;
+    check (shifted, "octave up and down move every note exactly 12 semitones");
+    check (! (am == amUp) && amUp == Chord { 0, ChordType::Minor, kAutoInversion, 1 }, "the octave is part of the chord");
+    checkEqual (chordName (amUp, { tonic, ScaleId::Minor }), std::string ("Am"), "the name does not change");
+
+    // A chord that is moved does not pull the next one with it, and the next one is voiced as if nothing was moved
+    const Chord f { 8, ChordType::Major, kAutoInversion };
+    const auto afterBase = voiceChord (f, tonic, &base);
+    const auto afterUp = voiceChord (f, tonic, &up);
+    bool same = afterBase.count == afterUp.count;
+    for (int i = 0; same && i < afterBase.count; ++i)
+        same = afterBase.notes[(size_t) i] == afterUp.notes[(size_t) i];
+    check (same, "the chord after a moved chord is voiced as if nothing was moved");
+
+    // And a moved chord after a chord is smooth in its own register
+    const auto movedAfter = voiceChord (Chord { 8, ChordType::Major, kAutoInversion, 1 }, tonic, &base);
+    bool plus12 = movedAfter.count == afterBase.count;
+    for (int i = 0; plus12 && i < movedAfter.count; ++i)
+        plus12 = movedAfter.notes[(size_t) i] == afterBase.notes[(size_t) i] + 12;
+    check (plus12, "a moved chord after another is the smooth voicing, moved");
+
+    // Out of range values and every chord stay inside what MIDI can play
+    bool range = voiceChord (Chord { 0, ChordType::Minor, kAutoInversion, 9 }, tonic, nullptr).octave == kMaxOctaveShift;
+    for (int root = 0; root < 12; ++root)
+        for (int t = 0; t < kNumChordTypes; ++t)
+            for (int o = -kMaxOctaveShift; o <= kMaxOctaveShift; ++o)
+            {
+                const auto v = voiceChord (Chord { root, (ChordType) t, kAutoInversion, o }, tonic, nullptr);
+                range = range && v.notes[0] >= 0 && v.notes[(size_t) v.count - 1] <= 127;
+            }
+    check (range, "every chord, moved the most, is a playable MIDI note");
+
+    // Editing: one step at a time, never past the limit, other blocks and the rest of the chord stay
+    Progression p;
+    p.push_back ({ am, 4.0 });
+    p.push_back ({ f, 4.0 });
+    auto q = withOctaveShift (p, 0, 1);
+    check (q[0].chord.octave == 1 && q[1].chord.octave == 0 && q[0].chord.type == ChordType::Minor, "one block is moved");
+    q = withOctaveShift (withOctaveShift (withOctaveShift (q, 0, 1), 0, 1), 0, 1);
+    check (q[0].chord.octave == kMaxOctaveShift, "up to the limit and no further");
+    q = withOctaveShift (p, 1, -1);
+    q = withOctaveShift (q, 1, -1);
+    q = withOctaveShift (q, 1, -1);
+    check (q[1].chord.octave == -kMaxOctaveShift && withOctaveShift (p, 5, 1) == p, "down to the limit, and a block that is not there does nothing");
+
+    // Replacing a block takes the chord with its octave
+    check (withReplaced (p, 0, amUp)[0].chord.octave == 1, "a replaced block gets the octave of the new chord");
+
+    // The MIDI file: the notes are the ones that play
+    Progression e;
+    e.push_back ({ am, 4.0 });
+    e.push_back ({ amUp, 4.0 });
+    const auto notes = exportNotes (e, tonic);
+    check (notes.size() == 6 && notes[3].note == notes[0].note + 12, "the file has the moved chord");
+
+    // The text says how far a chord is moved: Am+1, Am-1, Am+2:2, and it comes back
+    const Key key { tonic, ScaleId::Minor };
+    checkEqual (formatQuickText (e, key, 4.0), std::string ("Am Am+1"), "the text shows an octave up");
+    auto kept = keepingBlockState (e, parseQuickText (formatQuickText (e, key, 4.0), key, 4.0, true).blocks);
+    check (kept.size() == 2 && kept[0].chord.octave == 0 && kept[1].chord.octave == 1, "an octave is read back from the text");
+    const auto octaves = parseQuickText ("Am-1 F+2:2*2 C-2 G+0 Am-1:0.5 Am-F-C", key, 4.0, true);
+    check (octaves.blocks.size() == 9 && octaves.blocks[0].chord.octave == -1 && octaves.blocks[1].chord.octave == 2
+               && octaves.blocks[2].chord.octave == 2 && octaves.blocks[2].beats == 8.0 && octaves.blocks[3].chord.octave == -2
+               && octaves.blocks[4].chord.octave == 0,
+           "octaves: Am-1, F+2:2*2 (two blocks of two bars), C-2, G+0 is no move");
+    check (octaves.problems.empty(), "and nothing in it is a problem");
+    check (parseQuickText ("Am+3", key, 4.0, true).problems.size() == 1 && parseQuickText ("Am+", key, 4.0, true).problems.size() == 1,
+           "an octave past 2 or without a number is a problem");
+    check (parseQuickText ("Am-F-C-G", key, 4.0, true).blocks.size() == 4, "a hyphen still separates chords");
+}
+
+int main()
+{
+    testOctaves();
+    testQuickText();
+    testLoopPlan();
+    testEditing();
+    testExport();
+    testNextPads();
+    testTripleBuffer();
+    testLibrary();
+    testNoteTracker();
+    testPads();
+    testNames();
+    testNames3();
+    testScaleFit();
+    testVoicingBasics();
+    testChosenInversion();
+    testSmoothVoiceLeading();
+    testNoDriftAnyChord();
+
+    std::printf ("%d checks, %d failed\n", checks, failures);
+    return failures == 0 ? 0 : 1;
+}
