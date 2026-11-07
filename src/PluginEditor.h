@@ -8,7 +8,7 @@
 // One big pad: the name of the chord, and it lights up while it sounds. Pressing it with the mouse plays it; letting go
 // (also outside the pad) stops it. Drag it down into the bar to add the chord there. The gear (on mouseover) opens the
 // variants of the pad.
-class PadButton : public juce::Component
+class PadButton : public juce::Component, public juce::SettableTooltipClient
 {
 public:
     std::function<void()> onPress;
@@ -23,6 +23,7 @@ public:
     void setNumeral (const juce::String& numeral); // I, ii, III, IV ... : the place of the chord in the key, small above its name
     void setLit (bool nowLit);
     void setHasVariant (bool nowHasVariant);
+    void setRestPad() { restPad = true; repaint(); } // the blank pad: a pause, no sound, no colour, no gear
     void setSuggested (bool nowSuggested); // fits well after the chord played last: a soft glow, not the full light of a pad that sounds
     bool isSuggested() const { return suggested; }
     void setDragEnabled (bool nowEnabled) { dragEnabled = nowEnabled; } // pulling a pad down into the bar is editing
@@ -46,6 +47,7 @@ private:
     bool suggested = false;
     int rootPitchClass = 0;
     bool dragEnabled = false;
+    bool restPad = false;
 };
 
 // The Suggest button: a die and the word. One click fills the bar with a whole progression.
@@ -161,6 +163,7 @@ public:
     bool isOutsideScale() const { return outsideScale; }
     void setOctave (int nowOctave); // shown as a small mark when it is not 0
     int getOctave() const { return octave; }
+    void setRest (bool nowRest); // a pause: grey, "Rest", and no sound
     void setSilent (bool nowSilent); // Quick-text disabled it (outside the scale, lock on): crossed out, and it makes no sound
     void setEditable (bool nowEditable); // in Play a block only plays its chord when it is pressed
     bool isHeldByMouse() const { return heldByMouse; }
@@ -200,6 +203,7 @@ private:
     bool locked = false;
     bool outsideScale = false;
     bool silent = false;
+    bool rest = false;
     int octave = 0;
     bool editable = false;
     bool wasSelectedAtDown = false;
@@ -235,6 +239,8 @@ public:
     int getSelected() const { return selected; }
     void clearSelection();
     bool replaceBlock (int index, const engine::Chord&); // false if there is no such block
+    bool replaceBlockWithRest (int index);                // the block becomes a pause
+    void addRestWhileRecording();                         // Rec is on and the blank pad was pressed: a pause at the end
     bool deleteSelected();
 
     // Dragging a chord in from a pad: where it would land
@@ -376,6 +382,7 @@ public:
 
     ProgressionBar& getBar() { return bar; }
     PadButton& getPad (int i) { return pads[(size_t) i]; }
+    PadButton& getRestPad() { return restPad; }
     juce::Button& getSuggestButton() { return suggestButton; }
     void showVariantMenu (int pad);
     void saveMidi(); // the Save MIDI button
@@ -407,6 +414,7 @@ private:
     BarButton saveButton { "Save MIDI", BarButton::Icon::None };
     BarButton folderButton { "Open Folder", BarButton::Icon::None };
     std::array<PadButton, ProgrezzorProcessor::kNumPads> pads;
+    PadButton restPad; // the blank pad: drag it into the bar for a pause
     ProgressionBar bar;
     std::unique_ptr<DragGhost> ghost;
     int shownKey = -1, shownScale = -1, shownProgression = -1, shownVariant = -1, shownLock = -1;

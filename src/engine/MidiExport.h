@@ -26,7 +26,7 @@ struct ExportNote
 };
 
 // Every block strikes its chord at its start and lets go at its end, also when the next block has the same chord
-// A block that is silent (see isBlockDisabled) gives a rest of its length, as it does when the loop plays.
+// A pause, and a block that is silent (see isBlockDisabled), give a rest of their length, as it does when the loop plays.
 // With `arp` on, a block gives the notes of the arpeggio instead of the chord, step by step as it plays.
 // `octaveShift` (the Oct buttons): the file has the notes that are heard.
 inline std::vector<ExportNote> exportNotes (const Progression& progression, int tonic, ScaleId scale = ScaleId::Minor,
@@ -37,7 +37,7 @@ inline std::vector<ExportNote> exportNotes (const Progression& progression, int 
     double start = 0.0;
     for (const auto& block : progression)
     {
-        if (isBlockDisabled (block, scale, lockToScale))
+        if (block.rest || isBlockDisabled (block, scale, lockToScale)) // a pause or a silent block: a gap of its length
         {
             start += block.beats;
             continue;
@@ -80,7 +80,7 @@ inline std::string exportFileName (const Progression& progression, const Key& ke
             break;
 
         std::string chord;
-        for (const char c : chordName (block.chord, key))
+        for (const char c : (block.rest ? std::string ("Rest") : chordName (block.chord, key)))
         {
             const bool safe = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
             if (c == '#')

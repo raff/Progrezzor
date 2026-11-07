@@ -17,7 +17,7 @@
 //   Am/C      Am with C in the bass (an inversion that is chosen, so it is kept)
 //   Am+1      Am an octave up (+1, +2) or down (-1, -2); it comes right after the chord, before : and *: Am-1:2*2
 //
-// * means how many, : means how long (in bars). Chords are separated by a space, a comma or a hyphen. A word that cannot be
+// R (or Rest) is a pause: R, R:2, Rest*2. * means how many, : means how long (in bars). Chords are separated by a space, a comma or a hyphen. A word that cannot be
 // read is reported (where it is and what is wrong) and the rest is read as usual. Nothing is ever corrected by itself.
 namespace engine
 {
@@ -39,7 +39,7 @@ struct QuickTextResult
     int outsideScale = 0;                   // blocks marked as disabled because the chord is not in the scale
 };
 
-// The blocks as text, exactly as they are: Am, Am:2, Am:0.5. Two blocks that are alike stay two words (Am Am).
+// The blocks as text, exactly as they are: Am, Am:2, Am:0.5, and R for a pause. Two blocks that are alike stay two words (Am Am).
 std::string formatQuickText (const Progression&, const Key&, double barBeats = kBeatsPerBar);
 
 // Reads the text. With the lock on, a chord that is not in the scale becomes a disabled block (see isBlockDisabled).

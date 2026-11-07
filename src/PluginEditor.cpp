@@ -116,12 +116,12 @@ void PadButton::setRoot (int pitchClass)
 void PadButton::paint (juce::Graphics& g)
 {
     const bool on = lit || heldByMouse;
-    const auto colour = theme::chordColour (rootPitchClass);
+    const auto colour = restPad ? theme::padHover : theme::chordColour (rootPitchClass);
     const auto bounds = getLocalBounds().toFloat().reduced (5.0f, 4.0f);
     const float lip = juce::jlimit (5.0f, 9.0f, bounds.getHeight() * 0.035f);
     const float corner = 15.0f;
 
-    const auto rest = colour.withMultipliedBrightness (0.80f);
+    const auto rest = restPad ? colour : colour.withMultipliedBrightness (0.80f);
     const auto base = on ? rest.brighter (0.10f) : rest; // a pad that plays is only a little brighter, with a faint glow
     if (on)
         theme::drawGlow (g, bounds.withTrimmedBottom (lip), colour, 7.0f, corner, 0.28f);
@@ -132,6 +132,21 @@ void PadButton::paint (juce::Graphics& g)
     {
         g.setColour (theme::accent.withAlpha (0.9f));
         g.drawRoundedRectangle (face, corner, 3.0f);
+    }
+
+    if (restPad)
+    {
+        // The blank pad: a pause sign (two bars) and the word under it, in the grey of the other buttons
+        const auto ink = theme::dimText.brighter (0.3f);
+        const float barHeight = juce::jlimit (18.0f, 60.0f, face.getHeight() * 0.22f), barWidth = barHeight * 0.28f;
+        const auto c = juce::Point<float> (face.getCentreX(), face.getCentreY() - barHeight * 0.45f);
+        g.setColour (ink);
+        g.fillRoundedRectangle (juce::Rectangle<float> (barWidth, barHeight).withCentre ({ c.x - barWidth * 0.95f, c.y }), barWidth * 0.3f);
+        g.fillRoundedRectangle (juce::Rectangle<float> (barWidth, barHeight).withCentre ({ c.x + barWidth * 0.95f, c.y }), barWidth * 0.3f);
+        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+            g.setFont (l->titleFont (juce::jlimit (13.0f, 24.0f, (float) getWidth() * 0.2f)));
+        g.drawFittedText ("Rest", face.withTrimmedTop (face.getHeight() * 0.55f).reduced (4.0f, 0.0f).toNearestInt(), juce::Justification::centredTop, 1, 0.6f);
+        return;
     }
 
     // A small light in the corner, and grip dots at the bottom, like the keys of a drum machine
@@ -644,6 +659,15 @@ void BlockButton::setEditable (bool nowEditable)
     }
 }
 
+void BlockButton::setRest (bool nowRest)
+{
+    if (nowRest != rest)
+    {
+        rest = nowRest;
+        repaint();
+    }
+}
+
 void BlockButton::setRoot (int pitchClass)
 {
     if (pitchClass != rootPitchClass)
@@ -662,6 +686,8 @@ void BlockButton::paint (juce::Graphics& g)
     auto base = colour.withMultipliedBrightness (0.52f).withMultipliedSaturation (0.9f);
     if (playing || selected)
         base = colour.withMultipliedBrightness (0.72f);
+    if (rest) // a pause is grey: no chord, no colour
+        base = (playing || selected) ? theme::blockHover : theme::block;
     if (lit)
         base = theme::accent;
 
@@ -732,7 +758,7 @@ void BlockButton::paint (juce::Graphics& g)
     }
 
     const auto ink = theme::textOn (base);
-    g.setColour (lit ? theme::onAccent : (silent ? ink.withAlpha (0.4f) : (outsideScale ? ink.withAlpha (0.65f) : ink)));
+    g.setColour (lit ? theme::onAccent : (silent ? ink.withAlpha (0.4f) : (outsideScale ? ink.withAlpha (0.65f) : (rest ? ink.withAlpha (0.75f) : ink))));
     if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
     {
         // The name and the length sit together in the middle of the face, not down at the bottom. They follow the height of
@@ -807,7 +833,7 @@ void BlockButton::paint (juce::Graphics& g)
         drawLock (g, lockArea().toFloat().reduced (5.0f), locked ? (heldByMouse ? theme::onAccent : juce::Colours::white) : juce::Colours::white.withAlpha (0.75f), locked);
 
     // The arrows for the octave of this block, in Edit on mouseover
-    if (editable && hovered())
+    if (editable && hovered() && ! rest)
     {
         const auto arrowColour = heldByMouse ? theme::onAccent : theme::text.withAlpha (0.85f);
         drawArrow (g, octaveUpArea().toFloat(), true, octave >= engine::kMaxOctaveShift ? arrowColour.withAlpha (0.3f) : arrowColour);
@@ -835,7 +861,7 @@ void BlockButton::mouseDown (const juce::MouseEvent& e)
 
     if (! editable) // Play: the block only plays its chord while it is held
     {
-        if (e.mods.isPopupMenu() || silent) // a silent block has no sound to hold
+        if (e.mods.isPopupMenu() || silent || rest) // a silent block and a pause have no sound to hold
             return;
 
         mode = Mode::Press;
@@ -861,7 +887,7 @@ void BlockButton::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
-    if (octaveUpArea().contains (e.getPosition()) || octaveDownArea().contains (e.getPosition()))
+    if (! rest && (octaveUpArea().contains (e.getPosition()) || octaveDownArea().contains (e.getPosition())))
     {
         if (onOctave)
             onOctave (octaveUpArea().contains (e.getPosition()) ? 1 : -1);
@@ -1971,6 +1997,27 @@ bool ProgressionBar::replaceBlock (int index, const engine::Chord& chord)
     return true;
 }
 
+bool ProgressionBar::replaceBlockWithRest (int index)
+{
+    if (index < 0 || index >= (int) processor.getProgression().size())
+        return false;
+
+    processor.editProgression (engine::withRestAt (processor.getProgression(), index));
+    clearSelection();
+    return true;
+}
+
+// Rec is on and the blank pad was pressed: a pause of one bar goes at the end. (If the pad is pulled into the bar instead,
+// setDragActive takes this one back, as it does for a chord.)
+void ProgressionBar::addRestWhileRecording()
+{
+    if (! capturing || ! editing || textMode)
+        return;
+    takePlayedChords(); // chords played before the pad was pressed come first
+    processor.editProgression (engine::withInsertedRest (processor.getProgression(), (int) processor.getProgression().size(), processor.getHostBarBeats()));
+    captureVersion = processor.getProgressionVersion();
+}
+
 bool ProgressionBar::deleteSelected()
 {
     if (selected < 0 || selected >= (int) processor.getProgression().size())
@@ -2031,7 +2078,7 @@ void ProgressionBar::refresh()
             auto* block = blocks.add (new BlockButton());
             block->onPress = [this, i]
             {
-                if (i < (int) processor.getProgression().size() && ! processor.isBlockSilent (i))
+                if (i < (int) processor.getProgression().size() && ! processor.isBlockSilent (i) && ! processor.getProgression()[(size_t) i].rest)
                     processor.pressBlock (i, processor.getProgression()[(size_t) i].chord);
             };
             block->onRelease = [this, i] { processor.releaseBlock (i); };
@@ -2103,13 +2150,14 @@ void ProgressionBar::refresh()
     for (int i = 0; i < blocks.size(); ++i)
     {
         const auto& block = progression[(size_t) i];
-        blocks[i]->setChordName (engine::chordName (block.chord, key));
+        blocks[i]->setRest (block.rest);
+        blocks[i]->setChordName (block.rest ? juce::String ("Rest") : juce::String (engine::chordName (block.chord, key)));
         blocks[i]->setLength (block.beats, processor.getHostBarBeats());
         blocks[i]->setRoot (key.tonic + block.chord.root);
-        blocks[i]->setNumeral (engine::romanNumeral (block.chord, key.scale));
+        blocks[i]->setNumeral (block.rest ? juce::String() : juce::String (engine::romanNumeral (block.chord, key.scale)));
         blocks[i]->setLocked (block.locked);
-        blocks[i]->setOctave (block.chord.octave);
-        blocks[i]->setOutsideScale (processor.isLockedToScale() && ! engine::chordFitsScale (block.chord, key.scale));
+        blocks[i]->setOctave (block.rest ? 0 : block.chord.octave);
+        blocks[i]->setOutsideScale (! block.rest && processor.isLockedToScale() && ! engine::chordFitsScale (block.chord, key.scale));
         blocks[i]->setSilent (processor.isBlockSilent (i));
         blocks[i]->setPlaying (i == playingBlock);
         blocks[i]->setSelected (i == selected);
@@ -2542,7 +2590,8 @@ void ProgressionBar::resized()
 class ProgrezzorEditor::DragGhost : public juce::Component
 {
 public:
-    DragGhost (const juce::String& name, int pitchClass) : chordName (name), colour (theme::chordColour (pitchClass))
+    DragGhost (const juce::String& name, int pitchClass) : DragGhost (name, theme::chordColour (pitchClass)) {}
+    DragGhost (const juce::String& name, juce::Colour keyColour) : chordName (name), colour (keyColour)
     {
         setInterceptsMouseClicks (false, false);
         setSize (104, 62);
@@ -2663,6 +2712,39 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
         addAndMakeVisible (pad);
     }
 
+    // The blank pad: a pause. It makes no sound. Pulled into the bar it adds a pause (or turns the block it lands on into one);
+    // with Rec on, a click adds a pause at the end.
+    restPad.setRestPad();
+    restPad.setTooltip ("Rest: a pause. Drag it into the bar. With Rec on, a click adds a pause");
+    restPad.onPress = [this] { bar.addRestWhileRecording(); };
+    restPad.onDragStart = [this]
+    {
+        bar.setDragActive (true);
+        ghost = std::make_unique<DragGhost> ("Rest", theme::block);
+        addAndMakeVisible (*ghost);
+    };
+    restPad.onDragMove = [this] (juce::Point<int> screen)
+    {
+        if (ghost != nullptr)
+            ghost->setCentrePosition (getLocalPoint (nullptr, screen));
+        const int target = bar.containsScreenPoint (screen) ? bar.blockAtScreenPoint (screen) : -1;
+        bar.showDropTarget (target);
+        bar.showDropGap (target < 0 && bar.containsScreenPoint (screen) ? bar.gapAtScreenPoint (screen) : -1);
+    };
+    restPad.onDragEnd = [this] (juce::Point<int> screen)
+    {
+        ghost.reset();
+        bar.setDragActive (false);
+        bar.showDropGap (-1);
+        bar.showDropTarget (-1);
+        const int target = bar.containsScreenPoint (screen) ? bar.blockAtScreenPoint (screen) : -1;
+        if (target >= 0)
+            bar.replaceBlockWithRest (target);
+        else if (bar.containsScreenPoint (screen))
+            processor.editProgression (engine::withInsertedRest (processor.getProgression(), bar.gapAtScreenPoint (screen), processor.getHostBarBeats()));
+    };
+    addAndMakeVisible (restPad);
+
     bar.setEditing (! processor.isPlayOn()); // with Play off the bar can be edited
     updateNames();
 
@@ -2725,6 +2807,7 @@ void ProgrezzorEditor::timerCallback()
 
     for (auto& pad : pads)
         pad.setDragEnabled (processor.isEditing() && ! bar.isInTextMode());
+    restPad.setDragEnabled (processor.isEditing() && ! bar.isInTextMode());
 }
 
 // Learn mode: the user holds the keys of the chord on a MIDI keyboard
@@ -3026,11 +3109,16 @@ void ProgrezzorEditor::resized()
     // further out: then the keys themselves start and end exactly at the edges of the area, in line with the Suggest button
     // and the card of the bar below (any odd pixels are spread over the gaps, not left at the right edge).
     const int gap = 10;
-    const float keyWidth = (float) (area.getWidth() - gap * (ProgrezzorProcessor::kNumPads - 1)) / (float) ProgrezzorProcessor::kNumPads;
-    for (int i = 0; i < ProgrezzorProcessor::kNumPads; ++i)
+    constexpr float restShare = 0.55f; // the blank pad is about half as wide as a chord pad
+    const float keyWidth = (float) (area.getWidth() - gap * ProgrezzorProcessor::kNumPads) / ((float) ProgrezzorProcessor::kNumPads + restShare);
+    for (int i = 0; i <= ProgrezzorProcessor::kNumPads; ++i)
     {
-        const int left = area.getX() + juce::roundToInt ((float) i * (keyWidth + (float) gap));
-        const int right = area.getX() + juce::roundToInt ((float) i * (keyWidth + (float) gap) + keyWidth);
-        pads[(size_t) i].setBounds (left - 5, area.getY(), right - left + 10, area.getHeight());
+        const bool isRest = i == ProgrezzorProcessor::kNumPads;
+        const float width = isRest ? keyWidth * restShare : keyWidth;
+        const float startX = (float) i * (keyWidth + (float) gap);
+        const int left = area.getX() + juce::roundToInt (startX);
+        const int right = isRest ? area.getRight() : area.getX() + juce::roundToInt (startX + width);
+        auto& pad = isRest ? restPad : pads[(size_t) i];
+        pad.setBounds (left - 5, area.getY(), right - left + 10, area.getHeight());
     }
 }

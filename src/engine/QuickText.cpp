@@ -109,16 +109,14 @@ struct Word
     std::string problem; // empty if the word was read
 };
 
-Word readWord (const std::string& word, double barBeats)
+// The chord part of a word: the root, the kind, an inversion (/) and an octave (+1, -1). False if it cannot be read.
+bool readChord (const std::string& word, size_t& pos, Word& out)
 {
-    Word out;
-    size_t pos = 0;
-
     const int rootPitch = readNote (word, pos);
     if (rootPitch < 0)
     {
         out.problem = quote (word) + " is not a chord";
-        return out;
+        return false;
     }
 
     // The kind of chord: everything up to / + - : or *
@@ -129,7 +127,7 @@ Word readWord (const std::string& word, double barBeats)
     if (! readType (word.substr (typeStart, pos - typeStart), type))
     {
         out.problem = quote (word) + " is not a chord I know";
-        return out;
+        return false;
     }
 
     // Stored as the distance from the tonic, so the caller has to subtract the tonic: the root is kept as a pitch class here
@@ -143,7 +141,7 @@ Word readWord (const std::string& word, double barBeats)
         if (bassPitch < 0)
         {
             out.problem = quote (word) + ": a note is missing after /";
-            return out;
+            return false;
         }
         const auto& shape = shapeOf (type);
         int index = -1;
@@ -153,7 +151,7 @@ Word readWord (const std::string& word, double barBeats)
         if (index < 0)
         {
             out.problem = quote (word) + ": that note is not in the chord";
-            return out;
+            return false;
         }
         out.block.chord.inversion = index;
     }
@@ -170,10 +168,37 @@ Word readWord (const std::string& word, double barBeats)
         if (digits.empty() || digits.size() > 1 || digits[0] - '0' > kMaxOctaveShift)
         {
             out.problem = quote (word) + ": the octave is +1 or +2 up, -1 or -2 down";
-            return out;
+            return false;
         }
         out.block.chord.octave = direction * (digits[0] - '0');
     }
+
+    return true;
+}
+
+Word readWord (const std::string& word, double barBeats)
+{
+    Word out;
+    size_t pos = 0;
+
+    // A pause: R or Rest, then a length and a number like any chord
+    {
+        size_t restEnd = 0;
+        if (! word.empty() && (word[0] == 'R' || word[0] == 'r'))
+        {
+            restEnd = 1;
+            if (word.size() >= 4 && (word.compare (1, 3, "est") == 0 || word.compare (1, 3, "EST") == 0 || word.compare (1, 3, "Est") == 0))
+                restEnd = 4;
+        }
+        if (restEnd > 0 && (restEnd == word.size() || word[restEnd] == ':' || word[restEnd] == '*'))
+        {
+            out.block.rest = true;
+            pos = restEnd;
+        }
+    }
+
+    if (! out.block.rest && ! readChord (word, pos, out))
+        return out;
 
     bool haveLength = false, haveCount = false;
     double bars = 1.0;
@@ -243,9 +268,14 @@ std::string formatQuickText (const Progression& progression, const Key& key, dou
     {
         if (! text.empty())
             text += ' ';
-        text += chordName (block.chord, key);
-        if (block.chord.octave != 0)
-            text += (block.chord.octave > 0 ? "+" : "-") + std::to_string (std::abs (block.chord.octave));
+        if (block.rest)
+            text += "R";
+        else
+        {
+            text += chordName (block.chord, key);
+            if (block.chord.octave != 0)
+                text += (block.chord.octave > 0 ? "+" : "-") + std::to_string (std::abs (block.chord.octave));
+        }
         const double bars = block.beats / barBeats;
         if (std::abs (bars - 1.0) > 0.005)
             text += ":" + formatBars (bars);
@@ -279,8 +309,9 @@ QuickTextResult parseQuickText (const std::string& text, const Key& key, double 
             result.problems.push_back ({ i, end, read.problem });
         else
         {
-            read.block.chord.root = wrap12 (read.block.chord.root - key.tonic);
-            const bool outside = lockToScale && ! chordFitsScale (read.block.chord, key.scale);
+            if (! read.block.rest)
+                read.block.chord.root = wrap12 (read.block.chord.root - key.tonic);
+            const bool outside = ! read.block.rest && lockToScale && ! chordFitsScale (read.block.chord, key.scale);
             read.block.disabled = outside;
             for (int n = 0; n < read.count; ++n)
             {
@@ -300,6 +331,12 @@ Progression keepingBlockState (const Progression& old, Progression read)
     {
         auto& block = read[i];
         const auto& before = old[i];
+        if (block.rest || before.rest)
+        {
+            if (block.rest && before.rest)
+                block.locked = before.locked;
+            continue;
+        }
         if (block.chord.root != before.chord.root || block.chord.type != before.chord.type)
             continue;
 

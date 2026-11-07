@@ -26,10 +26,11 @@ struct Block
     double beats = kDefaultBlockBeats;
     bool locked = false; // a locked block stays when Suggest replaces the rest
     bool disabled = false; // Quick-text put a chord outside the scale here: it is silent while Lock to scale is on
+    bool rest = false;     // a pause: silence for the length of the block (the chord is not used)
 
     friend bool operator== (const Block& a, const Block& b)
     {
-        return a.chord == b.chord && std::abs (a.beats - b.beats) < 1.0e-9 && a.locked == b.locked && a.disabled == b.disabled;
+        return a.chord == b.chord && std::abs (a.beats - b.beats) < 1.0e-9 && a.locked == b.locked && a.disabled == b.disabled && a.rest == b.rest;
     }
     friend bool operator!= (const Block& a, const Block& b) { return ! (a == b); }
 };

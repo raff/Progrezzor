@@ -43,6 +43,7 @@ public:
         isStarted = total > 0;
         resetAttempt();
         waitForRelease = false;
+        skipPauses (progression);
     }
 
     bool started() const { return isStarted; }
@@ -97,12 +98,9 @@ public:
             ++current;
             resetAttempt();
             waitForRelease = true;
-            if (current >= total)
-            {
-                current = -1;
-                isFinished = true;
+            skipPauses (progression);
+            if (current < 0)
                 return Outcome::Finished;
-            }
             return Outcome::Right;
         }
 
@@ -125,6 +123,21 @@ public:
     }
 
 private:
+    // A pause has nothing to play: it counts as done, and the next block is the target. If nothing is left, it is finished.
+    void skipPauses (const Progression& progression)
+    {
+        while (current >= 0 && current < total && current < (int) progression.size() && progression[(size_t) current].rest)
+        {
+            played[(size_t) current] = true;
+            ++current;
+        }
+        if (isStarted && current >= total)
+        {
+            current = -1;
+            isFinished = true;
+        }
+    }
+
     void resetAttempt()
     {
         attempting = false;

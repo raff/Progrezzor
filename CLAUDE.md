@@ -38,7 +38,7 @@ Testen for hver funktion: Kan man bruge den uden at tænke? Hvis ikke, skal den 
 Alt ligger på én skærm uden faner.
 
 - Topbjælke: Toneart og skala, Lock to scale (🔒), Mood, stemme og en tydelig 🎲 Suggest-knap.
-- Midten: 7 store pads, der fylder hele bredden og næsten halvdelen af vinduet. De skal kunne hamres på med mus eller MIDI.
+- Midten: 7 store pads og yderst til højre en smallere blank pad (Rest, en pause), der sammen fylder hele bredden. Padsene fylder cirka 49 % af højden mellem topbjælken og bjælken. De skal kunne hamres på med mus eller MIDI.
 - Bund: Rundgangsbjælken, et kort for sig med en mørk bakke til blokkene: Play, blokke (ombrydes i flere rækker), Rec (til/fra), Fortryd, Gendan, ✏️ Quick-text (fast plads i højre side) og Drag.
 
 Regler:
@@ -140,6 +140,7 @@ Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Moo
 
 - Hver afspillet akkord kommer i historikken. Samme akkord to gange i træk tæller som to.
 - Rec (før kaldt Capture, omdøbt 2026-11-07 efter Henriks ønske) er en TÆNDT/SLUKKET knap med en rød prik, på prøve på branchen feature/capture-toggle. Er den tændt (lyser med accentfarven), bliver hver akkord, der spilles, sat sidst i rundgangen som én blok på 1 takt, uanset om den spilles med mus på en pad eller fra MIDI-tastaturet. Er den slukket, sker der ingenting. Den kan kun tændes, når Play er slukket, og Play, Quick-text og Learn slukker den. Fortryd tager akkorderne væk igen, en ad gangen. Trækkes en pad ned i bjælken, mens Rec er tændt, tæller akkorden kun én gang (der, hvor den slippes). Den gamle Capture-knap (de sidste 8) er væk; historiestriben ligger på feature/capture-history.
+- Pause (Henrik, 2026-11-07): en blok kan være stilhed. Den blanke pad yderst til højre (smallere end de andre, dæmpet grå med et pausetegn og "Rest") trækkes ned i bjælken som en akkord: mellem blokke indsætter den en pause på 1 takt, over midten af en blok gør den blokken til en pause (længden bevares). En akkord, der trækkes over en pause, gør den til en akkord igen. Klik på den blanke pad giver hverken lyd eller ændring, men er Rec tændt, lægger et klik en pause bagerst (trækkes den ned, tæller den kun én gang). En pauseblok er grå og viser "Rest" og længden, har ingen oktavpile, ingen romertal og kan flyttes, kopieres, låses, slettes og strækkes som andre blokke. I loopet og i MIDI-filen er der stilhed i pausens længde (filnavnet får "Rest"), den kan ikke spilles ved klik i Play, og Learn springer den over. Suggest lægger aldrig pauser ind (Henrik), men en pause uden 🔒 bliver erstattet, som alle andre blokke. Gemmes som egen markering i projektet (tilstand version 11). Quick-text: R eller Rest, med længde og antal som for en akkord (R, R:2, Rest*2). Bindestreg kan ikke bruges, fordi den skiller akkorder.
 - Standardlængde er 1 takt. Mindste længde er ½ takt, største er 8 takter. Længder ændres ved at trække i blokkens højre kant med trin på ½ takt.
 - Rundgangen kan have alle samlede længder, også ulige antal takter.
 - Træk en blok for at flytte den. Hold Ctrl (Option på Mac) nede for at duplikere.

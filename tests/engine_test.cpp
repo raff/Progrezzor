@@ -1242,8 +1242,82 @@ void testArp()
     checkEqual (exportFileName (twoBlocks, aMinor, false), std::string ("Am-F.mid"), "and does not when it is off");
 }
 
+
+// Pauses: a block of silence
+void testRests()
+{
+    std::printf ("rests\n");
+    const Key aMinor { 9, ScaleId::Minor };
+    const Chord am { 0, ChordType::Minor, kAutoInversion };
+    const Chord f { 8, ChordType::Major, kAutoInversion };
+
+    Progression p;
+    p = withInserted (p, 0, am, 4.0);
+    p = withInsertedRest (p, 1, 4.0);
+    p = withInserted (p, 2, f, 4.0);
+    check (p.size() == 3 && ! p[0].rest && p[1].rest && ! p[2].rest && p[1].beats == 4.0, "a pause goes in like a chord, with a length");
+    check (withInsertedRest (Progression (kMaxBlocks), 0).size() == (size_t) kMaxBlocks, "a full bar takes no more pauses");
+
+    const auto replaced = withRestAt (p, 0);
+    check (replaced[0].rest && replaced[0].beats == p[0].beats, "a block that is replaced by a pause keeps its length");
+    check (! withReplaced (replaced, 0, f)[0].rest && withReplaced (replaced, 0, f)[0].chord == f, "a chord on a pause makes it a chord again");
+    check (p[1] != p[0] && withRestAt (p, 99) == p, "a pause is not equal to a chord, and a block that is not there changes nothing");
+
+    // The loop: the audio thread is told which block is a pause
+    const auto snapshot = makeSnapshot (p);
+    check (! snapshot.blocks[0].rest && snapshot.blocks[1].rest && ! snapshot.blocks[2].rest, "the loop snapshot knows the pause");
+
+    // The MIDI file: a gap of the pause's length, and "Rest" in the name
+    const auto notes = exportNotes (p, aMinor.tonic);
+    check (notes.size() == 6, "the pause has no notes");
+    check (notes[0].start == 0.0 && notes[3].start == 8.0, "the next chord starts after the pause");
+    const auto name = exportFileName (p, aMinor);
+    check (name.find ("-Rest-") != std::string::npos, "the file name says Rest");
+
+    // Quick-text: R or Rest, a length and a number like a chord
+    const auto read = [&] (const std::string& text) { return parseQuickText (text, aMinor, 4.0, true); };
+    auto r = read ("Am R F");
+    check (r.problems.empty() && r.blocks.size() == 3 && r.blocks[1].rest && ! r.blocks[0].rest, "R is a pause in the text");
+    r = read ("Rest:2 R*2 R:0.5");
+    check (r.problems.empty() && r.blocks.size() == 4 && r.blocks[0].beats == 8.0 && r.blocks[1].rest && r.blocks[2].rest && r.blocks[3].beats == 2.0,
+           "Rest:2, R*2 and R:0.5 give the lengths and the numbers");
+    check (r.outsideScale == 0, "a pause is never outside the scale");
+    check (formatQuickText (p, aMinor) == "Am R F", "a pause is written as R");
+    Progression longRest = p;
+    longRest[1].beats = 8.0;
+    check (formatQuickText (longRest, aMinor) == "Am R:2 F", "with its length, as for a chord");
+    const auto back = read (formatQuickText (longRest, aMinor)).blocks;
+    check (back.size() == 3 && back[1].rest && back[1].beats == 8.0, "and the text reads back to the same bar");
+    check (! read ("Rx").problems.empty() && ! read ("Rest:9").problems.empty(), "a misspelled pause is marked, and so is a length that is too long");
+
+    auto old = p;
+    old[1].locked = true;
+    check (keepingBlockState (old, read ("Am R F").blocks)[1].locked, "a pause that is unchanged keeps its lock");
+    check (! keepingBlockState (old, read ("Am Am F").blocks)[1].locked && ! keepingBlockState (old, read ("Am Am F").blocks)[1].rest, "a pause changed to a chord is just a chord");
+
+    // Learn: a pause has nothing to play and is skipped
+    LearnSession session;
+    session.start (p);
+    check (session.target() == 0, "Learn starts on the first chord");
+    const auto classes = [&] (const Chord& chord) { return chordPitchClasses (chord, aMinor.tonic); };
+    session.update (classes (am), 3, 1000.0, p, aMinor.tonic);
+    check (session.target() == 2 && session.isPlayed (1), "after the first chord the pause is passed and the next chord is the target");
+    session.update (0, 0, 1100.0, p, aMinor.tonic);
+    check (session.update (classes (f), 3, 1200.0, p, aMinor.tonic) == LearnSession::Outcome::Finished && session.finished(), "and it finishes after the last chord");
+    Progression onlyRests = withInsertedRest (withInsertedRest ({}, 0), 1);
+    session.start (onlyRests);
+    check (session.finished() && session.target() == -1, "a bar of only pauses is finished at once");
+    Progression endsWithRest = p;
+    endsWithRest.pop_back();
+    endsWithRest = withInsertedRest (endsWithRest, 2);
+    session.start (endsWithRest);
+    session.update (classes (am), 3, 2000.0, endsWithRest, aMinor.tonic);
+    check (session.finished(), "a bar that ends with a pause finishes after the last chord");
+}
+
 int main()
 {
+    testRests();
     testLearn();
     testTotalOctave();
     testRomanNumerals();

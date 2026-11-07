@@ -20,6 +20,7 @@ struct LoopBlock
     Chord chord;
     double beats = kDefaultBlockBeats;
     bool disabled = false; // see isBlockDisabled(): the audio thread checks it against the key and the lock
+    bool rest = false;     // a pause: nothing sounds
 };
 
 // A copy of the progression that the audio thread can read, fixed in size so that no allocation is needed
@@ -37,7 +38,7 @@ inline LoopSnapshot makeSnapshot (const Progression& progression)
     {
         if (snapshot.count == kMaxBlocks)
             break;
-        snapshot.blocks[(size_t) snapshot.count++] = { block.chord, block.beats, block.disabled };
+        snapshot.blocks[(size_t) snapshot.count++] = { block.chord, block.beats, block.disabled, block.rest };
         snapshot.total += block.beats;
     }
     return snapshot;

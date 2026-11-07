@@ -35,6 +35,19 @@ inline Progression withReplaced (Progression p, int index, const Chord& chord)
     {
         p[(size_t) index].chord = chord;
         p[(size_t) index].disabled = false; // a chord the user picks on a pad plays
+        p[(size_t) index].rest = false;     // and it is no longer a pause
+    }
+    return p;
+}
+
+// The block becomes a pause (it keeps its length and its lock)
+inline Progression withRestAt (Progression p, int index)
+{
+    if (index >= 0 && index < (int) p.size())
+    {
+        p[(size_t) index].chord = Chord {};
+        p[(size_t) index].disabled = false;
+        p[(size_t) index].rest = true;
     }
     return p;
 }
@@ -71,6 +84,16 @@ inline Progression withInserted (Progression p, int gap, const Chord& chord, dou
     block.chord = chord;
     block.beats = std::clamp (beats, kMinBlockBeats, kMaxBlockBeats);
     p.insert (p.begin() + std::clamp (gap, 0, (int) p.size()), block);
+    return p;
+}
+
+// A pause at the gap (a block of silence)
+inline Progression withInsertedRest (Progression p, int gap, double beats = kDefaultBlockBeats)
+{
+    const auto before = (int) p.size();
+    p = withInserted (std::move (p), gap, Chord {}, beats);
+    if ((int) p.size() > before)
+        p[(size_t) std::clamp (gap, 0, before)].rest = true;
     return p;
 }
 

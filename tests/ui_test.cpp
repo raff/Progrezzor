@@ -512,6 +512,101 @@ int main (int argc, char** argv)
             settle (50);
         }
 
+        // The blank pad: a pause
+        {
+            const auto barBefore = processor.getProgression();
+            const auto screenAt = [&] (int block, bool rightEdge)
+            {
+                const auto b = bar.getBlock (block)->getBounds();
+                return bar.localPointToGlobal (juce::Point<int> (rightEdge ? b.getRight() + 2 : b.getCentreX(), b.getCentreY()));
+            };
+            auto& restPad = ui.getRestPad();
+            check (restPad.getWidth() > 0 && restPad.getWidth() < ui.getPad (0).getWidth(), "the blank pad is narrower than a chord pad");
+
+            // A click on it does nothing (and has no sound)
+            restPad.onPress();
+            runBlock (processor);
+            check (processor.getProgression() == barBefore && processor.soundingNotes() == 0, "a click on the blank pad adds nothing and makes no sound");
+
+            // Pulled between blocks it adds a pause of one bar
+            restPad.onDragStart();
+            restPad.onDragEnd (screenAt (0, true));
+            settle (50);
+            check (processor.getProgression().size() == barBefore.size() + 1 && processor.getProgression()[1].rest
+                       && near (processor.getProgression()[1].beats, processor.getHostBarBeats()),
+                   "dragged between blocks it adds a pause of one bar");
+            check (! processor.getProgression()[0].rest && processor.getProgression()[2] == barBefore[1], "the other blocks stay as they were");
+            snapshot ("rest_in_bar");
+
+            // Pulled onto the middle of a block it turns that block into a pause (the length is kept)
+            const auto lengthOfThird = processor.getProgression()[2].beats;
+            restPad.onDragStart();
+            restPad.onDragEnd (screenAt (2, false));
+            settle (50);
+            check (processor.getProgression()[2].rest && near (processor.getProgression()[2].beats, lengthOfThird) && processor.getProgression().size() == barBefore.size() + 1,
+                   "dragged onto a block it replaces that block with a pause");
+
+            // A chord on a pause makes it a chord again
+            ui.getPad (3).onDragStart();
+            ui.getPad (3).onDragEnd (screenAt (2, false));
+            settle (50);
+            check (! processor.getProgression()[2].rest && processor.getProgression()[2].chord == processor.getPadChord (3), "a chord dragged onto a pause makes it a chord");
+
+            // The pause does not sound in Play, and it is quiet in the loop
+            processor.undo();
+            processor.undo();
+            processor.undo();
+            settle (50);
+            check (processor.getProgression() == barBefore, "undo brings the bar back after the pauses");
+            processor.editProgression (engine::withRestAt (processor.getProgression(), 0));
+            settle (50);
+            bar.getBlock (0)->onPress();
+            runBlock (processor);
+            check (processor.soundingNotes() == 0, "pressing a pause plays nothing");
+            {
+                bar.setEditing (false); // Play: the loop sounds
+                FakeTransport t3;
+                processor.setPlayHead (&t3);
+                t3.playing = true;
+                t3.quarters = 1.0; // inside the first block, the pause
+                runBlock (processor);
+                check (processor.getPlayingBlock() == 0 && processor.soundingNotes() == 0, "the loop is quiet during a pause");
+                t3.quarters = 5.0;
+                runBlock (processor);
+                check (processor.soundingNotes() > 0, "and plays again after it");
+                t3.playing = false;
+                runBlock (processor);
+                processor.setPlayHead (nullptr);
+                bar.setEditing (true);
+            }
+
+            // It is saved with the project
+            juce::MemoryBlock saved;
+            processor.getStateInformation (saved);
+            ProgrezzorProcessor other;
+            other.setStateInformation (saved.getData(), (int) saved.getSize());
+            check (other.getProgression() == processor.getProgression() && other.getProgression()[0].rest, "a pause is saved and comes back with the project");
+
+            // With Rec on, a click on the blank pad adds a pause at the end, and a drag into the bar adds it once
+            processor.setProgression (barBefore);
+            settle (50);
+            bar.getCaptureButton().triggerClick();
+            settle (50);
+            check (bar.isCapturing(), "Rec is on");
+            restPad.onPress();
+            settle (50);
+            check (processor.getProgression().size() == barBefore.size() + 1 && processor.getProgression().back().rest, "with Rec on a click adds a pause at the end");
+            restPad.onPress();
+            restPad.onDragStart();
+            restPad.onDragEnd (screenAt (0, true));
+            settle (50);
+            check (processor.getProgression().size() == barBefore.size() + 2 && processor.getProgression()[1].rest, "a pause dragged in with Rec on is added once, where it lands");
+            bar.getCaptureButton().triggerClick();
+            settle (50);
+            processor.setProgression (barBefore);
+            settle (50);
+        }
+
         // A new project starts in C Major with the plainest mood
         {
             ProgrezzorProcessor fresh;

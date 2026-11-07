@@ -179,7 +179,7 @@ public:
         if (wanted) // a block that Quick-text disabled (a chord outside the scale, with the lock on) keeps its time but is silent
         {
             const auto& block = snapshot.blocks[(size_t) owner.loopIndex];
-            wanted = ! (block.disabled && owner.lockParam->get() && ! engine::chordFitsScale (block.chord, (engine::ScaleId) owner.scaleParam->getIndex()));
+            wanted = ! block.rest && ! (block.disabled && owner.lockParam->get() && ! engine::chordFitsScale (block.chord, (engine::ScaleId) owner.scaleParam->getIndex()));
         }
         const int loopSource = engine::NoteTracker::loopSource();
 
@@ -843,7 +843,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     if (arp.on)
         madeFrom << "/arp" << arp.style << "," << arp.rate << "," << arp.octaves << "," << arp.steps << "," << arp.hits << "," << arp.rotation;
     for (const auto& block : progression)
-        madeFrom << (engine::isBlockDisabled (block, key.scale, lockParam->get()) ? "|-" : "|") << block.chord.root << "," << (int) block.chord.type << "," << block.chord.inversion << "," << block.chord.octave << "," << juce::String (block.beats, 4);
+        madeFrom << (block.rest ? "|r" : (engine::isBlockDisabled (block, key.scale, lockParam->get()) ? "|-" : "|")) << block.chord.root << "," << (int) block.chord.type << "," << block.chord.inversion << "," << block.chord.octave << "," << juce::String (block.beats, 4);
 
     if (progression.empty())
         return {};
@@ -887,11 +887,11 @@ juce::File ProgrezzorProcessor::saveMidi()
     return file;
 }
 
-// The key, scale, progression and pad variants as XML (version 2 added the progression, version 3 the pad variants, version 4 Lock to scale, version 5 disabled blocks, version 6 octaves).
+// The key, scale, progression and pad variants as XML (version 2 added the progression, version 3 the pad variants, version 4 Lock to scale, version 5 disabled blocks, version 6 octaves, version 11 pauses).
 void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
 {
     juce::XmlElement xml ("Progrezzor");
-    xml.setAttribute ("version", 10);
+    xml.setAttribute ("version", 11);
     xml.setAttribute ("key", keyParam->getIndex());
     xml.setAttribute ("scale", scaleParam->getIndex());
     xml.setAttribute ("loop", loopParam->get() ? 1 : 0);
@@ -920,6 +920,7 @@ void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
         element->setAttribute ("beats", block.beats);
         element->setAttribute ("locked", block.locked ? 1 : 0);
         element->setAttribute ("disabled", block.disabled ? 1 : 0);
+        element->setAttribute ("rest", block.rest ? 1 : 0);
     }
     copyXmlToBinary (xml, destination);
 }
@@ -971,6 +972,7 @@ void ProgrezzorProcessor::setStateInformation (const void* data, int size)
         block.beats = juce::jlimit (engine::kMinBlockBeats, engine::kMaxBlockBeats, element->getDoubleAttribute ("beats", engine::kDefaultBlockBeats));
         block.locked = element->getIntAttribute ("locked", 0) != 0;
         block.disabled = element->getIntAttribute ("disabled", 0) != 0;
+        block.rest = element->getIntAttribute ("rest", 0) != 0; // projects from before pauses have none
         loaded.push_back (block);
     }
     undoStack.clear(); // a loaded project starts with a clean history
