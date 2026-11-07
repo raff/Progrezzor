@@ -250,10 +250,16 @@ public:
     void toggleArp();
     bool arpPanelShown = false;
     void drawPitchStrip (juce::Graphics&, juce::Rectangle<float>) const;
-    void askToReplace();  // Suggest was pressed and would overwrite chords: ask in the message line
+    // Suggest or Capture would throw away chords the user has made: ask first, in a small card in the middle of the bar
+    enum class Pending { Suggest, Capture };
+    void askToReplace (Pending what);
+    class AskCard;
+    Pending pending = Pending::Suggest;
+    std::unique_ptr<AskCard> askCard;
     void cancelAsk();
     juce::Rectangle<int> getTrayBounds() const { return trayBounds; }
     ArpToggle& getArpButton() { return arpButton; }
+    BarButton& getCaptureButton() { return captureButton; }
     BarButton& getSettingsButton() { return settingsButton; }
     void chooseHomeOctave (int octaves); // Settings: where the chords usually sit, kept for every project
     BarButton& getOctaveUpButton() { return octaveUpButton; }

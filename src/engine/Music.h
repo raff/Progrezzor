@@ -35,8 +35,8 @@ constexpr int kScaleSize = 7;
 // A key is a tonic (0 = C ... 11 = B) and a scale.
 struct Key
 {
-    int tonic = 9; // A
-    ScaleId scale = ScaleId::Minor; // A Minor is the default
+    int tonic = 0; // C
+    ScaleId scale = ScaleId::Major; // C Major is the default
 };
 
 constexpr int wrap12 (int semitones) { return ((semitones % 12) + 12) % 12; }

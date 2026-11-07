@@ -1189,6 +1189,30 @@ private:
     int dragStartRotation = 0;
 };
 
+// The question card: a small panel in the middle of the bar with the question, and the Replace button on top of it
+class ProgressionBar::AskCard : public juce::Component
+{
+public:
+    juce::String text;
+
+    AskCard() { setInterceptsMouseClicks (false, false); }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto r = getLocalBounds().toFloat().reduced (3.0f);
+        g.setColour (theme::shade.withAlpha (0.35f));
+        g.fillRoundedRectangle (r.translated (0.0f, 3.0f), 12.0f);
+        g.setColour (theme::panel);
+        g.fillRoundedRectangle (r, 12.0f);
+        g.setColour (theme::accent.withAlpha (0.85f));
+        g.drawRoundedRectangle (r, 12.0f, 2.0f);
+        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+            g.setFont (l->titleFont (16.0f));
+        g.setColour (theme::text);
+        g.drawText (text, getLocalBounds().withTrimmedRight (120).withTrimmedLeft (22), juce::Justification::centredLeft);
+    }
+};
+
 void ProgressionBar::toggleArp()
 {
     auto& parameter = *processor.arpOnParam;
@@ -1241,14 +1265,23 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     addAndMakeVisible (octaveDownButton);
     addAndMakeVisible (octaveUpButton);
 
-    replaceButton.setTooltip ("Replace the chords with a new suggestion (Undo brings them back)");
+    askCard = std::make_unique<AskCard>();
+    addChildComponent (*askCard);
+    replaceButton.setTooltip ("Replace the chords in the bar (Undo brings them back)");
     replaceButton.setVisible (false);
     replaceButton.setAccented (true);
     replaceButton.setComponentID ("replace");
     replaceButton.onClick = [this]
     {
         askingReplace = false;
-        processor.suggestProgression();
+        if (pending == Pending::Capture)
+        {
+            if (processor.capture (8))
+                clearSelection();
+        }
+        else
+            processor.suggestProgression();
+        updateNotice();
     };
     addChildComponent (replaceButton);
 
@@ -1451,6 +1484,8 @@ void ProgressionBar::updateNotice()
         noticeHasAllow = false;
         allowButton.setVisible (false);
         replaceButton.setVisible (true);
+        askCard->text = "Replace the chords in the bar?";
+        askCard->setVisible (true);
         if (noticeText != asked || noticeBounds.isEmpty())
         {
             resized();
@@ -1459,6 +1494,7 @@ void ProgressionBar::updateNotice()
         return;
     }
     replaceButton.setVisible (false);
+    askCard->setVisible (false);
 
     silentCount = 0;
     juce::String firstName;
@@ -1534,6 +1570,11 @@ void ProgressionBar::captureLastChords()
 {
     // One click: the last 8 chords you played go in the bar (Undo brings the old bar back)
     cancelQuickText();
+    if (processor.captureWouldOverwrite())
+    {
+        askToReplace (Pending::Capture); // it would replace chords you made: ask first
+        return;
+    }
     if (processor.capture (8))
         clearSelection();
 }
@@ -1578,8 +1619,9 @@ void ProgressionBar::shiftGeneralOctave (int steps)
     updateButtons();
 }
 
-void ProgressionBar::askToReplace()
+void ProgressionBar::askToReplace (Pending what)
 {
+    pending = what;
     askingReplace = true;
     askedAtVersion = processor.getProgressionVersion();
     updateNotice();
@@ -1922,7 +1964,7 @@ void ProgressionBar::paint (juce::Graphics& g)
                     trayBounds, juce::Justification::centred);
     }
 
-    if (noticeText.isNotEmpty() && ! noticeBounds.isEmpty())
+    if (noticeText.isNotEmpty() && ! noticeBounds.isEmpty() && ! askingReplace)
     {
         g.setColour (noticeIsWarning ? theme::warn : theme::dimText);
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
@@ -2080,7 +2122,16 @@ void ProgressionBar::resized()
 
     // A short message under the blocks or the text, when there is one (with the Allow button at its end)
     noticeBounds = {};
-    if (noticeText.isNotEmpty())
+    if (askingReplace)
+    {
+        // The question sits in the middle of the tray, over the blocks
+        const juce::Rectangle<int> card = juce::Rectangle<int> (0, 0, 470, 76).withCentre (trayBounds.getCentre());
+        askCard->setBounds (card);
+        replaceButton.setBounds (juce::Rectangle<int> (card.getRight() - 24 - 100, card.getCentreY() - 19, 100, 38));
+        askCard->toFront (false);
+        replaceButton.toFront (false);
+    }
+    else if (noticeText.isNotEmpty())
     {
         auto row = area.removeFromBottom (22);
         area.removeFromBottom (2);
@@ -2224,7 +2275,7 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     {
         bar.cancelQuickText(); // a new progression replaces the text too
         if (processor.suggestWouldOverwrite())
-            bar.askToReplace();
+            bar.askToReplace (ProgressionBar::Pending::Suggest);
         else
             processor.suggestProgression();
     };

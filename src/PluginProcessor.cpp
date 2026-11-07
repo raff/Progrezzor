@@ -35,9 +35,9 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     for (const auto& scale : engine::scales)
         scales.add (scale.name);
 
-    // Defaults: A Minor
-    addParameter (keyParam = new juce::AudioParameterChoice ({ "key", 1 }, "Key", keys, 9));
-    addParameter (scaleParam = new juce::AudioParameterChoice ({ "scale", 1 }, "Scale", scales, (int) engine::ScaleId::Minor));
+    // Defaults: C Major, and the Bright mood (the plainest)
+    addParameter (keyParam = new juce::AudioParameterChoice ({ "key", 1 }, "Key", keys, 0));
+    addParameter (scaleParam = new juce::AudioParameterChoice ({ "scale", 1 }, "Scale", scales, (int) engine::ScaleId::Major));
     addParameter (loopParam = new juce::AudioParameterBool ({ "loop", 1 }, "Play", true)); // added last: earlier projects keep theirs
     addParameter (lockParam = new juce::AudioParameterBool ({ "lock", 1 }, "Lock to scale", true));
 
@@ -46,7 +46,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
         moods.add (name);
     for (const char* name : { "Pad", "Strings", "Keys", "Organ", "Stab", "Pluck", "Off" }) // Off: no preview sound (the MIDI is the same)
         voices.add (name);
-    addParameter (moodParam = new juce::AudioParameterChoice ({ "mood", 1 }, "Mood", moods, (int) engine::Mood::Melancholic));
+    addParameter (moodParam = new juce::AudioParameterChoice ({ "mood", 1 }, "Mood", moods, (int) engine::Mood::Bright));
     addParameter (voiceParam = new juce::AudioParameterChoice ({ "voice", 1 }, "Voice", voices, 0));
     addParameter (arpOnParam = new juce::AudioParameterBool ({ "arpOn", 1 }, "Arp", false));
     addParameter (arpStyleParam = new juce::AudioParameterChoice ({ "arpStyle", 1 }, "Arp Pattern", juce::StringArray { "Up", "Down", "Up/Down", "Random" }, 0));
@@ -664,12 +664,17 @@ void ProgrezzorProcessor::suggestProgression()
     suggestion.blocks = engine::withPadVariants (std::move (suggestion.blocks), (engine::ScaleId) scaleParam->getIndex(), pads);
 
     editProgression (engine::keepingLocked (progression, std::move (suggestion.blocks)));
-    suggestedVersion = progressionVersion.load();
+    generatedVersion = progressionVersion.load();
+}
+
+bool ProgrezzorProcessor::captureWouldOverwrite() const
+{
+    return ! progression.empty() && progressionVersion.load() != generatedVersion;
 }
 
 bool ProgrezzorProcessor::suggestWouldOverwrite() const
 {
-    if (progressionVersion.load() == suggestedVersion)
+    if (progressionVersion.load() == generatedVersion)
         return false;
     for (const auto& block : progression)
         if (! block.locked)
@@ -719,6 +724,7 @@ bool ProgrezzorProcessor::capture (int count)
         return false;
 
     editProgression (captured);
+    generatedVersion = progressionVersion.load();
     return true;
 }
 

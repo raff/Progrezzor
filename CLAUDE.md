@@ -44,7 +44,7 @@ Alt ligger på én skærm uden faner.
 Regler:
 
 - Første klik på en pad giver lyd, uden routing eller opsætning.
-- Gode standarder, så man kan spille med det samme. Standard er A Minor.
+- Gode standarder, så man kan spille med det samme. Standard er C Major og stemningen Bright (den mest almindelige og enkle). Ændret 2026-11-07 efter Henriks ønske.
 - Pads og blokke viser akkordnavnet og, småt, akkordens plads i tonearten som romertal (I, ii, III, IV, v, VI, VII, ii° for formindsket). Henrik ønskede det 2026-11-07. Store bogstaver er dur, små er mol. Ingen andre teoriord.
 - Pads lyser op, når de spilles, både fra mus og MIDI.
 - Avancerede ting er skjulte. ⚙️ på pads og 🔒 på blokke vises først ved mouseover.
@@ -147,7 +147,7 @@ Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Moo
 - Højreklik eller Delete sletter.
 - Play-knappen bestemmer alt: Play slukket = rundgangen kan redigeres (der er ingen Edit-knap). Play tændt = blokkene spiller kun deres akkord, når de trykkes, og intet kan ændres.
 - Kører DAW'en, følger loopet DAW'ens position (PPQ). Det skal klare DAW-loops, hop i tid og tempoændringer. Står DAW'en stille, starter Play plug-in'ens eget ur fra første akkord (DAW'ens tempo, ellers 120 BPM). Starter DAW'en, overtager den.
-- Suggest spørger i bjælkens beskedlinje (Replace-knap, ingen dialogboks), før den overskriver akkorder, brugeren selv har lavet. Den spørger ikke, når bjælken er tom, kun har låste blokke, eller stadig er det, Suggest selv lagde der.
+- Suggest og Capture spørger i et lille kort midt i rundgangsvinduet ("Replace the chords in the bar?" med en Replace-knap, ingen dialogboks), før de overskriver akkorder, brugeren selv har lavet. Capture spørger, hvis der er noget i bjælken, og Suggest, hvis der er blokke uden 🔒. Den spørger ikke, når bjælken er tom, kun har låste blokke, eller stadig er det, Suggest selv lagde der.
 - Akkordskift skal lande præcis på taktstregen, også midt i en audio-buffer.
 - Holdes en pad, mens loopet kører, har pad'en forrang, og loopet tier imens.
 

@@ -10,6 +10,10 @@ tag the commit (`vX.Y.Z`).
 
 ## [Unreleased]
 
+### Changed
+- A new project starts in C Major with the Bright mood (it was A Minor and Melancholic).
+- The question "Replace the chords in the bar?" now sits in a small card in the middle of the bar, and Capture asks it too before it replaces chords you made.
+
 ## [0.1.0] – 2026-11-07
 
 The first release. Linux, as CLAP and VST3. Other systems are not part of it yet.
