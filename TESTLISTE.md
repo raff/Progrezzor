@@ -34,6 +34,18 @@ retter de gamle linjer om mulighed A og B. Branchen merges ikke før du siger de
 - [ ] Pilene op/ned på blokkene (Edit, musen over): små, i hjørnerne. Man rammer dem ikke ved et uheld, når man vil
       trykke på selve akkorden.
 
+## 2b. Arp (2026-11-07)
+
+- [ ] Arp-knappen (nederst til venstre i bjælken, under Play): tænder og slukker. Slået fra er alt som før.
+- [ ] Arp tændt: pads spilles én tone ad gangen, op gennem akkorden. Slip pad'en: arpen stopper straks.
+- [ ] MIDI-tastaturet spiller arp. Klik på en blok spiller arp.
+- [ ] Rundgangen (Play): hver akkord spiller sin arp og starter forfra ved hver ny blok.
+- [ ] Drag/Save MIDI med Arp tændt: filen har arpens toner (filnavn med "-Arp"), og den lyder som du hørte den.
+- [ ] Slå Arp fra midt i afspilning: ingen hængende noter. Stop DAW'en: ingen hængende noter.
+- [ ] Panelet (de tre prikker ved Arp-knappen): Pattern, Speed, rytme-ringen (træk i ringen), forvalgene, Notes/Steps, 1 eller 2 oktaver. Er det til at forstå uden tekst?
+- [ ] Tempoændringer i DAW'en mens arpen spiller.
+- [ ] Preview-lyden ved korte arp-noter: er lyden brugbar, eller skal Pad-lyden have hurtigere anslag?
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

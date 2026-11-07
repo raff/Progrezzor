@@ -70,11 +70,19 @@ public:
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 };
 
+// The Arp button: lit while the arp is on (everything is then played one note at a time). A click switches it.
+class ArpToggle : public juce::Button
+{
+public:
+    ArpToggle() : juce::Button ("Arp") { setClickingTogglesState (false); }
+    void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
+};
+
 // A small button of the bar: a plus, an arrow for undo or redo, or a word
 class BarButton : public juce::Button
 {
 public:
-    enum class Icon { None, Plus, Minus, Undo, Redo, Pencil, Gear };
+    enum class Icon { None, Plus, Minus, Undo, Redo, Pencil, Gear, Dots };
     BarButton (const juce::String& name, Icon i) : juce::Button (name), icon (i) {}
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
     void setAccented (bool nowAccented) { accented = nowAccented; } // filled with the accent colour: the one thing to press
@@ -235,11 +243,16 @@ public:
     BlockButton* getBlock (int i) { return blocks[i]; }
     void shiftGeneralOctave (int steps);
     void showSettingsMenu();
+    void showArpPanel();
+    std::unique_ptr<juce::Component> makeArpPanel(); // the panel behind the Arp button (also for the tests)
+    void toggleArp();
+    bool arpPanelShown = false;
     void drawPitchStrip (juce::Graphics&, juce::Rectangle<float>) const;
     void askToReplace();  // Suggest was pressed and would overwrite chords: ask in the message line
     void cancelAsk();
     juce::Rectangle<int> getTrayBounds() const { return trayBounds; }
     BarButton& getSettingsButton() { return settingsButton; }
+    ArpToggle& getArpButton() { return arpButton; }
     const juce::String& getRegisterLabel() const { return registerLabel; }
     void chooseRegister (int index); // Settings: Low (0), Mid (1) or High (2)
     BarButton& getOctaveUpButton() { return octaveUpButton; }
@@ -270,6 +283,8 @@ private:
     BarButton captureButton { "Capture", BarButton::Icon::None };
     BarButton quickTextButton { "Text", BarButton::Icon::Pencil };
     BarButton allowButton { "Allow", BarButton::Icon::None };
+    ArpToggle arpButton;
+    BarButton arpOptionsButton { "Arp options", BarButton::Icon::Dots };
     BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };

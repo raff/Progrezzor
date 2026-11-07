@@ -273,6 +273,30 @@ void PlayToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButton
     }
 }
 
+// ---- ArpToggle -----------------------------------------------------------------------------------------------------
+
+void ArpToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonDown)
+{
+    const bool on = getToggleState();
+    if (on)
+        theme::drawGlow (g, getLocalBounds().toFloat().reduced (4.0f, 5.0f), theme::chordColour (7), 6.0f, 10.0f, 0.3f);
+    const auto face = theme::drawKey (g, getLocalBounds().toFloat(), on ? theme::chordColour (7) : theme::pad, 10.0f, 4.0f, isButtonDown, isMouseOver);
+
+    // Notes climbing up, one after the other: what the arp does
+    const auto ink = on ? theme::onAccent : theme::dimText.brighter (0.2f);
+    g.setColour (ink);
+    const float x0 = face.getX() + face.getWidth() * 0.18f, x1 = face.getRight() - face.getWidth() * 0.18f;
+    const float yTop = face.getY() + face.getHeight() * 0.20f, yLow = face.getY() + face.getHeight() * 0.46f;
+    for (int i = 0; i < 4; ++i)
+    {
+        const float t = (float) i / 3.0f;
+        g.fillEllipse (juce::Rectangle<float> (4.5f, 4.5f).withCentre ({ x0 + (x1 - x0) * t, yLow - (yLow - yTop) * t }));
+    }
+    if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+        g.setFont (l->titleFont (13.0f));
+    g.drawText ("Arp", face.withTrimmedTop (face.getHeight() * 0.5f).toNearestInt(), juce::Justification::centred);
+}
+
 // ---- BarButton -----------------------------------------------------------------------------------------------------
 
 void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonDown)
@@ -293,6 +317,11 @@ void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
         case Icon::Plus:
             g.drawLine (centre.x - size, centre.y, centre.x + size, centre.y, 2.4f);
             g.drawLine (centre.x, centre.y - size, centre.x, centre.y + size, 2.4f);
+            break;
+
+        case Icon::Dots:
+            for (int i = -1; i <= 1; ++i)
+                g.fillEllipse (juce::Rectangle<float> (3.6f, 3.6f).withCentre ({ centre.x, centre.y + (float) i * 6.0f }));
             break;
 
         case Icon::Gear:
@@ -805,8 +834,343 @@ private:
     juce::TextEditor& editor;
 };
 
+// ---- ArpPanel ------------------------------------------------------------------------------------------------------
+
+// The panel behind the Arp button: pick how the notes go (up, down, up and down, at random), how fast, and in what rhythm,
+// shown as a ring of dots where the lit dots are the notes that play. Everything is a picture or a button, no numbers needed.
+class ArpPanel : public juce::Component, private juce::Timer
+{
+public:
+    explicit ArpPanel (ProgrezzorProcessor& p) : processor (p)
+    {
+        setSize (372, 352);
+        startTimerHz (15);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel());
+        const auto arp = processor.getArpSettings();
+
+        // Title and the switch
+        if (l != nullptr)
+            g.setFont (l->titleFont (21.0f));
+        g.setColour (theme::text);
+        g.drawText ("Arp", 16, 12, 80, 28, juce::Justification::centredLeft);
+        drawPill (g, onRect(), arp.on ? "On" : "Off", arp.on, true);
+
+        const auto label = [&] (const juce::String& text, int y)
+        {
+            if (l != nullptr)
+                g.setFont (l->labelFont (12.0f));
+            g.setColour (theme::dimText);
+            g.drawText (text, 16, y, 200, 16, juce::Justification::centredLeft);
+        };
+
+        // The pattern: four little pictures of how the notes move
+        label ("PATTERN", 48);
+        static const char* styleNames[engine::kNumArpStyles] = { "Up", "Down", "Up/Down", "Random" };
+        for (int i = 0; i < engine::kNumArpStyles; ++i)
+        {
+            const auto r = styleRect (i).toFloat();
+            const bool selected = arp.style == i;
+            drawTile (g, r, selected);
+            drawStyleIcon (g, r.withTrimmedBottom (18.0f).reduced (10.0f, 8.0f), i, selected);
+            drawTileLabel (g, r, styleNames[i], selected);
+        }
+
+        // The speed: more ticks, faster
+        label ("SPEED", 130);
+        static const char* rateNames[engine::kNumArpRates] = { "Slow", "Normal", "Fast", "Very fast" };
+        for (int i = 0; i < engine::kNumArpRates; ++i)
+        {
+            const auto r = rateRect (i).toFloat();
+            const bool selected = arp.rate == i;
+            drawTile (g, r, selected);
+            const auto icon = r.withTrimmedBottom (18.0f).reduced (14.0f, 12.0f);
+            const int ticks = 1 << i;
+            g.setColour (selected ? theme::onAccent : theme::text.withAlpha (0.85f));
+            for (int t = 0; t < ticks; ++t)
+                g.fillRoundedRectangle (icon.getX() + icon.getWidth() * ((float) t + 0.5f) / (float) ticks - 1.5f, icon.getY(), 3.0f, icon.getHeight(), 1.5f);
+            drawTileLabel (g, r, rateNames[i], selected);
+        }
+
+        // The rhythm: a ring with one dot for each step. The lit dots play. Drag the ring to turn it.
+        label ("RHYTHM", 206);
+        drawRing (g, ringRect(), arp);
+
+        static const char* presetNames[4] = { "Even", "Offbeat", "Gallop", "Spread" };
+        for (int i = 0; i < 4; ++i)
+            drawPill (g, presetRect (i), presetNames[i], presetMatches (i, arp), false);
+
+        // How many of the steps play, and how long the rhythm is
+        drawStepper (g, hitsRect(), "Notes", arp.hits > arp.steps ? arp.steps : arp.hits);
+        drawStepper (g, stepsRect(), "Steps", arp.steps);
+
+        // One octave or two
+        drawPill (g, octaveRect (0), "1 octave", arp.octaves == 1, false);
+        drawPill (g, octaveRect (1), "2 octaves", arp.octaves == 2, false);
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        const auto p = e.getPosition();
+        const auto arp = processor.getArpSettings();
+
+        if (onRect().contains (p))
+            setBool (processor.arpOnParam, ! arp.on);
+        for (int i = 0; i < engine::kNumArpStyles; ++i)
+            if (styleRect (i).contains (p))
+                setChoice (processor.arpStyleParam, i);
+        for (int i = 0; i < engine::kNumArpRates; ++i)
+            if (rateRect (i).contains (p))
+                setChoice (processor.arpRateParam, i);
+
+        static const int presets[4][3] = { { 8, 8, 0 }, { 8, 4, 1 }, { 8, 5, 0 }, { 8, 3, 0 } };
+        for (int i = 0; i < 4; ++i)
+            if (presetRect (i).contains (p))
+            {
+                setInt (processor.arpStepsParam, presets[i][0]);
+                setInt (processor.arpHitsParam, presets[i][1]);
+                setInt (processor.arpRotationParam, presets[i][2]);
+            }
+
+        if (hitsRect().contains (p))
+            setInt (processor.arpHitsParam, juce::jlimit (1, arp.steps, std::min (arp.hits, arp.steps) + (p.x > hitsRect().getCentreX() ? 1 : -1)));
+        if (stepsRect().contains (p))
+        {
+            const int steps = juce::jlimit (engine::kMinArpSteps, engine::kMaxArpSteps, arp.steps + (p.x > stepsRect().getCentreX() ? 1 : -1));
+            setInt (processor.arpStepsParam, steps);
+            setInt (processor.arpHitsParam, std::min (std::min (arp.hits, arp.steps), steps));
+            setInt (processor.arpRotationParam, arp.rotation % steps);
+        }
+        for (int i = 0; i < 2; ++i)
+            if (octaveRect (i).contains (p))
+                setInt (processor.arpOctavesParam, i + 1);
+
+        // The ring: pulling it round turns the rhythm
+        if (ringRect().expanded (6).contains (p))
+        {
+            dragStartAngle = angleAt (p);
+            dragStartRotation = arp.rotation;
+            turning = true;
+        }
+        repaint();
+    }
+
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (! turning)
+            return;
+        const auto arp = processor.getArpSettings();
+        const float stepAngle = juce::MathConstants<float>::twoPi / (float) arp.steps;
+        float delta = angleAt (e.getPosition()) - dragStartAngle;
+        while (delta > juce::MathConstants<float>::pi)
+            delta -= juce::MathConstants<float>::twoPi;
+        while (delta < -juce::MathConstants<float>::pi)
+            delta += juce::MathConstants<float>::twoPi;
+        const int moved = juce::roundToInt (delta / stepAngle);
+        const int rotation = ((dragStartRotation + moved) % arp.steps + arp.steps) % arp.steps;
+        setInt (processor.arpRotationParam, rotation);
+        repaint();
+    }
+
+    void mouseUp (const juce::MouseEvent&) override { turning = false; }
+
+private:
+    void timerCallback() override { repaint(); }
+
+    // ---- where everything is ----
+    juce::Rectangle<int> onRect() const { return { getWidth() - 16 - 72, 14, 72, 26 }; }
+    juce::Rectangle<int> styleRect (int i) const { return { 16 + i * 88, 66, 80, 56 }; }
+    juce::Rectangle<int> rateRect (int i) const { return { 16 + i * 88, 148, 80, 50 }; }
+    juce::Rectangle<int> ringRect() const { return { 20, 232, 112, 112 }; }
+    juce::Rectangle<int> presetRect (int i) const { return { 152 + (i % 2) * 106, 230 + (i / 2) * 32, 100, 26 }; }
+    juce::Rectangle<int> hitsRect() const { return { 152, 296, 100, 20 }; }
+    juce::Rectangle<int> stepsRect() const { return { 258, 296, 100, 20 }; }
+    juce::Rectangle<int> octaveRect (int i) const { return { 152 + i * 106, 322, 100, 22 }; }
+
+    bool presetMatches (int i, const engine::ArpSettings& arp) const
+    {
+        static const int presets[4][3] = { { 8, 8, 0 }, { 8, 4, 1 }, { 8, 5, 0 }, { 8, 3, 0 } };
+        return arp.steps == presets[i][0] && std::min (arp.hits, arp.steps) == presets[i][1] && arp.rotation % arp.steps == presets[i][2];
+    }
+
+    float angleAt (juce::Point<int> p) const
+    {
+        const auto c = ringRect().getCentre();
+        return std::atan2 ((float) (p.y - c.y), (float) (p.x - c.x));
+    }
+
+    // ---- drawing ----
+    static void drawTile (juce::Graphics& g, juce::Rectangle<float> r, bool selected)
+    {
+        theme::drawKey (g, r, selected ? theme::accent : theme::pad, 9.0f, 4.0f, false, false);
+    }
+
+    void drawTileLabel (juce::Graphics& g, juce::Rectangle<float> r, const char* text, bool selected) const
+    {
+        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+            g.setFont (l->titleFont (12.0f));
+        g.setColour (selected ? theme::onAccent : theme::text);
+        g.drawText (text, r.withTrimmedTop (r.getHeight() - 24.0f).withTrimmedBottom (6.0f).toNearestInt(), juce::Justification::centred);
+    }
+
+    static void drawStyleIcon (juce::Graphics& g, juce::Rectangle<float> r, int style, bool selected)
+    {
+        // The height of each note (0 low, 1 high), for a few notes in a row
+        static const float up[4] = { 0.0f, 0.34f, 0.67f, 1.0f };
+        static const float down[4] = { 1.0f, 0.67f, 0.34f, 0.0f };
+        static const float upDown[5] = { 0.0f, 0.5f, 1.0f, 0.5f, 0.0f };
+        static const float random[5] = { 0.5f, 0.1f, 0.85f, 0.3f, 0.7f };
+        const float* heights = style == 0 ? up : style == 1 ? down : style == 2 ? upDown : random;
+        const int count = style < 2 ? 4 : 5;
+
+        juce::Path line;
+        for (int i = 0; i < count; ++i)
+        {
+            const juce::Point<float> at (r.getX() + r.getWidth() * (float) i / (float) (count - 1), r.getBottom() - r.getHeight() * heights[i]);
+            if (i == 0)
+                line.startNewSubPath (at);
+            else
+                line.lineTo (at);
+        }
+        const auto ink = selected ? theme::onAccent : theme::text;
+        g.setColour (ink.withAlpha (style == 3 ? 0.0f : 0.45f)); // at random there is no line between the notes
+        g.strokePath (line, juce::PathStrokeType (1.6f));
+        g.setColour (ink);
+        for (int i = 0; i < count; ++i)
+            g.fillEllipse (juce::Rectangle<float> (6.0f, 6.0f).withCentre ({ r.getX() + r.getWidth() * (float) i / (float) (count - 1), r.getBottom() - r.getHeight() * heights[i] }));
+    }
+
+    void drawPill (juce::Graphics& g, juce::Rectangle<int> r, const juce::String& text, bool on, bool big) const
+    {
+        const auto face = theme::drawKey (g, r.toFloat(), on ? (big ? theme::go : theme::accent) : theme::pad, big ? 12.0f : 8.0f, 3.0f, false, false);
+        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+            g.setFont (l->titleFont (big ? 14.0f : 12.0f));
+        g.setColour (on ? theme::onAccent : theme::text);
+        g.drawText (text, face.toNearestInt(), juce::Justification::centred);
+    }
+
+    void drawStepper (juce::Graphics& g, juce::Rectangle<int> r, const char* name, int value) const
+    {
+        g.setColour (theme::pad.darker (0.2f));
+        g.fillRoundedRectangle (r.toFloat(), 8.0f);
+        g.setColour (theme::text);
+        if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
+            g.setFont (l->titleFont (12.0f));
+        g.drawText ("-", r.withWidth (22), juce::Justification::centred);
+        g.drawText ("+", r.withTrimmedLeft (r.getWidth() - 22), juce::Justification::centred);
+        g.drawText (juce::String (name) + " " + juce::String (value), r.reduced (22, 0), juce::Justification::centred);
+    }
+
+    void drawRing (juce::Graphics& g, juce::Rectangle<int> area, const engine::ArpSettings& arp) const
+    {
+        const auto pattern = arp.pattern();
+        const auto c = area.toFloat().getCentre();
+        const float radius = (float) area.getWidth() * 0.5f - 10.0f;
+
+        g.setColour (theme::pad.darker (0.3f));
+        g.fillEllipse (area.toFloat());
+        g.setColour (theme::outline);
+        g.drawEllipse (area.toFloat().reduced (0.5f), 1.2f);
+
+        const auto dot = [&] (int i)
+        {
+            const float angle = -juce::MathConstants<float>::halfPi + juce::MathConstants<float>::twoPi * (float) i / (float) pattern.steps;
+            return juce::Point<float> (c.x + radius * std::cos (angle), c.y + radius * std::sin (angle));
+        };
+
+        // The lit dots are joined: the shape is the rhythm
+        juce::Path shape;
+        bool first = true;
+        for (int i = 0; i < pattern.steps; ++i)
+            if (pattern.onset[(size_t) i])
+            {
+                if (first)
+                    shape.startNewSubPath (dot (i));
+                else
+                    shape.lineTo (dot (i));
+                first = false;
+            }
+        if (! first)
+            shape.closeSubPath();
+        g.setColour (theme::accent.withAlpha (0.35f));
+        g.strokePath (shape, juce::PathStrokeType (1.6f));
+
+        for (int i = 0; i < pattern.steps; ++i)
+        {
+            const bool lit = pattern.onset[(size_t) i];
+            g.setColour (lit ? theme::accent : theme::dimText.withAlpha (0.55f));
+            const float size = lit ? 11.0f : 6.0f;
+            g.fillEllipse (juce::Rectangle<float> (size, size).withCentre (dot (i)));
+            if (i == 0) // the start of the rhythm
+            {
+                g.setColour (theme::text.withAlpha (0.8f));
+                g.drawEllipse (juce::Rectangle<float> (size + 5.0f, size + 5.0f).withCentre (dot (i)), 1.4f);
+            }
+        }
+    }
+
+    // ---- changing the settings ----
+    static void setInt (juce::AudioParameterInt* parameter, int value)
+    {
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost (parameter->convertTo0to1 ((float) value));
+        parameter->endChangeGesture();
+    }
+    static void setChoice (juce::AudioParameterChoice* parameter, int index)
+    {
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost (parameter->convertTo0to1 ((float) index));
+        parameter->endChangeGesture();
+    }
+    static void setBool (juce::AudioParameterBool* parameter, bool value)
+    {
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost (value ? 1.0f : 0.0f);
+        parameter->endChangeGesture();
+    }
+
+    ProgrezzorProcessor& processor;
+    bool turning = false;
+    float dragStartAngle = 0.0f;
+    int dragStartRotation = 0;
+};
+
+void ProgressionBar::toggleArp()
+{
+    auto& parameter = *processor.arpOnParam;
+    parameter.beginChangeGesture();
+    parameter.setValueNotifyingHost (parameter.get() ? 0.0f : 1.0f);
+    parameter.endChangeGesture();
+    updateButtons();
+    if (parameter.get() && ! arpPanelShown) // the first time it is switched on, the choices are shown
+        showArpPanel();
+}
+
+void ProgressionBar::showArpPanel()
+{
+    arpPanelShown = true;
+    juce::CallOutBox::launchAsynchronously (makeArpPanel(), arpButton.getScreenBounds(), nullptr);
+}
+
+std::unique_ptr<juce::Component> ProgressionBar::makeArpPanel()
+{
+    return std::make_unique<ArpPanel> (processor);
+}
+
 ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
 {
+    arpButton.setTooltip ("Arp: play everything one note at a time (the MIDI file follows)");
+    arpButton.setComponentID ("arp");
+    arpButton.onClick = [this] { toggleArp(); };
+    addAndMakeVisible (arpButton);
+    arpOptionsButton.setTooltip ("How the arp plays: pattern, speed and rhythm");
+    arpOptionsButton.setComponentID ("arp-options");
+    arpOptionsButton.onClick = [this] { showArpPanel(); };
+    addAndMakeVisible (arpOptionsButton);
+
     playButton.setClickingTogglesState (false);
     playButton.onClick = [this] { processor.togglePlay(); updateButtons(); };
     playButton.setTooltip ("Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
@@ -1076,6 +1440,7 @@ void ProgressionBar::updateButtons()
     // starting and stopping.
     const bool playOn = processor.isPlayOn();
     playButton.setToggleState (playOn, juce::dontSendNotification);
+    arpButton.setToggleState (processor.getArpSettings().on, juce::dontSendNotification);
 
     // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
     const int octave = processor.getGeneralOctave();
@@ -1588,7 +1953,12 @@ void ProgressionBar::resized()
     const int controlsHeight = std::min (area.getHeight() - labelHeight, 150);
     auto left = area.removeFromLeft (64).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromLeft (10);
+    auto arpRow = left.removeFromBottom (40);
+    left.removeFromBottom (6);
     playButton.setBounds (left);
+    arpOptionsButton.setBounds (arpRow.removeFromRight (16));
+    arpRow.removeFromRight (2);
+    arpButton.setBounds (arpRow);
 
     // The right side: the Drag tile, and Capture on top of Undo, Redo and the pencil (which stays in its place)
     dragTile.setBounds (area.removeFromRight (std::min (68, std::max (56, area.getHeight()))).withTrimmedTop (labelHeight).withHeight (controlsHeight));

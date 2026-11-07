@@ -150,6 +150,16 @@ Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Moo
 - Akkordskift skal lande præcis på taktstregen, også midt i en audio-buffer.
 - Holdes en pad, mens loopet kører, har pad'en forrang, og loopet tier imens.
 
+## Arp
+
+Besluttet af Henrik 2026-11-07. Arp-knappen (nederst til venstre i bjælken, under Play) tænder og slukker den. Slået fra er alt som før.
+
+- Er Arp tændt, spilles ALT som arp: pads, MIDI-tastatur, klik på blokke og rundgangen. MIDI-filen (Drag og Save MIDI) har arpen, filnavnet får "-Arp". Slås den fra, er det akkorder igen.
+- En arp spiller tonerne i den aktuelle akkord (evt. over to oktaver) én ad gangen. Hver akkord starter sin arp forfra, og noderne afgøres af trinnummeret alene, også Random, så lyd og MIDI-fil er ens.
+- De tre prikker ved Arp-knappen åbner et lille panel uden tal og teori: Pattern (Up, Down, Up/Down, Random som små tegninger), Speed (4 trin) og Rhythm (en ring med prikker, hvor de tændte spiller; træk i ringen for at dreje den; forvalg Even, Offbeat, Gallop, Spread; antal toner og længde).
+- Rytmen er et Euklid-mønster og koden er tilpasset fra ../seqverse (Music.h), uden arp-delene fra SeqVerses skalaer.
+- Ingen hængende noter: hver arp-node har sin egen note off, og alt stopper ved slip, transport stop, bypass og når Arp skiftes.
+
 ## Quick-text
 
 ✏️ gør bjælken til en tekstlinje med de aktuelle akkorder. Enter anvender, Esc fortryder. Teksten ændrer kun rundgangen, ikke de 7 pads.

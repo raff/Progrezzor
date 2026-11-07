@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
+#include "Arp.h"
 #include "ChordEngine.h"
 #include "Progression.h"
 
@@ -25,9 +27,11 @@ struct ExportNote
 
 // Every block strikes its chord at its start and lets go at its end, also when the next block has the same chord
 // A block that is silent (see isBlockDisabled) gives a rest of its length, as it does when the loop plays.
+// With `arp` on, a block gives the notes of the arpeggio instead of the chord, step by step as it plays.
 // `octaveShift` (the Oct buttons) and `centreNote` (the default register in Settings): the file has the notes that are heard.
 inline std::vector<ExportNote> exportNotes (const Progression& progression, int tonic, ScaleId scale = ScaleId::Minor,
-                                            bool lockToScale = false, int octaveShift = 0, int centreNote = kCentreNote)
+                                            bool lockToScale = false, int octaveShift = 0, int centreNote = kCentreNote,
+                                            ArpSettings arp = {})
 {
     std::vector<ExportNote> notes;
     double start = 0.0;
@@ -41,8 +45,24 @@ inline std::vector<ExportNote> exportNotes (const Progression& progression, int 
 
         const auto voicing = voiceChord (block.chord, tonic, centreNote);
         const auto heard = shiftedByOctaves (voicing, octaveShift);
-        for (int i = 0; i < heard.count; ++i)
-            notes.push_back ({ start, block.beats, heard.notes[(size_t) i], kExportVelocity });
+        if (arp.on)
+        {
+            // The arp: the same steps as when it plays, counted from the start of the block
+            const auto pattern = arp.pattern();
+            const auto pool = arpPool (heard, arp.octaves);
+            const double stepBeats = arp.stepBeats();
+            for (std::int64_t step = 0; (double) step * stepBeats < block.beats - 1.0e-9; ++step)
+            {
+                const auto hit = arpStep (arp, pattern, pool, step);
+                if (! hit.play)
+                    continue;
+                const double at = (double) step * stepBeats;
+                notes.push_back ({ start + at, std::min (kArpGate * stepBeats, block.beats - at), hit.note, kExportVelocity });
+            }
+        }
+        else
+            for (int i = 0; i < heard.count; ++i)
+                notes.push_back ({ start, block.beats, heard.notes[(size_t) i], kExportVelocity });
         start += block.beats;
     }
     return notes;
@@ -50,7 +70,7 @@ inline std::vector<ExportNote> exportNotes (const Progression& progression, int 
 
 // "Am-F-C-G.mid". Only a-z, A-Z, 0-9, hyphen and underscore are used: # is written "sharp" (Csharp), and a slash (an
 // inversion: Am/C) would be a folder in a file name, so it is written as an underscore (Am_C).
-inline std::string exportFileName (const Progression& progression, const Key& key)
+inline std::string exportFileName (const Progression& progression, const Key& key, bool arp = false)
 {
     std::string name;
     int count = 0;
@@ -70,6 +90,6 @@ inline std::string exportFileName (const Progression& progression, const Key& ke
         }
         name += (name.empty() ? "" : "-") + chord;
     }
-    return (name.empty() ? "Progression" : name) + ".mid";
+    return (name.empty() ? "Progression" : name) + (arp ? "-Arp" : "") + ".mid";
 }
 }

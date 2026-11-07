@@ -55,6 +55,14 @@ public:
     juce::AudioParameterChoice* scaleParam = nullptr;
     juce::AudioParameterChoice* moodParam = nullptr;  // one of the 8 moods: it decides which progressions Suggest picks from
     juce::AudioParameterChoice* voiceParam = nullptr; // the preview sound: Pad, Strings, Keys, Organ, Stab, Pluck
+    // The arpeggio (Arp button): everything is played one note at a time while it is on, and the MIDI file follows
+    juce::AudioParameterBool* arpOnParam = nullptr;
+    juce::AudioParameterChoice* arpStyleParam = nullptr;
+    juce::AudioParameterChoice* arpRateParam = nullptr;
+    juce::AudioParameterInt* arpOctavesParam = nullptr;
+    juce::AudioParameterInt* arpStepsParam = nullptr;
+    juce::AudioParameterInt* arpHitsParam = nullptr;
+    juce::AudioParameterInt* arpRotationParam = nullptr;
     juce::AudioParameterChoice* registerParam = nullptr; // the default register (Settings): Low, Mid or High
     juce::AudioParameterInt* octaveParam = nullptr;   // the general register: -2 to +2 octaves for everything that sounds and is exported
     juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
@@ -146,6 +154,8 @@ public:
     void clearPadVariant (int pad);
     int getVariantVersion() const { return variantVersion.load(); }
     bool isLockedToScale() const { return lockParam->get(); }
+    // The arp as the parameters have it now. Safe to call from any thread.
+    engine::ArpSettings getArpSettings() const;
     int getGeneralOctave() const { return octaveParam->get(); }
     int getRegisterIndex() const { return registerParam->getIndex(); }
     engine::Mood getMood() const { return (engine::Mood) moodParam->getIndex(); }
@@ -174,6 +184,24 @@ private:
     PadSynth synth;
     bool wasPlaying = false;
     bool wasHostPlaying = false;
+
+    // The arp, audio thread only: one slot for every source that holds a chord, stepping through its notes
+    struct ArpSlot
+    {
+        bool running = false;
+        engine::ArpSettings settings;
+        engine::EuclidPattern pattern;
+        engine::ArpPool pool;
+        std::int64_t step = 0;
+        double dueIn = 0.0;   // samples from the start of this block to the next step
+        double offIn = -1.0;  // samples to the end of the note that sounds, -1 if none
+        int velocity = 100;
+    };
+    std::array<ArpSlot, engine::NoteTracker::kNumSources> arpSlots {};
+    std::array<bool, engine::NoteTracker::kNumSources> sourceActive {}; // a source holds a chord (also in a rest of the arp)
+    bool arpWasOn = false;
+    double samplesPerBeat = 22050.0;
+    engine::ArpSettings blockArp; // the arp as it is during this block
 
     // The loop (audio thread). The progression reaches it through a lock-free hand-over.
     engine::TripleBuffer<engine::LoopSnapshot> loopBuffer;

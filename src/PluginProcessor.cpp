@@ -48,6 +48,13 @@ ProgrezzorProcessor::ProgrezzorProcessor()
         voices.add (name);
     addParameter (moodParam = new juce::AudioParameterChoice ({ "mood", 1 }, "Mood", moods, (int) engine::Mood::Melancholic));
     addParameter (voiceParam = new juce::AudioParameterChoice ({ "voice", 1 }, "Voice", voices, 0));
+    addParameter (arpOnParam = new juce::AudioParameterBool ({ "arpOn", 1 }, "Arp", false));
+    addParameter (arpStyleParam = new juce::AudioParameterChoice ({ "arpStyle", 1 }, "Arp Pattern", juce::StringArray { "Up", "Down", "Up/Down", "Random" }, 0));
+    addParameter (arpRateParam = new juce::AudioParameterChoice ({ "arpRate", 1 }, "Arp Speed", juce::StringArray { "Slow", "Normal", "Fast", "Very fast" }, engine::kDefaultArpRate));
+    addParameter (arpOctavesParam = new juce::AudioParameterInt ({ "arpOctaves", 1 }, "Arp Octaves", 1, engine::kMaxArpOctaves, 1));
+    addParameter (arpStepsParam = new juce::AudioParameterInt ({ "arpSteps", 1 }, "Arp Rhythm Length", engine::kMinArpSteps, engine::kMaxArpSteps, 8));
+    addParameter (arpHitsParam = new juce::AudioParameterInt ({ "arpHits", 1 }, "Arp Hits", 1, engine::kMaxArpSteps, 8));
+    addParameter (arpRotationParam = new juce::AudioParameterInt ({ "arpRotation", 1 }, "Arp Rotation", 0, engine::kMaxArpSteps - 1, 0));
     addParameter (registerParam = new juce::AudioParameterChoice ({ "register", 1 }, "Register", juce::StringArray { "Low", "Mid", "High" }, 1));
     addParameter (octaveParam = new juce::AudioParameterInt ({ "octave", 1 }, "Octave", -engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, 0));
 
@@ -55,6 +62,19 @@ ProgrezzorProcessor::ProgrezzorProcessor()
         variant.store (-1);
     for (auto& entry : history)
         entry.store (0);
+}
+
+engine::ArpSettings ProgrezzorProcessor::getArpSettings() const
+{
+    engine::ArpSettings settings;
+    settings.on = arpOnParam->get();
+    settings.style = arpStyleParam->getIndex();
+    settings.rate = arpRateParam->getIndex();
+    settings.octaves = arpOctavesParam->get();
+    settings.steps = arpStepsParam->get();
+    settings.hits = arpHitsParam->get();
+    settings.rotation = arpRotationParam->get();
+    return settings;
 }
 
 void ProgrezzorProcessor::prepareToPlay (double newSampleRate, int)
@@ -165,7 +185,7 @@ public:
 
         const auto chord = snapshot.blocks[(size_t) owner.loopIndex].chord;
         const int tonic = owner.keyParam->getIndex();
-        if (! again && owner.tracker.isHeld (loopSource) && owner.loopChord == chord && owner.loopTonic == tonic)
+        if (! again && owner.sourceActive[(size_t) loopSource] && owner.loopChord == chord && owner.loopTonic == tonic)
             return;
 
         owner.loopChord = chord;
@@ -187,6 +207,7 @@ public:
         while (nextChange < owner.loopPlan.numChanges && owner.loopPlan.changes[(size_t) nextChange].sample < position)
         {
             const auto change = owner.loopPlan.changes[(size_t) nextChange++];
+            advanceArp (change.sample); // the steps before the change come first
             owner.loopIndex = change.index;
             syncLoop (change.sample, true); // every block change strikes the chord again, also when it is the same chord
         }
@@ -214,7 +235,11 @@ public:
         const bool user = source != engine::NoteTracker::loopSource();
         if (user)
             ++owner.userHolds;
-        owner.tracker.press (source, heard, velocity, [&] (const engine::NoteEvent& e) { emit (e, position); });
+        owner.sourceActive[(size_t) source] = true;
+        if (owner.blockArp.on)
+            startArp (source, heard, velocity, position); // the arp: one note at a time
+        else
+            owner.tracker.press (source, heard, velocity, [&] (const engine::NoteEvent& e) { emit (e, position); });
 
         if (user) // what the user plays comes before the loop, which is silent as long as a hand is on a pad
             syncLoop (position);
@@ -222,8 +247,12 @@ public:
 
     void releaseSource (int source, int position)
     {
-        if (source < 0 || source >= engine::NoteTracker::kNumSources || ! owner.tracker.isHeld (source))
+        if (source < 0 || source >= engine::NoteTracker::kNumSources || ! owner.sourceActive[(size_t) source])
             return;
+
+        owner.sourceActive[(size_t) source] = false;
+        owner.arpSlots[(size_t) source].running = false;
+        owner.arpSlots[(size_t) source].offIn = -1.0;
 
         if (const int pad = owner.sourcePad[(size_t) source]; pad >= 0)
             --owner.padHolds[(size_t) pad];
@@ -242,11 +271,107 @@ public:
         owner.tracker.releaseAll ([&] (const engine::NoteEvent& e) { emit (e, position); });
         owner.padHolds.fill (0);
         owner.userHolds = 0;
+        owner.sourceActive.fill (false);
+        for (auto& slot : owner.arpSlots)
+        {
+            slot.running = false;
+            slot.offIn = -1.0;
+        }
+    }
+
+    // ---- The arp --------------------------------------------------------------------------------------------------
+    // A source that holds a chord plays it one note at a time. The steps follow from the moment the chord started (a pad
+    // pressed, a block of the loop begun), the notes from the step number alone, so the MIDI file has the same notes.
+
+    // The first step is played at once
+    void startArp (int source, const engine::Voicing& heard, int velocity, int position)
+    {
+        auto& slot = owner.arpSlots[(size_t) source];
+        slot.settings = owner.blockArp;
+        slot.pattern = slot.settings.pattern();
+        slot.pool = engine::arpPool (heard, slot.settings.octaves);
+        slot.velocity = velocity;
+        slot.step = 0;
+        slot.running = true;
+        slot.offIn = -1.0;
+        playArpStep (source, (double) position);
+    }
+
+    void playArpStep (int source, double at)
+    {
+        auto& slot = owner.arpSlots[(size_t) source];
+        const int position = juce::jlimit (0, std::max (0, numSamples - 1), (int) at);
+        const auto emitNow = [&] (const engine::NoteEvent& e) { emit (e, position); };
+        const double stepSamples = slot.settings.stepBeats() * owner.samplesPerBeat;
+
+        owner.tracker.release (source, emitNow); // the note of the step before, if it still sounds
+        slot.offIn = -1.0;
+
+        const auto hit = engine::arpStep (slot.settings, slot.pattern, slot.pool, slot.step++);
+        if (hit.play)
+        {
+            engine::Voicing single;
+            single.count = 1;
+            single.notes[0] = hit.note;
+            owner.tracker.press (source, single, slot.velocity, emitNow);
+            slot.offIn = at + engine::kArpGate * stepSamples;
+        }
+        slot.dueIn = at + stepSamples;
+    }
+
+    // Every step and every end of a note that falls before `position`, in the order they come
+    void advanceArp (int position)
+    {
+        for (;;)
+        {
+            int bestSource = -1;
+            double bestTime = (double) position;
+            bool isEnd = false;
+            for (int source = 0; source < engine::NoteTracker::kNumSources; ++source)
+            {
+                const auto& slot = owner.arpSlots[(size_t) source];
+                if (! slot.running)
+                    continue;
+                if (slot.offIn >= 0.0 && slot.offIn < bestTime)
+                {
+                    bestSource = source;
+                    bestTime = slot.offIn;
+                    isEnd = true;
+                }
+                if (slot.dueIn < bestTime)
+                {
+                    bestSource = source;
+                    bestTime = slot.dueIn;
+                    isEnd = false;
+                }
+            }
+            if (bestSource < 0)
+                break;
+
+            auto& slot = owner.arpSlots[(size_t) bestSource];
+            if (isEnd)
+            {
+                const int at = juce::jlimit (0, std::max (0, numSamples - 1), (int) bestTime);
+                owner.tracker.release (bestSource, [&] (const engine::NoteEvent& e) { emit (e, at); });
+                slot.offIn = -1.0;
+            }
+            else
+                playArpStep (bestSource, bestTime);
+        }
     }
 
     void finish()
     {
         render (numSamples);
+
+        // What is left of the arp's timers is counted from the start of the next block
+        for (auto& slot : owner.arpSlots)
+            if (slot.running)
+            {
+                slot.dueIn -= (double) numSamples;
+                if (slot.offIn >= 0.0)
+                    slot.offIn -= (double) numSamples;
+            }
 
         unsigned mask = 0;
         for (int pad = 0; pad < kNumPads; ++pad)
@@ -345,6 +470,13 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     wasPlaying = playing;
 
     const double beatsPerSample = bpm / 60.0 / sampleRate;
+    samplesPerBeat = sampleRate * 60.0 / bpm;
+    blockArp = getArpSettings();
+    if (blockArp.on != arpWasOn) // Arp was switched: everything that sounds stops, and starts again the other way
+    {
+        work.releaseEverything (0);
+        arpWasOn = blockArp.on;
+    }
     internalPpq = playing ? startBeat + buffer.getNumSamples() * beatsPerSample : 0.0;
 
     // The loop plays while the host plays and Play is on, or on its own clock when Play was pressed with the host stopped
@@ -381,6 +513,7 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     {
         const auto& message = input[(size_t) i];
         work.advanceLoop (message.position);
+        work.advanceArp (message.position);
 
         if (message.kind == allNotesOffMessage)
         {
@@ -401,6 +534,7 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     }
 
     work.advanceLoop (buffer.getNumSamples());
+    work.advanceArp (buffer.getNumSamples());
     work.finish();
 }
 
@@ -623,6 +757,9 @@ juce::File ProgrezzorProcessor::saveMidi()
 
     // What the file is made from. The same again gives the same file.
     juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (octaveParam->get()) + "/" + juce::String (registerParam->getIndex());
+    const auto arp = getArpSettings();
+    if (arp.on)
+        madeFrom << "/arp" << arp.style << "," << arp.rate << "," << arp.octaves << "," << arp.steps << "," << arp.hits << "," << arp.rotation;
     for (const auto& block : progression)
         madeFrom << (engine::isBlockDisabled (block, key.scale, lockParam->get()) ? "|-" : "|") << block.chord.root << "," << (int) block.chord.type << "," << block.chord.inversion << "," << block.chord.octave << "," << juce::String (block.beats, 4);
 
@@ -634,7 +771,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto ticks = [] (double beats) { return beats * kTicksPerQuarter; };
 
     juce::MidiMessageSequence sequence;
-    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), octaveParam->get(), engine::registerCentre (registerParam->getIndex())))
+    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), octaveParam->get(), engine::registerCentre (registerParam->getIndex()), arp))
     {
         // All MIDI on channel 1. A note off comes before a note on at the same time, so that equal chords strike again.
         sequence.addEvent (juce::MidiMessage::noteOn (1, note.note, (juce::uint8) note.velocity).withTimeStamp (ticks (note.start)));
@@ -649,7 +786,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     midiFile.addTrack (sequence);
 
     const auto folder = getExportFolder();
-    const auto file = folder.getChildFile (juce::File::createLegalFileName (juce::String (engine::exportFileName (progression, key)))).getNonexistentSibling();
+    const auto file = folder.getChildFile (juce::File::createLegalFileName (juce::String (engine::exportFileName (progression, key, arp.on)))).getNonexistentSibling();
 
     bool written = false;
     if (folder.createDirectory().wasOk())
@@ -672,7 +809,7 @@ juce::File ProgrezzorProcessor::saveMidi()
 void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
 {
     juce::XmlElement xml ("Progrezzor");
-    xml.setAttribute ("version", 9);
+    xml.setAttribute ("version", 10);
     xml.setAttribute ("key", keyParam->getIndex());
     xml.setAttribute ("scale", scaleParam->getIndex());
     xml.setAttribute ("loop", loopParam->get() ? 1 : 0);
@@ -681,6 +818,13 @@ void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
     xml.setAttribute ("voice", voiceParam->getIndex());
     xml.setAttribute ("octave", octaveParam->get());
     xml.setAttribute ("register", registerParam->getIndex());
+    xml.setAttribute ("arpOn", arpOnParam->get() ? 1 : 0);
+    xml.setAttribute ("arpStyle", arpStyleParam->getIndex());
+    xml.setAttribute ("arpRate", arpRateParam->getIndex());
+    xml.setAttribute ("arpOctaves", arpOctavesParam->get());
+    xml.setAttribute ("arpSteps", arpStepsParam->get());
+    xml.setAttribute ("arpHits", arpHitsParam->get());
+    xml.setAttribute ("arpRotation", arpRotationParam->get());
 
     for (int pad = 0; pad < kNumPads; ++pad)
         xml.setAttribute ("pad" + juce::String (pad), padVariant[(size_t) pad].load());
@@ -717,6 +861,13 @@ void ProgrezzorProcessor::setStateInformation (const void* data, int size)
     set (*moodParam, xml->getIntAttribute ("mood", (int) engine::Mood::Melancholic)); // older projects: the mood they had
     set (*voiceParam, xml->getIntAttribute ("voice", 0));
     set (*registerParam, xml->getIntAttribute ("register", 1));
+    *arpOnParam = xml->getIntAttribute ("arpOn", 0) != 0;
+    set (*arpStyleParam, xml->getIntAttribute ("arpStyle", 0));
+    set (*arpRateParam, xml->getIntAttribute ("arpRate", engine::kDefaultArpRate));
+    *arpOctavesParam = juce::jlimit (1, engine::kMaxArpOctaves, xml->getIntAttribute ("arpOctaves", 1));
+    *arpStepsParam = juce::jlimit (engine::kMinArpSteps, engine::kMaxArpSteps, xml->getIntAttribute ("arpSteps", 8));
+    *arpHitsParam = juce::jlimit (1, engine::kMaxArpSteps, xml->getIntAttribute ("arpHits", 8));
+    *arpRotationParam = juce::jlimit (0, engine::kMaxArpSteps - 1, xml->getIntAttribute ("arpRotation", 0));
     *octaveParam = juce::jlimit (-engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, xml->getIntAttribute ("octave", 0));
 
     for (int pad = 0; pad < kNumPads; ++pad)

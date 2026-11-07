@@ -11,6 +11,7 @@
 #include "../src/engine/ProgressionEdit.h"
 #include "../src/engine/MidiExport.h"
 #include "../src/engine/NextPads.h"
+#include "../src/engine/Arp.h"
 #include "../src/engine/QuickText.h"
 
 #include <algorithm>
@@ -1057,8 +1058,102 @@ void testOctaves()
     check (parseQuickText ("Am-F-C-G", key, 4.0, true).blocks.size() == 4, "a hyphen still separates chords");
 }
 
+void testArp()
+{
+    std::printf ("arp\n");
+    const auto rhythm = [] (int steps, int hits, int rotation)
+    {
+        const EuclidPattern e (steps, hits, rotation);
+        std::string text;
+        for (int i = 0; i < steps; ++i)
+            text += e.onset[(size_t) i] ? 'x' : '.';
+        return text;
+    };
+    checkEqual (rhythm (8, 3, 0), std::string ("x..x..x."), "E(3,8)");
+    checkEqual (rhythm (8, 5, 0), std::string ("x.xx.xx."), "E(5,8)");
+    checkEqual (rhythm (8, 4, 0), std::string ("x.x.x.x."), "E(4,8)");
+    checkEqual (rhythm (8, 4, 1), std::string (".x.x.x.x"), "E(4,8) moved one step later is the offbeat");
+    checkEqual (rhythm (8, 8, 0), std::string ("xxxxxxxx"), "all hits: every step plays");
+    checkEqual (rhythm (8, 20, 0), std::string ("xxxxxxxx"), "more hits than steps: every step plays");
+    checkEqual (rhythm (16, 5, 0), std::string ("x..x..x..x..x..."), "E(5,16)");
+
+    // Which note each hit plays
+    const auto order = [] (ArpStyle style, int size, int count)
+    {
+        std::string text;
+        for (int i = 0; i < count; ++i)
+            text += std::to_string (arpIndex (style, size, i));
+        return text;
+    };
+    checkEqual (order (ArpStyle::Up, 3, 7), std::string ("0120120"), "Up");
+    checkEqual (order (ArpStyle::Down, 3, 7), std::string ("2102102"), "Down");
+    checkEqual (order (ArpStyle::UpDown, 3, 9), std::string ("012101210"), "Up/Down goes up and back without repeating the ends");
+    checkEqual (order (ArpStyle::UpDown, 2, 6), std::string ("010101"), "Up/Down with two notes");
+    checkEqual (order (ArpStyle::Up, 1, 3), std::string ("000"), "one note");
+    bool inRange = true, same = true, varied = false;
+    for (int i = 0; i < 200; ++i)
+    {
+        const int a = arpIndex (ArpStyle::Random, 5, i);
+        inRange &= a >= 0 && a < 5;
+        same &= a == arpIndex (ArpStyle::Random, 5, i);
+        varied |= a != arpIndex (ArpStyle::Random, 5, 0);
+    }
+    check (inRange && same && varied, "Random is in range, the same for the same step, and not all the same note");
+
+    // The notes of a chord, in order, for a whole run of steps
+    const Key aMinor { 9, ScaleId::Minor };
+    const auto am = shiftedByOctaves (voiceChord (padChord (aMinor.scale, 0), aMinor.tonic), 0);
+    ArpSettings settings;
+    settings.on = true;
+    const auto notesFor = [&] (const ArpSettings& arp, int steps)
+    {
+        const auto pattern = arp.pattern();
+        const auto pool = arpPool (am, arp.octaves);
+        std::string text;
+        for (int step = 0; step < steps; ++step)
+        {
+            const auto hit = arpStep (arp, pattern, pool, step);
+            text += hit.play ? std::to_string (hit.note) + " " : std::string (". ");
+        }
+        return text;
+    };
+    checkEqual (notesFor (settings, 6), std::string ("57 60 64 57 60 64 "), "Am as an arp, up, every step");
+    settings.style = (int) ArpStyle::Down;
+    checkEqual (notesFor (settings, 4), std::string ("64 60 57 64 "), "down");
+    settings.style = (int) ArpStyle::Up;
+    settings.octaves = 2;
+    checkEqual (notesFor (settings, 7), std::string ("57 60 64 69 72 76 57 "), "two octaves: the chord, then the same an octave higher");
+    settings.octaves = 1;
+    settings.hits = 3;
+    checkEqual (notesFor (settings, 9), std::string ("57 . . 60 . . 64 . 57 "), "E(3,8): the rests do not use up a note");
+
+    // The MIDI file: the same steps, from the start of every block
+    Progression oneBar;
+    oneBar.push_back ({ Chord { 0, ChordType::Minor, kAutoInversion }, 4.0 });
+    ArpSettings fast;
+    fast.on = true;
+    const auto arpNotes = exportNotes (oneBar, 9, ScaleId::Minor, true, 0, kCentreNote, fast);
+    const int amNotes[3] = { 57, 60, 64 };
+    bool shape = arpNotes.size() == 8;
+    for (size_t i = 0; shape && i < arpNotes.size(); ++i)
+        shape = std::abs (arpNotes[i].start - 0.5 * (double) i) < 1.0e-9 && std::abs (arpNotes[i].length - 0.4) < 1.0e-9
+                && arpNotes[i].note == amNotes[i % 3];
+    check (shape, "an arp in the MIDI file: eight steps of half a beat in one bar, notes up through the chord, 80 % long");
+    ArpSettings off;
+    check (exportNotes (oneBar, 9, ScaleId::Minor, true, 0, kCentreNote, off).size() == 3, "with the arp off the file has the chord");
+
+    Progression twoBlocks;
+    twoBlocks.push_back ({ Chord { 0, ChordType::Minor, kAutoInversion }, 2.0 });
+    twoBlocks.push_back ({ Chord { 8, ChordType::Major, kAutoInversion }, 2.0 });
+    const auto two = exportNotes (twoBlocks, 9, ScaleId::Minor, true, 0, kCentreNote, fast);
+    check (two.size() == 8 && two[4].start == 2.0 && two[4].note == 53, "every block starts its arp from the beginning (the second block starts on the F)");
+    checkEqual (exportFileName (twoBlocks, aMinor, true), std::string ("Am-F-Arp.mid"), "the file name says Arp");
+    checkEqual (exportFileName (twoBlocks, aMinor, false), std::string ("Am-F.mid"), "and does not when it is off");
+}
+
 int main()
 {
+    testArp();
     testOctaves();
     testQuickText();
     testLoopPlan();

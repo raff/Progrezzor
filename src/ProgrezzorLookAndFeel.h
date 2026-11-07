@@ -138,6 +138,15 @@ public:
         g.strokePath (chevron, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
     }
 
+    // The panel that opens from the Arp button: the same dark card as the rest, with a warm edge
+    void drawCallOutBoxBackground (juce::CallOutBox&, juce::Graphics& g, const juce::Path& path, juce::Image&) override
+    {
+        g.setColour (juce::Colour (0xff1c1838));
+        g.fillPath (path);
+        g.setColour (accent.withAlpha (0.7f));
+        g.strokePath (path, juce::PathStrokeType (2.0f));
+    }
+
     void positionComboBoxText (juce::ComboBox& box, juce::Label& label) override
     {
         label.setBounds (11, 1, box.getWidth() - 32, box.getHeight() - 6);

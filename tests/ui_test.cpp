@@ -43,7 +43,7 @@ public:
     double quarters = 0.0;
 };
 
-void saveSnapshot (juce::AudioProcessorEditor& editor, const std::string& path)
+void saveSnapshot (juce::Component& editor, const std::string& path)
 {
     const auto image = editor.createComponentSnapshot (editor.getLocalBounds());
     juce::File file (path);
@@ -1024,6 +1024,191 @@ int main (int argc, char** argv)
         processor.setProgression ({});
         *processor.octaveParam = 0;
         settle (50);
+    }
+
+    std::printf ("arp\n");
+    {
+        struct Event { long long at; int note; bool on; };
+        long long blockStart = 0;
+        std::vector<Event> events;
+        const auto run = [&] (int blocks, juce::AudioPlayHead* head = nullptr)
+        {
+            processor.setPlayHead (head);
+            for (int b = 0; b < blocks; ++b)
+            {
+                juce::MidiBuffer out;
+                juce::AudioBuffer<float> audio (2, 512);
+                processor.processBlock (audio, out);
+                for (const auto m : out)
+                {
+                    const auto msg = m.getMessage();
+                    if (msg.isNoteOn() || msg.isNoteOff())
+                        events.push_back ({ blockStart + m.samplePosition, msg.getNoteNumber(), msg.isNoteOn() });
+                }
+                blockStart += 512;
+            }
+            processor.setPlayHead (nullptr);
+        };
+        const auto onsOf = [&] (const std::vector<Event>& list)
+        {
+            std::vector<Event> result;
+            for (const auto& e : list)
+                if (e.on)
+                    result.push_back (e);
+            return result;
+        };
+
+        *processor.keyParam = 9;
+        *processor.scaleParam = 0;
+        *processor.octaveParam = 0;
+        *processor.registerParam = 1;
+        processor.setProgression ({});
+        run (4); // what sounds from before ends
+        *processor.arpOnParam = true;
+        run (2);  // the switch itself
+        events.clear();
+        blockStart = 0;
+
+        // A pad: the notes of the chord one after the other, a step apart (half a beat at 120 bpm is 12000 samples)
+        processor.pressPad (0);
+        run (60); // about 0.64 s: steps at 0, 12000 and 24000 samples
+        const auto padOns = onsOf (events);
+        check (padOns.size() >= 3 && padOns[0].note == 57 && padOns[1].note == 60 && padOns[2].note == 64, "arp on: a pad plays its notes one at a time, up through the chord");
+        check (padOns.size() >= 3 && padOns[0].at <= 511 && std::abs (padOns[1].at - padOns[0].at - 12000) <= 1 && std::abs (padOns[2].at - padOns[1].at - 12000) <= 1,
+               "a step apart (half a beat), the first at once");
+        // Every note ends before the next begins: only one sounds at a time
+        bool oneAtATime = true;
+        int sounding = 0;
+        for (const auto& e : events)
+        {
+            sounding += e.on ? 1 : -1;
+            oneAtATime &= sounding >= 0 && sounding <= 1;
+        }
+        check (oneAtATime, "only one note sounds at a time");
+
+        // Let go: the note ends, nothing new starts, nothing hangs
+        processor.releasePad (0);
+        events.clear();
+        run (60);
+        check (onsOf (events).empty() && processor.soundingNotes() == 0, "letting go of the pad stops the arp, nothing hangs");
+
+        // Rests: hits spread over the steps, and a pad held through the rests ends clean
+        *processor.arpHitsParam = 3;
+        processor.pressPad (2);
+        events.clear();
+        run (200);
+        const auto restOns = onsOf (events);
+        bool spaced = restOns.size() >= 3;
+        for (size_t i = 1; spaced && i < 3; ++i)
+            spaced = std::abs (restOns[i].at - restOns[i - 1].at - 3 * 12000) <= 1 || std::abs (restOns[i].at - restOns[i - 1].at - 2 * 12000) <= 1 || std::abs (restOns[i].at - restOns[i - 1].at - 3 * 12000) <= 1;
+        check (spaced, "with 3 hits in 8 steps the notes are spread (x..x..x.)");
+        processor.releasePad (2);
+        run (60);
+        check (processor.soundingNotes() == 0, "no note hangs after a pad held through the rests is let go");
+        *processor.arpHitsParam = 8;
+
+        // Switching Arp off while a pad is held: no note hangs, and the pad is the chord again from the next press
+        processor.pressPad (0);
+        run (5);
+        *processor.arpOnParam = false;
+        run (3);
+        processor.releasePad (0);
+        run (3);
+        check (processor.soundingNotes() == 0, "switching Arp off while a pad is held leaves no note hanging");
+        events.clear();
+        processor.pressPad (0);
+        run (2);
+        check (onsOf (events).size() == 3, "with the arp off a pad is the whole chord again");
+        processor.releasePad (0);
+        run (3);
+
+        // The progression: the loop plays the arp, and the MIDI file has the same notes at the same times
+        *processor.arpOnParam = true;
+        processor.setProgression ({ { { 0, engine::ChordType::Minor, engine::kAutoInversion }, 4.0, false },
+                                    { { 8, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false } });
+        run (3);
+        FakeTransport arpTransport;
+        arpTransport.playing = true;
+        arpTransport.quarters = 0.0;
+        events.clear();
+        // About 8 beats (two bars at 120 bpm is 192000 samples = 375 blocks), the transport moving along in step with the blocks
+        for (int b = 0; b < 380; ++b)
+        {
+            arpTransport.quarters = (double) (b * 512) / 24000.0; // 24000 samples is one beat at 120 bpm and 48 kHz
+            run (1, &arpTransport);
+        }
+        std::vector<Event> loopOns = onsOf (events);
+        const auto expected = engine::exportNotes (processor.getProgression(), 9, engine::ScaleId::Minor, true, 0, 60, processor.getArpSettings());
+        bool matches = loopOns.size() >= expected.size() && expected.size() == 16;
+        long long firstAt = loopOns.empty() ? 0 : loopOns.front().at;
+        for (size_t i = 0; matches && i < expected.size(); ++i)
+            matches = loopOns[i].note == expected[i].note && std::abs ((loopOns[i].at - firstAt) - (long long) std::llround (expected[i].start * 24000.0)) <= 512;
+        check (matches, "the loop plays the arp as the MIDI file has it: the same notes, at the same times (to within a block)");
+        arpTransport.playing = false;
+        run (3, &arpTransport);
+        check (processor.soundingNotes() == 0, "when the transport stops no note hangs");
+
+        // Switching Arp off in the middle of the loop leaves nothing hanging either
+        arpTransport.playing = true;
+        arpTransport.quarters = 0.0;
+        run (10, &arpTransport);
+        *processor.arpOnParam = false;
+        run (3, &arpTransport);
+        arpTransport.playing = false;
+        run (3, &arpTransport);
+        check (processor.soundingNotes() == 0, "switching the arp off while the loop plays leaves no note hanging");
+
+        // The settings are saved with the project
+        *processor.arpOnParam = true;
+        *processor.arpStyleParam = 3;
+        *processor.arpRateParam = 2;
+        *processor.arpOctavesParam = 2;
+        *processor.arpStepsParam = 12;
+        *processor.arpHitsParam = 5;
+        *processor.arpRotationParam = 3;
+        juce::MemoryBlock arpState;
+        processor.getStateInformation (arpState);
+        ProgrezzorProcessor arpRestored;
+        arpRestored.setStateInformation (arpState.getData(), (int) arpState.getSize());
+        const auto restored = arpRestored.getArpSettings();
+        check (restored.on && restored.style == 3 && restored.rate == 2 && restored.octaves == 2 && restored.steps == 12 && restored.hits == 5 && restored.rotation == 3,
+               "the arp settings come back from a saved project");
+
+        // The button and the panel
+        {
+            auto& bar = static_cast<ProgrezzorEditor*> (editor.get())->getBar();
+            *processor.arpOnParam = false;
+            bar.updateButtons();
+            check (! bar.getArpButton().getToggleState(), "the Arp button is off when the arp is off");
+            *processor.arpOnParam = true;
+            bar.updateButtons();
+            check (bar.getArpButton().getToggleState(), "and lit when it is on");
+            settle (60);
+            snapshot ("arp_on");
+            *processor.arpOnParam = false;
+            bar.updateButtons();
+            if (! prefix.empty())
+            {
+                auto panel = bar.makeArpPanel();
+                *processor.arpOnParam = true;
+                *processor.arpHitsParam = 5;
+                *processor.arpStyleParam = 2;
+                *processor.arpRateParam = 2;
+                panel->setLookAndFeel (&editor->getLookAndFeel());
+                saveSnapshot (*panel, prefix + "_arp_panel.png");
+                panel->setLookAndFeel (nullptr);
+            }
+        }
+
+        *processor.arpOnParam = false;
+        *processor.arpStyleParam = 0;
+        *processor.arpRateParam = engine::kDefaultArpRate;
+        *processor.arpOctavesParam = 1;
+        *processor.arpStepsParam = 8;
+        *processor.arpHitsParam = 8;
+        *processor.arpRotationParam = 0;
+        run (3);
+        processor.setProgression ({});
     }
 
     std::printf ("block lengths\n");
