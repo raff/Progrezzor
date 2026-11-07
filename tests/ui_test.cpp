@@ -437,6 +437,63 @@ int main (int argc, char** argv)
             settle (50);
         }
 
+        // Capture is a switch: while it is on, every chord played goes at the end of the bar as one bar
+        {
+            const auto barBefore = processor.getProgression();
+            check (! bar.isCapturing(), "Capture starts off");
+            processor.pressPad (4);
+            runBlock (processor);
+            processor.releasePad (4);
+            runBlock (processor);
+            bar.updateButtons();
+            check (processor.getProgression() == barBefore, "a chord played while Capture is off adds nothing");
+
+            bar.getCaptureButton().triggerClick();
+            settle (50);
+            check (bar.isCapturing() && bar.getCaptureButton().getToggleState(), "the Capture button switches it on");
+            snapshot ("capture_on");
+            for (int pad : { 1, 3, 3 })
+            {
+                processor.pressPad (pad);
+                runBlock (processor);
+                processor.releasePad (pad);
+                runBlock (processor);
+                bar.updateButtons();
+            }
+            const auto now = processor.getProgression();
+            check (now.size() == barBefore.size() + 3, "each chord played is added");
+            check (now[barBefore.size()].chord == processor.getPadChord (1) && now[barBefore.size() + 2].chord == processor.getPadChord (3)
+                       && near (now.back().beats, processor.getHostBarBeats()),
+                   "at the end, in the order played, one bar each");
+            check (std::vector<engine::Block> (now.begin(), now.begin() + (long) barBefore.size()) == barBefore, "the chords that were there are not changed");
+
+            processor.undo();
+            check (processor.getProgression().size() == now.size() - 1, "Undo takes the last one away");
+            processor.redo();
+
+            bar.getCaptureButton().triggerClick();
+            settle (50);
+            check (! bar.isCapturing(), "the Capture button switches it off");
+            processor.pressPad (5);
+            runBlock (processor);
+            processor.releasePad (5);
+            runBlock (processor);
+            bar.updateButtons();
+            check (processor.getProgression() == now, "and then nothing more is added");
+
+            bar.getCaptureButton().triggerClick();
+            settle (50);
+            check (bar.isCapturing(), "Capture on again");
+            processor.togglePlay();
+            settle (80);
+            bar.updateButtons();
+            check (! bar.isCapturing() && ! bar.getCaptureButton().isEnabled(), "Play switches Capture off, and it cannot be on while playing");
+            processor.togglePlay();
+            settle (80);
+            processor.setProgression (barBefore);
+            settle (50);
+        }
+
         // A new project starts in C Major with the plainest mood
         {
             ProgrezzorProcessor fresh;

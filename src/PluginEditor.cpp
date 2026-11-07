@@ -355,11 +355,12 @@ void LearnToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButto
 void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonDown)
 {
     const bool enabled = isEnabled();
-    const auto base = accented ? theme::accent : (isMouseOver && enabled ? theme::padHover : theme::pad);
+    const bool lit = accented || getToggleState();
+    const auto base = lit ? theme::accent : (isMouseOver && enabled ? theme::padHover : theme::pad);
     const auto face = theme::drawKey (g, getLocalBounds().toFloat(), enabled ? base : theme::pad.darker (0.3f), 9.0f, 4.0f, isButtonDown && enabled, isMouseOver && enabled);
     const auto bounds = face;
 
-    const auto colour = accented ? theme::onAccent
+    const auto colour = lit ? theme::onAccent
                                  : (enabled ? (isMouseOver ? theme::text : theme::dimText.brighter (0.2f)) : theme::dimText.withAlpha (0.35f));
     g.setColour (colour);
     const auto centre = bounds.getCentre();
@@ -1400,6 +1401,36 @@ public:
     }
 };
 
+// Capture: while it is on, every chord you play (on a pad with the mouse, or from the MIDI keyboard) is put at the end of the
+// bar as a chord of one bar. It is a switch, so it is clear when it is on. Undo takes the chords away again.
+void ProgressionBar::setCapturing (bool on)
+{
+    capturing = on && editing && ! textMode && ! processor.isLearning();
+    captureButton.setToggleState (capturing, juce::dontSendNotification);
+    captureSeen = processor.getPlayedCount();
+    repaint (trayBounds);
+}
+
+void ProgressionBar::toggleCapture()
+{
+    setCapturing (! capturing);
+}
+
+void ProgressionBar::takePlayedChords()
+{
+    if (! capturing)
+        return;
+    if (! editing || textMode || processor.isLearning()) // Play, Quick-text and Learn switch it off
+    {
+        setCapturing (false);
+        return;
+    }
+    const auto played = processor.chordsPlayedSince (captureSeen);
+    captureSeen = processor.getPlayedCount();
+    for (const auto& chord : played)
+        processor.editProgression (engine::withInserted (processor.getProgression(), (int) processor.getProgression().size(), chord, processor.getHostBarBeats()));
+}
+
 void ProgressionBar::toggleLearn()
 {
     processor.setLearning (! processor.isLearning());
@@ -1472,6 +1503,12 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     learnButton.setComponentID ("learn");
     learnButton.onClick = [this] { toggleLearn(); };
     addAndMakeVisible (learnButton);
+
+    captureButton.setToggle();
+    captureButton.setTooltip ("Capture: while it is on, every chord you play is added to the end of the bar, one bar each. Undo takes them away");
+    captureButton.setComponentID ("capture");
+    captureButton.onClick = [this] { setCapturing (captureButton.getToggleState()); };
+    addAndMakeVisible (captureButton);
 
     arpButton.setTooltip ("Arp: play everything one note at a time (the MIDI file follows)");
     arpButton.setComponentID ("arp");
@@ -1761,6 +1798,8 @@ void ProgressionBar::updateButtons()
     playButton.setEnabled (playOn || ! processor.getProgression().empty()); // an empty bar cannot be played
     arpButton.setToggleState (processor.getArpSettings().on, juce::dontSendNotification);
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
+    takePlayedChords();
+    captureButton.setEnabled (editing && ! textMode && ! processor.isLearning());
 
     // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
     const int octave = processor.getGeneralOctave();
@@ -2195,7 +2234,7 @@ void ProgressionBar::paint (juce::Graphics& g)
         g.setColour (theme::dimText);
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
             g.setFont (l->labelFont (16.0f));
-        g.drawText (editing ? "Drag a chord down here, or press Suggest" : "Press Suggest",
+        g.drawText (editing ? "Drag a chord down here, or press Suggest" : capturing ? "Capture is on: play a chord and it lands here" : "Press Suggest, or switch Capture on and play",
                     trayBounds, juce::Justification::centred);
     }
 
@@ -2345,25 +2384,28 @@ void ProgressionBar::resized()
 
     // The right side. The group (the buttons and the Drag tile) grows with the window, and the little keyboard sits in the
     // bottom right corner under all of it, as wide as the group.
-    const int groupWidth = juce::jlimit (240, 460, juce::roundToInt ((float) getWidth() * 0.27f));
+    const int groupWidth = juce::jlimit (214, 460, juce::roundToInt ((float) getWidth() * 0.27f));
     auto group = area.removeFromRight (groupWidth).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromRight (10);
-    const int rowHeight = (group.getHeight() - 10) / 3;
+    const int rowHeight = (group.getHeight() - 15) / 4;
     stripBounds = group.removeFromBottom (rowHeight);
     group.removeFromBottom (5);
     auto upper = group;
     dragTile.setBounds (upper.removeFromRight (std::min (68, std::max (56, upper.getHeight()))));
     upper.removeFromRight (10);
     auto right = upper;
+    auto captureRow = right.removeFromTop (rowHeight);
+    settingsButton.setBounds (captureRow.removeFromRight ((right.getWidth() - 12) / 3));
+    captureRow.removeFromRight (6);
+    captureButton.setBounds (captureRow);
+    right.removeFromTop (5);
     auto smallRow = right.removeFromTop (rowHeight);
-    const int smallWidth = (smallRow.getWidth() - 18) / 4;
+    const int smallWidth = (smallRow.getWidth() - 12) / 3;
     undoButton.setBounds (smallRow.removeFromLeft (smallWidth));
     smallRow.removeFromLeft (6);
     redoButton.setBounds (smallRow.removeFromLeft (smallWidth));
     smallRow.removeFromLeft (6);
-    quickTextButton.setBounds (smallRow.removeFromLeft (smallWidth));
-    smallRow.removeFromLeft (6);
-    settingsButton.setBounds (smallRow);
+    quickTextButton.setBounds (smallRow);
     right.removeFromTop (5);
 
     // Oct- and Oct+ with the register between them

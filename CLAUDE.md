@@ -39,7 +39,7 @@ Alt ligger på én skærm uden faner.
 
 - Topbjælke: Toneart og skala, Lock to scale (🔒), Mood, stemme og en tydelig 🎲 Suggest-knap.
 - Midten: 7 store pads, der fylder hele bredden og næsten halvdelen af vinduet. De skal kunne hamres på med mus eller MIDI.
-- Bund: Rundgangsbjælken, et kort for sig med en mørk bakke til blokkene: Play, blokke (ombrydes i flere rækker), Fortryd, Gendan, ✏️ Quick-text (fast plads i højre side) og Drag.
+- Bund: Rundgangsbjælken, et kort for sig med en mørk bakke til blokkene: Play, blokke (ombrydes i flere rækker), Capture (til/fra), Fortryd, Gendan, ✏️ Quick-text (fast plads i højre side) og Drag.
 
 Regler:
 
@@ -139,7 +139,7 @@ Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Moo
 ## Rundgangen
 
 - Hver afspillet akkord kommer i historikken. Samme akkord to gange i træk tæller som to.
-- Capture (en knap, der lagde de sidste 8 spillede akkorder i bjælken) er fjernet indtil videre (Henrik, 2026-11-07), fordi det ikke er afklaret, hvordan den bør virke. Idéerne med en historiestribe ligger på branchen feature/capture-history og kan genbruges. Historikken over spillede akkorder bruges stadig til at lyse pads op (se Forslag).
+- Capture er en TÆNDT/SLUKKET knap (Henrik, 2026-11-07, på prøve på branchen feature/capture-toggle). Er den tændt (lyser med accentfarven), bliver hver akkord, der spilles, sat sidst i rundgangen som én blok på 1 takt, uanset om den spilles med mus på en pad eller fra MIDI-tastaturet. Er den slukket, sker der ingenting. Den kan kun tændes, når Play er slukket, og Play, Quick-text og Learn slukker den. Fortryd tager akkorderne væk igen, en ad gangen. Den gamle Capture-knap (de sidste 8) er væk; historiestriben ligger på feature/capture-history.
 - Standardlængde er 1 takt. Mindste længde er ½ takt, største er 8 takter. Længder ændres ved at trække i blokkens højre kant med trin på ½ takt.
 - Rundgangen kan have alle samlede længder, også ulige antal takter.
 - Træk en blok for at flytte den. Hold Ctrl (Option på Mac) nede for at duplikere.

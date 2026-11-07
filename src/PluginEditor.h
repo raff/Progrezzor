@@ -96,6 +96,8 @@ public:
     BarButton (const juce::String& name, Icon i) : juce::Button (name), icon (i) {}
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
     void setAccented (bool nowAccented) { accented = nowAccented; } // filled with the accent colour: the one thing to press
+    // A button that stays down (Capture): filled with the accent colour while it is on
+    void setToggle() { setClickingTogglesState (true); }
 
 private:
     Icon icon;
@@ -260,6 +262,9 @@ public:
     void showSettingsMenu();
     void showArpPanel();
     void toggleLearn();
+    void toggleCapture();
+    bool isCapturing() const { return capturing; }
+    BarButton& getCaptureButton() { return captureButton; }
     std::unique_ptr<juce::Component> makeArpPanel(); // the panel behind the Arp button (also for the tests)
     void toggleArp();
     bool arpPanelShown = false;
@@ -311,6 +316,11 @@ private:
     BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     ArpToggle arpButton;
     LearnToggle learnButton;
+    BarButton captureButton { "Capture", BarButton::Icon::None };
+    bool capturing = false;
+    unsigned captureSeen = 0; // how many played chords had been played when Capture went on, or were last taken
+    void setCapturing (bool on);
+    void takePlayedChords();
     BarButton arpOptionsButton { "Arp options", BarButton::Icon::Dots };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };
