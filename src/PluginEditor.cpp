@@ -3016,9 +3016,9 @@ void ProgrezzorEditor::resized()
     area.removeFromTop (8);
     padLabel = area.removeFromTop (18);
 
-    // The pads are a third lower than before (65 %); the bar under them gets the rest, with room for several rows
+    // The pads are a quarter lower than before (65 % became 49 %), same width; the bar under them gets the rest, with room for several rows
     const int oldBarHeight = juce::jlimit (70, 130, getHeight() / 5);
-    const int padHeight = juce::roundToInt ((float) (area.getHeight() - oldBarHeight - 12) * 0.65f);
+    const int padHeight = juce::roundToInt ((float) (area.getHeight() - oldBarHeight - 12) * 0.49f);
     bar.setBounds (area.removeFromBottom (area.getHeight() - padHeight - 12));
     area.removeFromBottom (12);
 
