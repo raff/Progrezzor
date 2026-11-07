@@ -98,10 +98,13 @@ public:
     void setAccented (bool nowAccented) { accented = nowAccented; } // filled with the accent colour: the one thing to press
     // A button that stays down (Capture): filled with the accent colour while it is on
     void setToggle() { setClickingTogglesState (true); }
+    void setRecordDot() { recordDot = true; } // a red dot before the label, like a record button
+
 
 private:
     Icon icon;
     bool accented = false;
+    bool recordDot = false;
 };
 
 // The Drag tile: a small MIDI file. Drag it into the DAW (the file is written when the drag starts). It is the operating
@@ -316,7 +319,7 @@ private:
     BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     ArpToggle arpButton;
     LearnToggle learnButton;
-    BarButton captureButton { "Capture", BarButton::Icon::None };
+    BarButton captureButton { "Rec", BarButton::Icon::None };
     bool capturing = false;
     unsigned captureSeen = 0; // how many played chords had been played when Capture went on, or were last taken
     void setCapturing (bool on);

@@ -422,7 +422,17 @@ void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
             if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
                 g.setFont (l->titleFont (15.0f));
             {
-                const auto labelArea = bounds.toNearestInt();
+                auto labelArea = bounds.toNearestInt();
+                if (recordDot)
+                {
+                    const auto label = getButtonText().isEmpty() ? getName() : getButtonText();
+                    const float textWidth = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), label);
+                    const float dot = 9.0f, gap = 6.0f;
+                    const float x = bounds.getCentreX() - (textWidth + gap + dot) * 0.5f;
+                    g.setColour (getToggleState() ? juce::Colour (0xffe0202a) : juce::Colour (0xffe0202a).withAlpha (enabled ? 0.75f : 0.3f));
+                    g.fillEllipse (juce::Rectangle<float> (dot, dot).withCentre ({ x + dot * 0.5f, bounds.getCentreY() }));
+                    labelArea = labelArea.withTrimmedLeft ((int) (dot + gap));
+                }
                 g.setColour (theme::shade.withAlpha (accented ? 0.0f : 0.35f));
                 g.drawText (getButtonText().isEmpty() ? getName() : getButtonText(), labelArea.translated (0, 1), juce::Justification::centred);
                 g.setColour (colour);
@@ -793,7 +803,7 @@ void BlockButton::paint (juce::Graphics& g)
 
     // In Edit the lock shows on mouseover, and always on a block that is locked (in Play only on a locked one)
     if (locked || (editable && hovered()))
-        drawLock (g, lockArea().toFloat().reduced (5.0f), locked ? (heldByMouse ? theme::onAccent : theme::accent) : theme::dimText, locked);
+        drawLock (g, lockArea().toFloat().reduced (5.0f), locked ? (heldByMouse ? theme::onAccent : juce::Colours::white) : juce::Colours::white.withAlpha (0.75f), locked);
 
     // The arrows for the octave of this block, in Edit on mouseover
     if (editable && hovered())
@@ -1507,8 +1517,9 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     addAndMakeVisible (learnButton);
 
     captureButton.setToggle();
-    captureButton.setTooltip ("Capture: while it is on, every chord you play is added to the end of the bar, one bar each. Undo takes them away");
-    captureButton.setComponentID ("capture");
+    captureButton.setRecordDot();
+    captureButton.setTooltip ("Rec: while it is on, every chord you play is added to the end of the bar, one bar each. Undo takes them away");
+    captureButton.setComponentID ("rec");
     captureButton.onClick = [this] { setCapturing (captureButton.getToggleState()); };
     addAndMakeVisible (captureButton);
 
@@ -2244,7 +2255,7 @@ void ProgressionBar::paint (juce::Graphics& g)
         g.setColour (theme::dimText);
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
             g.setFont (l->labelFont (16.0f));
-        g.drawText (editing ? "Drag a chord down here, or press Suggest" : capturing ? "Capture is on: play a chord and it lands here" : "Press Suggest, or switch Capture on and play",
+        g.drawText (editing ? "Drag a chord down here, or press Suggest" : capturing ? "Rec is on: play a chord and it lands here" : "Press Suggest, or switch Rec on and play",
                     trayBounds, juce::Justification::centred);
     }
 
