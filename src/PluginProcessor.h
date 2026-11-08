@@ -143,7 +143,7 @@ public:
 
     // The chords played on the pads (mouse and MIDI), newest last, at most `count`. Blocks and the loop are not in it.
     std::vector<engine::Chord> recentChords (int count) const;
-    // How many chords have been played so far, and the ones played after that count (at most the last 32). Capture uses these.
+    // How many chords have been played so far, and the ones played after that count (at most the last 32). Rec uses these.
     unsigned getPlayedCount() const { return historyCount.load (std::memory_order_acquire); }
     std::vector<engine::Chord> chordsPlayedSince (unsigned count) const { return recentChords ((int) std::min<unsigned> (getPlayedCount() - count, 32u)); }
 

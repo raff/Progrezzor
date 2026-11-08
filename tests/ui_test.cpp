@@ -437,21 +437,21 @@ int main (int argc, char** argv)
             settle (50);
         }
 
-        // Capture is a switch: while it is on, every chord played goes at the end of the bar as one bar
+        // Rec is a switch: while it is on, every chord played goes at the end of the bar as one bar
         {
             const auto barBefore = processor.getProgression();
-            check (! bar.isCapturing(), "Capture starts off");
+            check (! bar.isRecOn(), "Rec starts off");
             processor.pressPad (4);
             runBlock (processor);
             processor.releasePad (4);
             runBlock (processor);
             bar.updateButtons();
-            check (processor.getProgression() == barBefore, "a chord played while Capture is off adds nothing");
+            check (processor.getProgression() == barBefore, "a chord played while Rec is off adds nothing");
 
-            bar.getCaptureButton().triggerClick();
+            bar.getRecButton().triggerClick();
             settle (50);
-            check (bar.isCapturing() && bar.getCaptureButton().getToggleState(), "the Capture button switches it on");
-            snapshot ("capture_on");
+            check (bar.isRecOn() && bar.getRecButton().getToggleState(), "the Rec button switches it on");
+            snapshot ("rec_on");
             for (int pad : { 1, 3, 3 })
             {
                 processor.pressPad (pad);
@@ -471,7 +471,7 @@ int main (int argc, char** argv)
             check (processor.getProgression().size() == now.size() - 1, "Undo takes the last one away");
             processor.redo();
 
-            // A pad pulled into the bar while Capture is on counts once (the press that starts the drag is not added too)
+            // A pad pulled into the bar while Rec is on counts once (the press that starts the drag is not added too)
             {
                 const auto sizeBefore = processor.getProgression().size();
                 processor.pressPad (2);
@@ -483,15 +483,15 @@ int main (int argc, char** argv)
                 ui.getPad (2).onDragEnd (bar.localPointToGlobal (juce::Point<int> (bar.getBlock (0)->getBounds().getRight() + 2, bar.getBlock (0)->getBounds().getCentreY())));
                 settle (50);
                 bar.updateButtons();
-                check (processor.getProgression().size() == sizeBefore + 1, "a pad dragged in while Capture is on is added once");
+                check (processor.getProgression().size() == sizeBefore + 1, "a pad dragged in while Rec is on is added once");
                 check (processor.getProgression()[1].chord == processor.getPadChord (2), "and it is where it was let go");
                 processor.undo(); // the drop
                 settle (50);
             }
 
-            bar.getCaptureButton().triggerClick();
+            bar.getRecButton().triggerClick();
             settle (50);
-            check (! bar.isCapturing(), "the Capture button switches it off");
+            check (! bar.isRecOn(), "the Rec button switches it off");
             processor.pressPad (5);
             runBlock (processor);
             processor.releasePad (5);
@@ -499,13 +499,13 @@ int main (int argc, char** argv)
             bar.updateButtons();
             check (processor.getProgression() == now, "and then nothing more is added");
 
-            bar.getCaptureButton().triggerClick();
+            bar.getRecButton().triggerClick();
             settle (50);
-            check (bar.isCapturing(), "Capture on again");
+            check (bar.isRecOn(), "Rec on again");
             processor.togglePlay();
             settle (80);
             bar.updateButtons();
-            check (! bar.isCapturing() && ! bar.getCaptureButton().isEnabled(), "Play switches Capture off, and it cannot be on while playing");
+            check (! bar.isRecOn() && ! bar.getRecButton().isEnabled(), "Play switches Rec off, and it cannot be on while playing");
             processor.togglePlay();
             settle (80);
             processor.setProgression (barBefore);
@@ -607,9 +607,9 @@ int main (int argc, char** argv)
             // With Rec on, a click on the blank pad adds a pause at the end, and a drag into the bar adds it once
             processor.setProgression (barBefore);
             settle (50);
-            bar.getCaptureButton().triggerClick();
+            bar.getRecButton().triggerClick();
             settle (50);
-            check (bar.isCapturing(), "Rec is on");
+            check (bar.isRecOn(), "Rec is on");
             restPad.onPress();
             settle (50);
             check (processor.getProgression().size() == barBefore.size() + 1 && processor.getProgression().back().rest, "with Rec on a click adds a pause at the end");
@@ -618,7 +618,7 @@ int main (int argc, char** argv)
             restPad.onDragEnd (screenAt (0, true));
             settle (50);
             check (processor.getProgression().size() == barBefore.size() + 2 && processor.getProgression()[1].rest, "a pause dragged in with Rec on is added once, where it lands");
-            bar.getCaptureButton().triggerClick();
+            bar.getRecButton().triggerClick();
             settle (50);
             processor.setProgression (barBefore);
             settle (50);
