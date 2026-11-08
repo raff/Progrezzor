@@ -13,6 +13,12 @@
 //
 // Sections are {start_of_verse} {start_of_chorus} {start_of_bridge} (short: {sov} {soc} {sob}), with an optional label after a
 // colon, and their {end_of_...} directives. Chords outside a section are not part of any section.
+//
+// Grids ({start_of_grid} ... {end_of_grid}, short {sog} {eog}) are read too: the cells between the bar lines are beats, a chord
+// starts a block, "." or "/" lets it go on, "N.C." is a pause, % repeats the measure before and %% the two before. The length of a
+// block is how many cells it takes of a measure (shape="4x4" says how many cells a measure has, else the cells of the measure
+// itself are counted). Bar line symbols (|| |: :| |1 ...) only separate measures; repeats are not played out. Margins and
+// strum lines are skipped. Each block comes out as a Quick-text word with its length in bars (C, C:2, G:0.5).
 namespace engine
 {
 struct ChordProSection
@@ -38,6 +44,11 @@ bool isChordProFileName(const std::string& fileName);
 
 // The chords as Quick-text, one bar each: "C Am F G". At most `maxChords`; `tooMany` says whether some were left out.
 std::string chordsAsQuickText(const std::vector<std::string>& chords, int maxChords, bool* tooMany = nullptr);
+
+// A ChordPro file for the progression: the title, the key and the chords as a grid with the cells of a measure as beats, so that
+// the lengths are kept (a chord that goes on is written as ".", a pause as "N.C."). Octaves are not written.
+// `barBeats` is the length of a bar in beats.
+std::string exportChordPro(const Progression&, const Key&, double barBeats, const std::string& title = "Progrezzor");
 
 // Does the song's key differ from the key of the plug-in? (Same tonic, and both major or both minor, is the same.)
 bool chordProKeyDiffers(const ChordProResult&, const Key&);

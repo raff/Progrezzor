@@ -214,7 +214,16 @@ Henrik, 2026-11-08. Genbruger Quick-text.
 - Resultatet vises som tekst i Quick-text-feltet ("C Am F G"), så brugeren kan se og rette det. Enter anvender, Esc fortryder, og rundgangen ændres først ved Enter. Alle Quick-text-regler gælder (Lock to scale, rødt for ukendte, Allow). N.C. og lignende bliver røde.
 - Har filen {key: X}, og den er en anden end plug-in'ets, står der i bunden "The song says it is in G major. Switch the key?" med en knap. Plug-in'et skifter aldrig selv. Akkorderne i teksten er navngivne, så de er de samme akkorder efter et skift.
 - Er der flere akkorder end bjælken kan rumme (32), tages de første, og en kort besked siger det. En fil uden akkorder giver en tom tekst og beskeden "No chords found in that file."
+- Grids ({start_of_grid} ... {end_of_grid}, {sog}/{eog}) læses også: cellerne mellem taktstregerne er slag, en akkord starter en blok, `.` eller `/` lader den fortsætte, `N.C.` er en pause, `%` gentager forrige takt og `%%` de to foregående. Længden af en blok er antal celler i forhold til cellerne i en takt (shape="4x4" siger det, ellers tælles cellerne i takten). Taktstreger (|| |: :| |1 ...) skiller kun takter, gentagelser spilles ikke ud, og margener og strum-linjer springes over. Hver blok bliver et Quick-text-ord med længde (C, C:2, G:0.5).
 - Plug-in'et må aldrig levere ChordPro-filer med andres sange. Testfilerne i tests/chordpro er skrevet til projektet.
+
+## Eksport som tekst
+
+Henrik, 2026-11-08. Settings har under "Import and export", ved siden af Import ChordPro, to punkter til at få rundgangen ud som tekst. Begge er slukket, når bjælken er tom.
+
+- **Copy as text** lægger rundgangen i udklipsholderen i takt-notation, som Quick-text kan læse: `| C | Am | F G | G |`. En blok på 1 takt på en taktstreg er en takt, to halve takter på en taktstreg deler en takt, og alle andre blokke får deres længde skrevet (`C:2`, `G:0.5`). Pause er R. Omvending (`G/B`) og oktav (`C+1`) skrives som i Quick-text. Lægges teksten ind igen, giver den præcis samme rundgang.
+- **Save ChordPro...** gemmer en .cho-fil: `{title: Progrezzor}`, `{key: Am}` (mol skrives med m) og rundgangen som et grid efter chordpro.org (`{start_of_grid shape="4x4"}` ... `{end_of_grid}`, fire takter pr. linje). Cellerne mellem taktstregerne er slag: en akkord starter en blok, et punkt lader den fortsætte, og en pause er `N.C.`. Så er længderne bevaret, også halve takter. Antal slag pr. takt følger værtens taktart, men altid et lige tal, så en halv takt er hele celler (3/4 giver 6). Oktaver skrives ikke i ChordPro, og Dorian og Phrygian skrives som mol.
+- ChordPro-importen læser også grids: se afsnittet ChordPro-import. En eksporteret fil kan importeres igen og giver præcis samme rundgang (undtagen oktaver).
 
 ## Gæt toneart
 

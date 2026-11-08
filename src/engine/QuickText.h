@@ -49,6 +49,11 @@ struct QuickTextResult
 // The blocks as text, exactly as they are: Am, Am:2, Am:0.5, and R for a pause. Two blocks that are alike stay two words (Am Am).
 std::string formatQuickText (const Progression&, const Key&, double barBeats = kBeatsPerBar);
 
+// The blocks as a chord chart in bar notation, which parseQuickText reads back to the same blocks: "| C | Am | F G | G |".
+// A block of one bar on a bar line is a bar; two blocks of half a bar on a bar line share one; every other block has its length
+// written (C:2, G:0.5). A pause is R. Octaves and inversions are written as in formatQuickText.
+std::string formatQuickTextBars (const Progression&, const Key&, double barBeats = kBeatsPerBar);
+
 // Reads the text. With the lock on, a chord that is not in the scale becomes a disabled block (see isBlockDisabled).
 QuickTextResult parseQuickText (const std::string& text, const Key&, double barBeats, bool lockToScale);
 

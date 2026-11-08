@@ -134,6 +134,11 @@ Kræver et MIDI-tastatur.
 - [ ] Står du allerede i den toneart, sker der ingenting.
 - [ ] ChordPro-fil med {key:}: ingen gætning. Uden {key:}: gættet kommer, når du trykker Enter.
 
+## 2n. Eksport som tekst (branch feature/text-export)
+- [ ] Settings > Copy as text: indsæt et sted (fx i en tekst): `| C | Am | F G | G |`. Åbn Quick-text, indsæt det, Enter: samme rundgang.
+- [ ] Settings > Save ChordPro...: gem en .cho-fil og åbn den i en teksteditor: titel, toneart og et grid med slag. Import ChordPro igen: samme rundgang (halve takter, omvendinger og pauser).
+- [ ] Begge punkter er slukket, når bjælken er tom.
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

@@ -2620,6 +2620,46 @@ void ProgressionBar::chooseChordProFile()
                               });
 }
 
+juce::String ProgressionBar::progressionAsText() const
+{
+    return juce::String (engine::formatQuickTextBars (processor.getProgression(), processor.getKey(), processor.getHostBarBeats()));
+}
+
+juce::String ProgressionBar::progressionAsChordPro() const
+{
+    return juce::String (engine::exportChordPro (processor.getProgression(), processor.getKey(), processor.getHostBarBeats()));
+}
+
+void ProgressionBar::copyAsText()
+{
+    if (! processor.getProgression().empty())
+        juce::SystemClipboard::copyTextToClipboard (progressionAsText());
+}
+
+bool ProgressionBar::saveChordProTo (const juce::File& file) const
+{
+    if (processor.getProgression().empty())
+        return false;
+    return file.replaceWithText (progressionAsChordPro(), false, false, "\n");
+}
+
+void ProgressionBar::saveChordPro()
+{
+    if (processor.getProgression().empty())
+        return;
+    const auto folder = ProgrezzorProcessor::getExportFolder();
+    folder.createDirectory();
+    const auto name = juce::File::createLegalFileName (juce::String (engine::exportFileName (processor.getProgression(), processor.getKey())).upToLastOccurrenceOf (".mid", false, false));
+    fileChooser = std::make_unique<juce::FileChooser> ("Save ChordPro", folder.getChildFile (name + ".cho"), "*.cho");
+    juce::Component::SafePointer<ProgressionBar> safe (this);
+    fileChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
+                              [safe] (const juce::FileChooser& chooser)
+                              {
+                                  if (safe != nullptr && chooser.getResult() != juce::File())
+                                      safe->saveChordProTo (chooser.getResult().withFileExtension ("cho"));
+                              });
+}
+
 bool ProgressionBar::importChordProFile (const juce::File& file)
 {
     if (! editing || ! file.existsAsFile() || file.getSize() > 2 * 1024 * 1024)
@@ -2722,8 +2762,10 @@ void ProgressionBar::showSettingsMenu()
     menu.addSeparator();
     menu.addItem (100, "Kept for every project. The keyboard shows where.", false, false);
     menu.addSeparator();
-    menu.addSectionHeader ("Import");
+    menu.addSectionHeader ("Import and export");
     menu.addItem (25, "Import ChordPro...", editing);
+    menu.addItem (26, "Copy as text", ! processor.getProgression().empty());
+    menu.addItem (27, "Save ChordPro...", ! processor.getProgression().empty());
     menu.addSeparator();
     menu.addSectionHeader ("Learn");
     menu.addItem (20, "Show hints from the start", true, processor.getLearnHints());
@@ -2746,6 +2788,10 @@ void ProgressionBar::showSettingsMenu()
                                 safe->chooseHomeOctave (result - 3);
                             else if (safe != nullptr && result == 25)
                                 safe->chooseChordProFile();
+                            else if (safe != nullptr && result == 26)
+                                safe->copyAsText();
+                            else if (safe != nullptr && result == 27)
+                                safe->saveChordPro();
                             else if (safe != nullptr && result == 20)
                                 safe->processor.setLearnHints (! safe->processor.getLearnHints());
                             else if (safe != nullptr && result == 21)

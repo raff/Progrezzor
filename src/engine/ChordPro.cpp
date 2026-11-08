@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdio>
 
 namespace engine
 {
@@ -108,6 +110,204 @@ bool readKey(const std::string& text, ChordProResult& out)
     out.hasKey = true;
     return true;
 }
+// 0.5, 1.5, 2: no zeros at the end
+std::string formatBarsText(double bars)
+{
+    char text[32];
+    std::snprintf(text, sizeof(text), "%.2f", bars);
+    std::string s = text;
+    while (! s.empty() && s.back() == '0')
+        s.pop_back();
+    if (! s.empty() && s.back() == '.')
+        s.pop_back();
+    return s;
+}
+
+// The cells in a measure from shape="4x4", "1+4x4+1" or "4x4"; 0 if the shape does not say
+int cellsFromShape(const std::string& argument)
+{
+    std::string shape = argument;
+    const auto equals = shape.find('=');
+    if (equals != std::string::npos)
+        shape = shape.substr(equals + 1);
+    shape.erase(std::remove_if(shape.begin(), shape.end(), [] (char c) { return c == '"' || c == '\'' || std::isspace((unsigned char) c); }), shape.end());
+
+    // left+measures x beats+right: the part with the x
+    size_t start = 0;
+    while (start <= shape.size())
+    {
+        size_t plus = shape.find('+', start);
+        const auto part = shape.substr(start, plus == std::string::npos ? std::string::npos : plus - start);
+        const auto x = part.find_first_of("xX");
+        if (x != std::string::npos)
+            return std::atoi(part.substr(x + 1).c_str());
+        if (plus == std::string::npos)
+            break;
+        start = plus + 1;
+    }
+    return 0;
+}
+
+struct GridMeasure
+{
+    std::vector<std::string> cells;
+};
+
+// The grid between {start_of_grid ...} and {end_of_grid}: the blocks as Quick-text words
+void readGrid(const std::string& body, int shapeCells, std::vector<std::string>& words)
+{
+    std::vector<GridMeasure> measures; // what was read (for % and %%)
+    bool haveBlock = false;
+    std::string blockWord;
+    double blockBars = 0.0;
+    const auto finish = [&]
+    {
+        if (haveBlock)
+            words.push_back(blockWord + (std::abs(blockBars - 1.0) > 0.005 ? ":" + formatBarsText(blockBars) : std::string()));
+        haveBlock = false;
+    };
+    const auto addMeasure = [&] (const GridMeasure& measure)
+    {
+        const int n = shapeCells > 0 ? shapeCells : (int) measure.cells.size();
+        if (n <= 0)
+            return;
+        for (const auto& cell : measure.cells)
+        {
+            if (cell == "." || cell == "/")
+            {
+                if (haveBlock)
+                    blockBars += 1.0 / n;
+                continue;
+            }
+            // Several chords in a cell (A~B): the first one
+            auto chord = cell.substr(0, cell.find('~'));
+            if (chord.empty())
+                continue;
+            finish();
+            std::string upper = chord;
+            for (auto& c : upper)
+                c = (char) std::toupper((unsigned char) c);
+            blockWord = (upper == "N.C." || upper == "NC") ? "R" : chord;
+            blockBars = 1.0 / n;
+            haveBlock = true;
+        }
+    };
+
+    int skipNext = 0;
+    GridMeasure forcedNext;
+    bool haveForced = false;
+
+    size_t lineStart = 0;
+    while (lineStart <= body.size())
+    {
+        size_t lineEnd = body.find_first_of("\r\n", lineStart);
+        if (lineEnd == std::string::npos)
+            lineEnd = body.size();
+        const auto line = body.substr(lineStart, lineEnd - lineStart);
+        lineStart = lineEnd + 1;
+
+        // Tokens: bar symbols (| || |. |: :| :|: |1 :|2>) and cells
+        struct Token { bool bar; std::string text; };
+        std::vector<Token> tokens;
+        size_t i = 0;
+        while (i < line.size())
+        {
+            const char c = line[i];
+            if (std::isspace((unsigned char) c))
+            {
+                ++i;
+                continue;
+            }
+            if (c == '|' || (c == ':' && i + 1 < line.size() && (line[i + 1] == '|' || line[i + 1] == ':')))
+            {
+                size_t j = i;
+                while (j < line.size() && (line[j] == '|' || line[j] == ':' || line[j] == '.'))
+                    ++j;
+                while (j < line.size() && std::isdigit((unsigned char) line[j]))
+                    ++j;
+                if (j < line.size() && line[j] == '>')
+                    ++j;
+                tokens.push_back({ true, line.substr(i, j - i) });
+                i = j;
+            }
+            else
+            {
+                size_t j = i;
+                while (j < line.size() && ! std::isspace((unsigned char) line[j]) && line[j] != '|')
+                    ++j;
+                tokens.push_back({ false, line.substr(i, j - i) });
+                i = j;
+            }
+        }
+
+        // A line needs a bar symbol. A strum line has S or s right after the first one: not read.
+        size_t firstBar = tokens.size();
+        for (size_t t = 0; t < tokens.size(); ++t)
+            if (tokens[t].bar)
+            {
+                firstBar = t;
+                break;
+            }
+        if (firstBar == tokens.size())
+            continue;
+        {
+            const auto barEnd = line.find(tokens[firstBar].text) + tokens[firstBar].text.size();
+            if (barEnd < line.size() && (line[barEnd] == 's' || line[barEnd] == 'S') && (barEnd + 1 >= line.size() || std::isspace((unsigned char) line[barEnd + 1])))
+                continue;
+        }
+
+        // The measures: between one bar symbol and the next. What is before the first and after the last is margin.
+        size_t t = firstBar;
+        while (t < tokens.size())
+        {
+            size_t next = t + 1;
+            GridMeasure measure;
+            while (next < tokens.size() && ! tokens[next].bar)
+                measure.cells.push_back(tokens[next++].text);
+            const bool closed = next < tokens.size(); // a bar symbol ends it
+            t = next;
+            if (! closed)
+                break;
+            if (measure.cells.empty())
+                continue;
+
+            if (skipNext > 0) // the second measure of a %% is the measure it repeats
+            {
+                --skipNext;
+                if (haveForced)
+                    addMeasure(forcedNext);
+                haveForced = false;
+                measures.push_back(forcedNext);
+                continue;
+            }
+            const auto& first = measure.cells.front();
+            if (first == "%" && ! measures.empty())
+            {
+                const auto again = measures.back();
+                addMeasure(again);
+                measures.push_back(again);
+            }
+            else if (first == "%%" && measures.size() >= 2)
+            {
+                const auto a = measures[measures.size() - 2], b = measures.back();
+                addMeasure(a);
+                measures.push_back(a);
+                forcedNext = b;
+                haveForced = true;
+                skipNext = 1;
+            }
+            else if (first == "%" || first == "%%")
+                continue;
+            else
+            {
+                addMeasure(measure);
+                measures.push_back(measure);
+            }
+        }
+    }
+    finish();
+}
+
 }
 
 ChordProResult readChordPro(const std::string& text)
@@ -175,7 +375,41 @@ ChordProResult readChordPro(const std::string& text)
 
             Kind kind;
             bool starts;
-            if (name == "key")
+            if (name == "start_of_grid" || name == "sog")
+            {
+                // Everything up to {end_of_grid} is the grid
+                size_t gridEnd = length;
+                size_t after = length;
+                for (size_t search = end + 1; search < length;)
+                {
+                    const size_t brace = text.find('{', search);
+                    if (brace == std::string::npos)
+                        break;
+                    const size_t close = text.find('}', brace);
+                    if (close == std::string::npos)
+                        break;
+                    const auto inner = trim(text.substr(brace + 1, close - brace - 1));
+                    const auto innerName = lower(trim(inner.substr(0, inner.find_first_of(": \t"))));
+                    if (innerName == "end_of_grid" || innerName == "eog")
+                    {
+                        gridEnd = brace;
+                        after = close + 1;
+                        break;
+                    }
+                    search = close + 1;
+                }
+                std::vector<std::string> words;
+                readGrid(text.substr(end + 1, gridEnd - (end + 1)), cellsFromShape(arg), words);
+                for (const auto& word : words)
+                {
+                    result.chords.push_back(word);
+                    if (open.kind != Kind::None)
+                        open.chords.push_back(word);
+                }
+                i = after;
+                continue;
+            }
+            else if (name == "key")
                 readKey(arg, result);
             else if (sectionDirective(name, kind, starts))
             {
@@ -251,6 +485,46 @@ std::string chordsAsQuickText(const std::vector<std::string>& chords, int maxCho
             text += ' ';
         text += chords[i];
     }
+    return text;
+}
+
+std::string exportChordPro(const Progression& progression, const Key& key, double barBeats, const std::string& title)
+{
+    // How many cells a measure has: its beats, but an even number, so that half a bar is whole cells
+    int cells = (int) std::lround(barBeats);
+    if (cells < 2)
+        cells = 2;
+    if (cells % 2 != 0)
+        cells *= 2;
+    const int measuresPerLine = 4;
+
+    std::string text = "{title: " + title + "}\n";
+    text += "{key: " + keyName(key) + (key.scale == ScaleId::Major ? "" : "m") + "}\n";
+    text += "{start_of_grid shape=\"" + std::to_string(measuresPerLine) + "x" + std::to_string(cells) + "\"}\n";
+
+    // The cells in order: a chord, then a dot for each cell it goes on
+    std::vector<std::string> stream;
+    for (const auto& block : progression)
+    {
+        const int n = std::max(1, (int) std::lround(block.beats / barBeats * cells));
+        stream.push_back(block.rest ? "N.C." : chordName(block.chord, key));
+        for (int c = 1; c < n; ++c)
+            stream.push_back(".");
+    }
+
+    size_t at = 0;
+    while (at < stream.size())
+    {
+        std::string line = "|";
+        for (int measure = 0; measure < measuresPerLine && at < stream.size(); ++measure)
+        {
+            for (int c = 0; c < cells && at < stream.size(); ++c)
+                line += " " + stream[at++];
+            line += " |";
+        }
+        text += line + "\n";
+    }
+    text += "{end_of_grid}\n";
     return text;
 }
 

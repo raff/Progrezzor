@@ -2190,6 +2190,77 @@ int main (int argc, char** argv)
     }
 
     {
+        std::printf ("text export\n");
+        auto& bar = static_cast<ProgrezzorEditor*> (editor.get())->getBar();
+        const int oldKey = processor.keyParam->getIndex(), oldScale = processor.scaleParam->getIndex();
+        const bool oldLock = processor.isLockedToScale();
+        *processor.keyParam = 0;
+        *processor.scaleParam = (int) engine::ScaleId::Major;
+        *processor.lockParam = true;
+        bar.setEditing (true);
+        const auto mk = [] (int root, engine::ChordType type, double beats, int inversion = engine::kAutoInversion)
+        {
+            engine::Block b;
+            b.chord = { root, type, inversion };
+            b.beats = beats;
+            return b;
+        };
+        engine::Block pause;
+        pause.rest = true;
+        pause.beats = 2.0;
+        const engine::Progression original { mk (0, engine::ChordType::Major, 4), mk (9, engine::ChordType::Minor, 2), mk (5, engine::ChordType::Major, 2), mk (7, engine::ChordType::Major, 4, 1),
+                                             pause, mk (2, engine::ChordType::Min7, 6), mk (4, engine::ChordType::Minor, 2) };
+        const auto sameBar = [] (const engine::Progression& a, const engine::Progression& b)
+        {
+            if (a.size() != b.size())
+                return false;
+            for (size_t i = 0; i < a.size(); ++i)
+                if (a[i].rest != b[i].rest || std::abs (a[i].beats - b[i].beats) > 1.0e-9 || (! a[i].rest && a[i].chord != b[i].chord))
+                    return false;
+            return true;
+        };
+        processor.setProgression (original);
+        settle (60);
+
+        check (bar.progressionAsText() == "| C | Am F | G/B | R:0.5 | Dm7:1.5 | Em:0.5 |", "the text of the bar");
+
+        // Copy as text, and back in with Quick-text: the same bar
+        bar.startQuickText();
+        bar.getTextEditor().setText (bar.progressionAsText(), false);
+        processor.setProgression ({});
+        bar.applyQuickText();
+        settle (60);
+        check (sameBar (processor.getProgression(), original), "the copied text gives the same bar when it is put back with Quick-text");
+        if (bar.isAskingKey())
+            bar.getGuessKeepButton().triggerClick();
+        settle (60);
+
+        // Save ChordPro, and import the file again
+        const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("progrezzor-test-export.cho");
+        check (bar.saveChordProTo (file) && file.existsAsFile(), "the ChordPro file is saved");
+        const auto text = file.loadFileAsString();
+        check (text.contains ("{title: Progrezzor}") && text.contains ("{key: C}") && text.contains ("{start_of_grid shape=\"4x4\"}") && text.contains ("{end_of_grid}") && text.contains ("N.C."),
+               "it has the title, the key and a grid with N.C. for the pause");
+        processor.setProgression ({});
+        check (bar.importChordProFile (file), "the file is read again");
+        bar.applyQuickText();
+        settle (60);
+        check (sameBar (processor.getProgression(), original), "and it gives the same bar: half bars, an inversion and a pause");
+        file.deleteFile();
+        if (bar.isAskingKey())
+            bar.getGuessKeepButton().triggerClick();
+        settle (60);
+
+        processor.setProgression ({});
+        check (! bar.saveChordProTo (file), "an empty bar is not saved");
+        processor.setProgression ({});
+        *processor.keyParam = oldKey;
+        *processor.scaleParam = oldScale;
+        *processor.lockParam = oldLock;
+        settle (60);
+    }
+
+    {
         std::printf ("bass note\n");
         check (! processor.bassParam->get(), "the bass note is off as standard");
         *processor.bassParam = true;
