@@ -1,0 +1,11 @@
+{title: Test tune with a grid}
+{key: Am}
+{start_of_grid shape="1+4x4+1"}
+|| Am . . . | F . . . | C . G . | G . . . ||
+|  Am . . . | % . . . | N.C. . . . | E . . . |
+{end_of_grid}
+{start_of_grid shape="2x2"}
+Intro | D . | E . | %% . | . . |
+|s dn up | dn up |
+| Bm . | % |
+{end_of_grid}

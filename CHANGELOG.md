@@ -11,6 +11,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Added
+- **Copy as text and Save ChordPro.** Settings has "Copy as text" (the progression as a chord chart in bar notation, like `| C | Am | F G | G |`, which Quick-text reads back) and "Save ChordPro..." (a .cho file with the title, the key and the chords as a grid, so the lengths are kept). ChordPro import now reads grids too, so an exported file gives the same progression when it is imported again.
 - **Guess the key.** When you put chords in with Quick-text or import a ChordPro file, Progrezzor looks at which major or minor key they fit. If it is another key than the one you are in, a card asks "These chords fit A Minor." with Switch and Keep. It never switches by itself, and a file that says its own key is not guessed.
 - **Chord charts in Quick-text.** Type or paste a chart with bar lines, like `| C | Am | F | G |`. Every bar is one block of a bar; two chords in a bar share it (`| C G |`); `%` or `/` repeats the chord before. Line breaks and extra spaces are ignored, the old notation (`Am*2`, `Am:2`) still works, and an unknown word is marked in red while the rest is used.
 - **ChordPro import.** Settings has "Import ChordPro..." (or drag a .cho, .chopro, .crd or .pro file onto the bar). The chords in square brackets become Quick-text, one bar each, to look at and change before you press Enter. A file with parts (verse, chorus, bridge) asks which part you want. If the song says its key, it asks whether to switch; it never switches by itself.

@@ -404,6 +404,58 @@ void parseBars (const std::string& text, const Key& key, double barBeats, bool l
 }
 }
 
+std::string formatQuickTextBars (const Progression& progression, const Key& key, double barBeats)
+{
+    const auto isAbout = [] (double a, double b) { return std::abs (a - b) < 0.01; };
+    const auto word = [&] (const Block& block, bool withLength)
+    {
+        std::string text;
+        if (block.rest)
+            text = "R";
+        else
+        {
+            text = chordName (block.chord, key);
+            if (block.chord.octave != 0)
+                text += (block.chord.octave > 0 ? "+" : "-") + std::to_string (std::abs (block.chord.octave));
+        }
+        if (withLength)
+            text += ":" + formatBars (block.beats / barBeats);
+        return text;
+    };
+
+    std::string out;
+    double position = 0.0; // in bars
+    size_t i = 0;
+    while (i < progression.size())
+    {
+        const auto& block = progression[i];
+        const double bars = block.beats / barBeats;
+        const bool onBarLine = isAbout (position, std::round (position));
+
+        std::string segment;
+        if (onBarLine && isAbout (bars, 1.0))
+        {
+            segment = word (block, false);
+            position += 1.0;
+            ++i;
+        }
+        else if (onBarLine && isAbout (bars, 0.5) && i + 1 < progression.size() && isAbout (progression[i + 1].beats / barBeats, 0.5))
+        {
+            segment = word (block, false) + " " + word (progression[i + 1], false);
+            position += 1.0;
+            i += 2;
+        }
+        else
+        {
+            segment = word (block, true);
+            position += bars;
+            ++i;
+        }
+        out += (out.empty() ? "| " : " ") + segment + " |";
+    }
+    return out;
+}
+
 QuickTextResult parseQuickText (const std::string& text, const Key& key, double barBeats, bool lockToScale)
 {
     QuickTextResult result;

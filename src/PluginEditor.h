@@ -261,6 +261,13 @@ public:
     // in the text field, to look at and change. A file with parts asks which one. A key in the file is asked about, never used
     // by itself. Nothing in the bar changes until Enter.
     void chooseChordProFile();                              // the file chooser
+    // Export: the progression as text. Copy as text (bar notation, which Quick-text reads) goes to the clipboard; Save ChordPro
+    // writes a .cho file with a grid. Both keep the lengths.
+    juce::String progressionAsText() const;
+    juce::String progressionAsChordPro() const;
+    void copyAsText();
+    void saveChordPro();                                    // the file chooser
+    bool saveChordProTo (const juce::File&) const;
     bool importChordProFile (const juce::File&);            // false if it cannot be read
     int readChordProText (const juce::String& text);        // reads the text and keeps it; gives how many parts it has
     void importChordProText (const juce::String& text);     // what the file says (also for the tests)

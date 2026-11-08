@@ -776,6 +776,100 @@ void testKeyGuess()
            && ! sameKeyKind ({ 0, ScaleId::Major }, { 0, ScaleId::Minor }), "the same key: the same tonic and both major or both minor");
 }
 
+void testTextExport()
+{
+    std::printf ("text export\n");
+    const auto same = [] (const Progression& a, const Progression& b)
+    {
+        if (a.size() != b.size())
+            return false;
+        for (size_t i = 0; i < a.size(); ++i)
+            if (a[i].rest != b[i].rest || std::abs (a[i].beats - b[i].beats) > 1.0e-9 || (! a[i].rest && (a[i].chord.root != b[i].chord.root || a[i].chord.type != b[i].chord.type
+                                                                                                         || a[i].chord.inversion != b[i].chord.inversion)))
+                return false;
+        return true;
+    };
+    const auto block = [] (int root, ChordType type, double beats, int inversion = kAutoInversion, int octave = 0)
+    {
+        Block b;
+        b.chord = { root, type, inversion, octave };
+        b.beats = beats;
+        return b;
+    };
+    const auto rest = [] (double beats) { Block b; b.rest = true; b.beats = beats; return b; };
+
+    // The text: | C | Am | F G | G |
+    const Key c { 0, ScaleId::Major };
+    Progression plain { block (0, ChordType::Major, 4), block (9, ChordType::Minor, 4), block (5, ChordType::Major, 2), block (7, ChordType::Major, 2), block (7, ChordType::Major, 4) };
+    checkEqual (formatQuickTextBars (plain, c, 4.0), std::string ("| C | Am | F G | G |"), "the text of a progression: | C | Am | F G | G |");
+    checkEqual (formatQuickTextBars ({ block (0, ChordType::Major, 8), rest (4), rest (2), block (7, ChordType::Major, 6) }, c, 4.0), std::string ("| C:2 | R | R:0.5 | G:1.5 |"),
+                "long blocks have their length, a pause is R");
+    check (formatQuickTextBars ({}, c, 4.0).empty(), "an empty bar is an empty text");
+
+    // Back from the text to the same progression: half bars, inversions, octaves, pauses, lengths that do not sit on the bar line
+    const std::vector<Progression> samples = {
+        plain,
+        { block (0, ChordType::Major, 2), block (7, ChordType::Major, 2), block (9, ChordType::Minor, 8), rest (4), block (5, ChordType::Major, 4) },
+        { block (7, ChordType::Major, 4, 1), block (9, ChordType::Minor, 4, 1), block (0, ChordType::Major, 4, 2), block (2, ChordType::Dom7, 4, 3), block (4, ChordType::Min7, 2, 2) },
+        { rest (2), block (9, ChordType::Minor, 2), rest (2), rest (2), block (5, ChordType::Major, 6) },
+        { block (0, ChordType::Major, 2), block (5, ChordType::Major, 4), block (7, ChordType::Major, 2), block (9, ChordType::Minor, 2) },
+        { block (3, ChordType::Sus4, 4), block (10, ChordType::Power5, 4), block (8, ChordType::Maj7, 4), block (1, ChordType::Dim, 2) },
+        { block (0, ChordType::Major, 4, kAutoInversion, 1), block (7, ChordType::Major, 4, kAutoInversion, -2) },
+    };
+    for (const auto& key : { Key { 0, ScaleId::Major }, Key { 9, ScaleId::Minor }, Key { 3, ScaleId::Major }, Key { 6, ScaleId::Dorian } })
+        for (const double bar : { 4.0, 6.0 })
+        {
+            bool allSame = true, allSameChordPro = true;
+            for (const auto& original : samples)
+            {
+                // The lengths are in beats: half a bar is half of `bar`
+                Progression p = original;
+                for (auto& b : p)
+                    b.beats = b.beats / 4.0 * bar;
+
+                const auto text = formatQuickTextBars (p, key, bar);
+                const auto read = parseQuickText (text, key, bar, false);
+                allSame &= read.problems.empty() && same (read.blocks, p);
+                bool octavesSame = read.blocks.size() == p.size();
+                for (size_t i = 0; octavesSame && i < p.size(); ++i)
+                    octavesSame = read.blocks[i].chord.octave == p[i].chord.octave;
+                allSame &= octavesSame;
+
+                // The ChordPro file: the same progression back (octaves are not in ChordPro)
+                Progression noOctave = p;
+                for (auto& b : noOctave)
+                    b.chord.octave = 0;
+                const auto file = exportChordPro (noOctave, key, bar);
+                const auto song = readChordPro (file);
+                const auto back = parseQuickText (chordsAsQuickText (song.chords, 1000), key, bar, false);
+                allSameChordPro &= back.problems.empty() && same (back.blocks, noOctave);
+            }
+            check (allSame, "the text reads back to the same progression, in " + keyName (key) + " with " + std::to_string ((int) bar) + " beats a bar");
+            check (allSameChordPro, "the ChordPro file reads back to the same progression, in " + keyName (key) + " with " + std::to_string ((int) bar) + " beats a bar");
+        }
+
+    // The ChordPro file, as it is written
+    const auto file = exportChordPro (plain, c, 4.0);
+    checkEqual (file, std::string ("{title: Progrezzor}\n{key: C}\n{start_of_grid shape=\"4x4\"}\n| C . . . | Am . . . | F . G . | G . . . |\n{end_of_grid}\n"),
+                "the ChordPro file: title, key and a grid with four beats a bar");
+    const auto minorFile = exportChordPro ({ block (0, ChordType::Minor, 4), rest (2), block (3, ChordType::Major, 4, 1) }, Key { 9, ScaleId::Minor }, 4.0);
+    checkEqual (minorFile, std::string ("{title: Progrezzor}\n{key: Am}\n{start_of_grid shape=\"4x4\"}\n| Am . . . | N.C. . C/E . | . . |\n{end_of_grid}\n"),
+                "a minor key is written Am, a pause N.C., a long chord goes on with dots, the last measure is left short");
+    const auto six = exportChordPro (plain, c, 3.0);
+    check (six.find ("shape=\"4x6\"") != std::string::npos, "three beats a bar: six cells to a measure, so that half a bar is whole cells");
+    const auto keyBack = readChordPro (file);
+    check (keyBack.hasKey && keyBack.keyTonic == 0 && ! keyBack.keyMinor && readChordPro (minorFile).keyTonic == 9 && readChordPro (minorFile).keyMinor, "the key is in the file, and read back");
+    check (exportChordPro ({}, c, 4.0).find ("{end_of_grid}") != std::string::npos, "an empty progression gives an empty grid");
+
+    // Grids from other files: measures, % and %%, N.C., margins, strum lines, repeat signs
+    const auto grid = readChordPro (readTestFile ("grid.cho"));
+    const auto words = chordsAsQuickText (grid.chords, 100);
+    checkEqual (words, std::string ("Am F C:0.5 G:0.5 G Am Am R E D E D E Bm Bm"),
+                "a grid is read: % repeats a measure, %% two, N.C. is a pause, margins and strum lines are skipped, shape sets the cells");
+    check (grid.hasKey && grid.keyMinor && grid.keyTonic == 9, "the key of the grid file");
+    check (chordsAsQuickText (readChordPro ("{sog}\n| C . . . | G . . . |\n{eog}\n[Am]word\n").chords, 100) == "C G Am", "short names (sog, eog), and chords in the text come after");
+}
+
 void testChosenInversion()
 {
     std::printf ("chosen inversion\n");
@@ -1901,6 +1995,7 @@ int main()
     testQuickTextBars();
     testChordPro();
     testKeyGuess();
+    testTextExport();
     testLoopPlan();
     testEditing();
     testExport();
