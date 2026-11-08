@@ -531,7 +531,18 @@ int main (int argc, char** argv)
             processor.togglePlay();
             settle (80);
             bar.updateButtons();
-            check (! bar.isRecOn() && ! bar.getRecButton().isEnabled(), "Play switches Rec off, and it cannot be on while playing");
+            check (bar.isRecOn() && bar.getRecButton().isEnabled(), "Rec stays on while Play is lit");
+            {
+                const auto sizeBefore = processor.getProgression().size();
+                processor.pressPad (4);
+                runBlock (processor);
+                processor.releasePad (4);
+                runBlock (processor);
+                bar.updateButtons();
+                check (processor.getProgression().size() == sizeBefore + 1, "a chord played while the progression plays is added");
+            }
+            bar.getRecButton().triggerClick();
+            settle (50);
             processor.togglePlay();
             settle (80);
             processor.setProgression (barBefore);

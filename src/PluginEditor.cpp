@@ -1907,7 +1907,7 @@ public:
 // bar as a chord of one bar. It is a switch, so it is clear when it is on. Undo takes the chords away again.
 void ProgressionBar::setRec (bool on)
 {
-    recOn = on && editing && ! textMode && ! processor.isLearning();
+    recOn = on && ! textMode && ! processor.isLearning(); // also while Play is lit: chords you play are added while the progression plays
     recButton.setToggleState (recOn, juce::dontSendNotification);
     recSeen = processor.getPlayedCount();
     repaint (trayBounds);
@@ -1917,7 +1917,7 @@ void ProgressionBar::takePlayedChords()
 {
     if (! recOn)
         return;
-    if (! editing || textMode || processor.isLearning()) // Play, Quick-text and Learn switch it off
+    if (textMode || processor.isLearning()) // Quick-text and Learn switch it off (Play does not)
     {
         setRec (false);
         return;
@@ -2468,7 +2468,7 @@ void ProgressionBar::updateButtons()
     arpButton.setToggleState (processor.arpOnParam->get(), juce::dontSendNotification);
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
     takePlayedChords();
-    recButton.setEnabled (editing && ! textMode && ! processor.isLearning());
+    recButton.setEnabled (! textMode && ! processor.isLearning());
 
     // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
     const int octave = processor.getGeneralOctave();
@@ -2975,7 +2975,7 @@ bool ProgressionBar::replaceBlockWithRest (int index)
 // setDragActive takes this one back, as it does for a chord.)
 void ProgressionBar::addRestWhileRecording()
 {
-    if (! recOn || ! editing || textMode)
+    if (! recOn || textMode)
         return;
     takePlayedChords(); // chords played before the pad was pressed come first
     processor.editProgression (engine::withInsertedRest (processor.getProgression(), (int) processor.getProgression().size(), processor.getHostBarBeats()));
