@@ -276,6 +276,7 @@ Suggest bruger kun akkorder, der også findes som pads (de 7 treklange), men må
 
 ## Versioner
 
+- 0.9.x er interne test-builds og udgives aldrig. Tæl patch op ved hver build, Henrik tester for alvor. Lav ingen tags eller GitHub-releases for 0.9.x. Første offentlige udgivelse er 1.0.0.
 - Første udgivelse er 1.0.0, når Henrik selv har testet og er tilfreds. Der laves ingen 0.x- eller beta-udgivelser, for udgivelser må ikke afhænge af brugernes feedback.
 - Før 1.0.0 testes i Bitwig og REAPER på Linux og mindst én gang på Windows.
 - 1.0.x er fejlrettelser. 1.x er nye funktioner eller presets. 2.0 kun hvis gamle projekter ikke længere åbner ens.

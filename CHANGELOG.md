@@ -8,6 +8,8 @@ When releasing: move the entries under "Unreleased" into a new version
 section, raise `project(Progrezzor VERSION …)` in `CMakeLists.txt` to match and
 tag the commit (`vX.Y.Z`).
 
+0.9.x are internal test builds and are never released. Everything since 0.1.0 is listed under "Unreleased" until 1.0.0.
+
 ## [Unreleased]
 
 ### Added
