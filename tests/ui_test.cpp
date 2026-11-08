@@ -1837,6 +1837,16 @@ int main (int argc, char** argv)
             wheel->mouseUp (mouse (at (0.0f, 0.0f), 1));
             runBlock (processor);
 
+            // While Play is on a double-click changes nothing
+            processor.togglePlay();
+            runBlock (processor);
+            check (processor.isPlayOn(), "Play is on");
+            wheel->mouseDoubleClick (mouse (at (90.0f, 150.0f), 2));
+            settle (60);
+            check (processor.keyParam->getIndex() == 0, "a double-click on the wheel does not change the key while Play is on");
+            processor.togglePlay();
+            runBlock (processor);
+
             // A double-click on A major makes the key A, and it is still major
             wheel->mouseDoubleClick (mouse (at (90.0f, 150.0f), 2));
             settle (60);

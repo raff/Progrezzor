@@ -1153,6 +1153,8 @@ public:
         const auto segment = makeSegments (key)[(size_t) index];
         if (segment.ring == 2)
             return; // the odd one out is not a key
+        if (processor.isPlayOn())
+            return; // while the progression plays nothing can be changed, and a new key moves every block
         setParameter (*processor.keyParam, segment.pitchClass);
         // A major chord is a major key. A minor chord is a minor key, in the minor scale that was chosen if there is one.
         if (segment.ring == 0 && key.scale != engine::ScaleId::Major)
