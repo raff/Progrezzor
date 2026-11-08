@@ -2,6 +2,7 @@
 #include "PluginEditor.h"
 
 #include <cmath>
+#include <limits>
 
 namespace
 {
@@ -200,12 +201,31 @@ public:
         pressSource (loopSource, -1, chord, kLoopVelocity, position);
     }
 
+    // The host's position of the start of the loop's block `loopIndex`, for the block that is playing at `position`
+    double loopBlockStart (int position) const
+    {
+        const auto& snapshot = owner.loopBuffer.read();
+        double offset = 0.0;
+        for (int i = 0; i < owner.loopIndex && i < snapshot.count; ++i)
+            offset += snapshot.blocks[(size_t) i].beats;
+        const double now = owner.bufferStartBeat + position * owner.bufferBeatsPerSample;
+        const double cycles = std::floor ((now - offset) / snapshot.total + 1.0e-6);
+        return offset + cycles * snapshot.total;
+    }
+
     // The loop starts the block at its first sample
     void beginLoop (int index)
     {
         owner.loopIndex = index;
         nextChange = 0;
-        syncLoop (0, owner.loopPlan.startsOnLine); // a block that starts here sounds anew, even with the same chord
+        // The arp of a block that the host has jumped away from (or into the middle of) starts over on the new grid
+        bool stale = false;
+        if (index >= 0)
+        {
+            const auto& slot = owner.arpSlots[(size_t) engine::NoteTracker::loopSource()];
+            stale = slot.running && slot.onGrid && std::abs (slot.gridStart - loopBlockStart (0)) > 1.0e-6;
+        }
+        syncLoop (0, owner.loopPlan.startsOnLine || stale); // a block that starts here sounds anew, even with the same chord
     }
 
     // The loop goes through the block changes that fall before `position`
@@ -318,6 +338,16 @@ public:
         slot.step = 0;
         slot.running = true;
         slot.offIn = -1.0;
+        slot.onGrid = source == engine::NoteTracker::loopSource() && owner.loopIndex >= 0;
+        if (slot.onGrid)
+        {
+            // The step that is under way on the host's grid (step 0 when the block has just begun) plays at once
+            const auto& snapshot = owner.loopBuffer.read();
+            slot.gridStart = loopBlockStart (position);
+            slot.blockLen = snapshot.blocks[(size_t) owner.loopIndex].beats;
+            const double now = owner.bufferStartBeat + position * owner.bufferBeatsPerSample;
+            slot.step = std::max<std::int64_t> (0, (std::int64_t) std::floor ((now - slot.gridStart) / slot.settings.stepBeats() + 1.0e-6));
+        }
         playArpStep (source, (double) position);
     }
 
@@ -339,8 +369,18 @@ public:
             single.notes[0] = hit.note;
             owner.tracker.press (source, single, slot.velocity, emitNow);
             slot.offIn = at + engine::kArpGate * stepSamples;
+            slot.offBeat = owner.bufferStartBeat + slot.offIn * owner.bufferBeatsPerSample;
         }
         slot.dueIn = at + stepSamples;
+        if (slot.onGrid) // the next step is on the host's grid, and it is only the block's if it starts before the block ends
+        {
+            const double stepBeats = slot.settings.stepBeats();
+            if ((double) slot.step * stepBeats >= slot.blockLen - 1.0e-9)
+                slot.dueBeat = std::numeric_limits<double>::infinity();
+            else
+                slot.dueBeat = slot.gridStart + (double) slot.step * stepBeats;
+            slot.dueIn = (slot.dueBeat - owner.bufferStartBeat) / owner.bufferBeatsPerSample;
+        }
     }
 
     // Every step and every end of a note that falls before `position`, in the order they come
@@ -390,7 +430,7 @@ public:
 
         // What is left of the arp's timers is counted from the start of the next block
         for (auto& slot : owner.arpSlots)
-            if (slot.running)
+            if (slot.running && ! slot.onGrid)
             {
                 slot.dueIn -= (double) numSamples;
                 if (slot.offIn >= 0.0)
@@ -511,6 +551,15 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         work.releaseEverything (0);
         arpWasOn = blockArp.on;
     }
+    bufferStartBeat = startBeat;
+    bufferBeatsPerSample = beatsPerSample;
+    for (auto& slot : arpSlots) // the loop's arp is on the host's grid: where its steps fall in this block
+        if (slot.running && slot.onGrid)
+        {
+            slot.dueIn = (slot.dueBeat - startBeat) / beatsPerSample;
+            if (slot.offIn >= 0.0)
+                slot.offIn = (slot.offBeat - startBeat) / beatsPerSample;
+        }
     internalPpq = playing ? startBeat + buffer.getNumSamples() * beatsPerSample : 0.0;
 
     // The loop plays while the host plays and Play is on, or on its own clock when Play was pressed with the host stopped

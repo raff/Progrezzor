@@ -30,7 +30,8 @@ using namespace engine;
 namespace
 {
 constexpr uint32_t sampleRate = 48000;
-constexpr uint32_t blockSize = 512;
+constexpr uint32_t maxBlockSize = 2048;
+uint32_t blockSize = 512; // a test may change it (the arp test runs with several buffer sizes)
 int failures = 0;
 bool everyBlockOk = true;
 bool everyBlockSilent = true;
@@ -135,7 +136,7 @@ Instance createInstance()
                 i.infos[info.name] = info;
         }
 
-    if (! i.plugin->activate (i.plugin, sampleRate, 1, blockSize) || ! i.plugin->start_processing (i.plugin))
+    if (! i.plugin->activate (i.plugin, sampleRate, 1, maxBlockSize) || ! i.plugin->start_processing (i.plugin))
     {
         std::fprintf (stderr, "could not activate the plugin\n");
         std::exit (2);
@@ -179,10 +180,10 @@ bool paramEvent (Instance& i, const char* name, const char* text, InEvent& out)
 
 void processBlock (Instance& i, uint32_t startSample, const clap_event_transport_t* transport)
 {
-    static std::vector<float> left (blockSize), right (blockSize);
+    static std::vector<float> left (maxBlockSize), right (maxBlockSize);
     float* channels[2] = { left.data(), right.data() };
-    std::fill (left.begin(), left.end(), 1.0f); // poison, so an unwritten buffer is caught
-    std::fill (right.begin(), right.end(), 1.0f);
+    std::fill (left.begin(), left.begin() + blockSize, 1.0f); // poison, so an unwritten buffer is caught
+    std::fill (right.begin(), right.begin() + blockSize, 1.0f);
 
     clap_audio_buffer_t out {};
     out.channel_count = 2;
@@ -355,6 +356,7 @@ struct BlockSpec
     int root;
     int type; // ChordType as a number: 0 major, 1 minor ...
     double beats;
+    int inversion = -1;
 };
 
 std::string progressionXml (int key, int scale, const std::vector<BlockSpec>& blocks)
@@ -1047,6 +1049,58 @@ int main (int argc, char** argv)
         playBlocks (s, stopBeat, 2, 120.0, false);
         check (s.out.sounding() == 0, "nothing hangs after the transport stops");
         check (s.out.totalOns == s.out.totalOffs, "as many note offs as note ons");
+    }
+
+
+    {
+        std::printf ("loop with the arp: never two notes at once, at any tempo or buffer size\n");
+        // C, G/B, F/A, G in C Major, the arp Up, Normal, Even, 8 steps, 8 hits, 1 octave, over 64 bars
+        const std::vector<BlockSpec> walking = { { 0, 0, 4 }, { 7, 0, 4, 1 }, { 5, 0, 4, 1 }, { 7, 0, 4 } };
+        const uint32_t sizes[] = { 64, 256, 441, 512, 1024 };
+        const double tempi[] = { 120.0, 128.0, 135.0, 140.0 };
+        int tooClose = 0, wrongCount = 0, runs = 0;
+        double worstGap = 1.0e9;
+        for (double bpm : tempi)
+            for (uint32_t size : sizes)
+            {
+                received.clear();
+                blockSize = size;
+                Session s;
+                loadState (s.instance, makeState (progressionXml (0, (int) ScaleId::Major, walking)));
+                InEvent arp, style, rate;
+                paramEvent (s.instance, "Arp", "On", arp);
+                paramEvent (s.instance, "Arp Pattern", "Up", style);
+                paramEvent (s.instance, "Arp Speed", "Normal", rate);
+                s.block ({ arp, style, rate });
+
+                double beat = 0.0;
+                const double beatsPerBlock = size * bpm / 60.0 / sampleRate;
+                const size_t before = received.size();
+                const int numBlocks = (int) std::ceil (256.0 / beatsPerBlock);
+                for (int b = 0; b < numBlocks; ++b)
+                {
+                    const auto t = transportAt (true, beat, bpm);
+                    s.block ({}, &t);
+                    beat += beatsPerBlock;
+                }
+                const auto ons = noteOnsFrom (before);
+                for (size_t i = 1; i < ons.size(); ++i)
+                {
+                    const double gap = (double) ons[i].time - (double) ons[i - 1].time;
+                    worstGap = std::min (worstGap, gap);
+                    tooClose += gap < 0.005 * sampleRate;
+                }
+                // Every bar has its eight steps: 8 per 4 beats, 64 bars
+                const double lastBeat = beat;
+                wrongCount += std::abs ((double) ons.size() - 8.0 * std::floor (lastBeat / 4.0)) > 8.0;
+                ++runs;
+                check (s.out.clean(), "the arp run is clean (no doubled note ons, no stray offs)");
+            }
+        std::printf ("  info: %d runs, shortest gap between two note ons %.0f samples, %d too close, %d runs with a wrong count\n",
+                     runs, worstGap, tooClose, wrongCount);
+        check (tooClose == 0, "never two note ons within 5 ms (with the arp on and the loop running)");
+        check (wrongCount == 0, "every bar has its eight steps");
+        blockSize = 512;
     }
 
     entry->deinit();
