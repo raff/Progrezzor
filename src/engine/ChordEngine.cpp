@@ -182,7 +182,24 @@ Voicing shiftedByOctaves (Voicing voicing, int octaves)
     return voicing;
 }
 
-Voicing voiceChord (const Chord& chord, int tonic, int centreNote)
+namespace
+{
+// Total distance from each note of `v` to the nearest note of `home`.
+int distanceToHome (const Voicing& v, const Voicing& home)
+{
+    int total = 0;
+    for (int i = 0; i < v.count; ++i)
+    {
+        int nearest = 1000;
+        for (int j = 0; j < home.count; ++j)
+            nearest = std::min (nearest, std::abs (v.notes[(size_t) i] - home.notes[(size_t) j]));
+        total += nearest;
+    }
+    return total;
+}
+}
+
+Voicing voiceChord (const Chord& chord, int tonic, int centreNote, VoicingMode mode, ScaleId scale)
 {
     // No magic: the notes of a chord depend only on the chord, the key and the register. Nothing that was played before has
     // any say. The tonic's root sits in the 12 semitones from centreNote - 6 (F#3 to F4 at the normal centre). Every other
@@ -194,6 +211,25 @@ Voicing voiceChord (const Chord& chord, int tonic, int centreNote)
     const int low = centreNote - 6;
     const int tonicRoot = low + wrap12 (tonic - low);
     Voicing v = invert (chord, tonicRoot + wrap12 (chord.root), inversion);
+
+    if (mode == VoicingMode::CloseToHome && chord.inversion < 0)
+    {
+        // Try every inversion in a few octaves and keep the one nearest the tonic chord. The first of equals wins (lowest
+        // inversion, then lowest octave), so the answer never depends on anything but the chord.
+        const Voicing home = invert (padChord (scale, 0), tonicRoot, 0);
+        int best = distanceToHome (v, home) + 1;
+        for (int inv = 0; inv < count; ++inv)
+            for (int shift = -2; shift <= 1; ++shift)
+            {
+                const Voicing candidate = invert (chord, tonicRoot + wrap12 (chord.root) + 12 * shift, inv);
+                const int d = distanceToHome (candidate, home);
+                if (d < best)
+                {
+                    best = d;
+                    v = candidate;
+                }
+            }
+    }
 
     v.octave = std::clamp (chord.octave, -kMaxOctaveShift, kMaxOctaveShift);
     for (int i = 0; i < v.count; ++i)

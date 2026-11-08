@@ -121,7 +121,15 @@ constexpr int kCentreNote = 60;  // the chords gather around C4
 // matters (no automatic voice leading). The tonic's root sits in F#3 to F4 (centreNote - 6 and 11 above), every other root 0 to
 // 11 semitones above the tonic's, so pads 1 to 7 always climb. Root position (the root is the lowest note) unless the chord has
 // a chosen inversion. The chord's own octave shift (Chord::octave) is added on top.
-Voicing voiceChord (const Chord& chord, int tonic, int centreNote = kCentreNote);
+//
+// VoicingMode::CloseToHome (Settings > Voicing): a chord without a chosen inversion is played in the inversion and octave whose
+// notes lie closest to the notes of the tonic chord (the lowest total distance, each note to the nearest tonic note), so the
+// voices hardly jump (G7 in C Major: B3 D4 F4 G4). Still only a function of the chord, the key and the scale, so the same chord
+// always gives the same notes. A chosen inversion is always used as it is. The name of the chord is not touched. `scale` gives
+// the tonic chord (minor or major) and matters only for CloseToHome.
+enum class VoicingMode { RootPosition = 0, CloseToHome = 1 };
+Voicing voiceChord (const Chord& chord, int tonic, int centreNote = kCentreNote, VoicingMode mode = VoicingMode::RootPosition,
+                    ScaleId scale = ScaleId::Minor);
 
 // The general register: the whole voicing moved up or down by whole octaves (the Oct buttons), never past the ends of the
 // MIDI range. Chords are voiced before this, so the register never pulls the next chord with it.

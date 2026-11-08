@@ -32,7 +32,8 @@ struct ExportNote
 // `octaveShift` (the Oct buttons): the file has the notes that are heard. With `bass` on every block has its bass note too.
 inline std::vector<ExportNote> exportNotes (const Progression& progression, int tonic, ScaleId scale = ScaleId::Minor,
                                             bool lockToScale = false, int octaveShift = 0, int centreNote = kCentreNote,
-                                            ArpSettings arp = {}, bool bass = false, RhythmSettings rhythm = {})
+                                            ArpSettings arp = {}, bool bass = false, RhythmSettings rhythm = {},
+                                            VoicingMode voicingMode = VoicingMode::RootPosition)
 {
     std::vector<ExportNote> notes;
     double start = 0.0;
@@ -44,7 +45,7 @@ inline std::vector<ExportNote> exportNotes (const Progression& progression, int 
             continue;
         }
 
-        const auto voicing = voiceChord (block.chord, tonic, centreNote);
+        const auto voicing = voiceChord (block.chord, tonic, centreNote, voicingMode, scale);
         const auto heard = shiftedByOctaves (voicing, octaveShift);
         if (bass) // the bass note lies under the whole block, also when the chord is an arp
             notes.push_back ({ start, block.beats, bassNote (block.chord, tonic, octaveShift, centreNote), kExportVelocity });

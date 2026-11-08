@@ -58,6 +58,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     addParameter (arpRotationParam = new juce::AudioParameterInt ({ "arpRotation", 1 }, "Arp Rotation", 0, engine::kMaxArpSteps - 1, 0));
     addParameter (octaveParam = new juce::AudioParameterInt ({ "octave", 1 }, "Octave", -engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, 0));
     addParameter (bassParam = new juce::AudioParameterBool ({ "bassNote", 1 }, "Bass Note", false)); // added last: earlier projects keep theirs
+    addParameter (voicingParam = new juce::AudioParameterChoice ({ "voicing", 1 }, "Voicing", juce::StringArray { "Root position", "Close to home" }, 0)); // added after the others: earlier projects keep theirs
     addParameter (keyboardModeParam = new juce::AudioParameterChoice ({ "keyboardMode", 1 }, "Keyboard", juce::StringArray { "White keys", "Chord roots" }, kKeyboardWhiteKeys));
     addParameter (rhythmModeParam = new juce::AudioParameterBool ({ "arpRhythm", 1 }, "Chord Rhythm", false));
     addParameter (rhythmPatternParam = new juce::AudioParameterChoice ({ "rhythmPattern", 1 }, "Rhythm Pattern",
@@ -267,7 +268,7 @@ public:
             return;
 
         // The same chord always has the same notes: only the key and the Oct buttons count
-        const auto voicing = engine::voiceChord (chord, owner.keyParam->getIndex());
+        const auto voicing = engine::voiceChord (chord, owner.keyParam->getIndex(), engine::kCentreNote, owner.blockVoicing, (engine::ScaleId) owner.scaleParam->getIndex());
         const auto heard = engine::shiftedByOctaves (voicing, owner.getTotalOctave());
 
         if (pad >= 0)
@@ -587,6 +588,7 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     samplesPerBeat = sampleRate * 60.0 / bpm;
     blockArp = getArpSettings();
     blockRhythm = getRhythmSettings();
+    blockVoicing = getVoicingMode();
     blockBass = bassParam->get() && ! learnOn.load(); // in Learn mode the keys play their own notes
     if (learnOn.load())
         blockArp.on = blockRhythm.on = false; // in Learn mode a chord is played whole
@@ -978,7 +980,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto key = getKey();
 
     // What the file is made from. The same again gives the same file.
-    juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (getTotalOctave());
+    juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (getTotalOctave()) + "/v" + juce::String (voicingParam->getIndex()) + "s" + juce::String ((int) key.scale);
     const auto arp = getArpSettings();
     const auto rhythm = getRhythmSettings();
     if (rhythm.on)
@@ -996,7 +998,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto ticks = [] (double beats) { return beats * kTicksPerQuarter; };
 
     juce::MidiMessageSequence sequence;
-    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), getTotalOctave(), engine::kCentreNote, arp, bassParam->get(), rhythm))
+    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), getTotalOctave(), engine::kCentreNote, arp, bassParam->get(), rhythm, getVoicingMode()))
     {
         // All MIDI on channel 1. A note off comes before a note on at the same time, so that equal chords strike again.
         sequence.addEvent (juce::MidiMessage::noteOn (1, note.note, (juce::uint8) note.velocity).withTimeStamp (ticks (note.start)));
@@ -1043,6 +1045,7 @@ void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
     xml.setAttribute ("voice", voiceParam->getIndex());
     xml.setAttribute ("octave", octaveParam->get());
     xml.setAttribute ("bassNote", bassParam->get() ? 1 : 0);
+    xml.setAttribute ("voicing", voicingParam->getIndex());
     xml.setAttribute ("keyboardMode", keyboardModeParam->getIndex());
     xml.setAttribute ("arpRhythm", rhythmModeParam->get() ? 1 : 0);
     xml.setAttribute ("rhythmPattern", rhythmPatternParam->getIndex());
@@ -1103,6 +1106,7 @@ void ProgrezzorProcessor::setStateInformation (const void* data, int size)
     set (*rhythmPatternParam, xml->getIntAttribute ("rhythmPattern", 0));
     set (*rhythmSpeedParam, xml->getIntAttribute ("rhythmSpeed", 0));
     set (*rhythmLengthParam, xml->getIntAttribute ("rhythmLength", 1));
+    set (*voicingParam, xml->getIntAttribute ("voicing", 0)); // projects saved before have root position
     set (*keyboardModeParam, xml->getIntAttribute ("keyboardMode", kKeyboardWhiteKeys)); // projects saved before have the white keys
     *bassParam = xml->getIntAttribute ("bassNote", 0) != 0; // projects saved before the bass note have it off
 

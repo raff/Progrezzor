@@ -2767,6 +2767,10 @@ void ProgressionBar::showSettingsMenu()
     menu.addItem (26, "Copy as text", ! processor.getProgression().empty());
     menu.addItem (27, "Save ChordPro...", ! processor.getProgression().empty());
     menu.addSeparator();
+    menu.addSectionHeader ("Voicing"); // saved with the project
+    menu.addItem (40, "Root position", true, processor.voicingParam->getIndex() == 0);
+    menu.addItem (41, "Close to home", true, processor.voicingParam->getIndex() == 1);
+    menu.addSeparator();
     menu.addSectionHeader ("Keyboard"); // which pad a MIDI key plays, saved with the project
     menu.addItem (30, "White keys", true, processor.keyboardModeParam->getIndex() == ProgrezzorProcessor::kKeyboardWhiteKeys);
     menu.addItem (31, "Chord roots", true, processor.keyboardModeParam->getIndex() == ProgrezzorProcessor::kKeyboardChordRoots);
@@ -2796,6 +2800,13 @@ void ProgressionBar::showSettingsMenu()
                                 mode.beginChangeGesture();
                                 mode.setValueNotifyingHost (mode.convertTo0to1 ((float) (result - 30)));
                                 mode.endChangeGesture();
+                            }
+                            else if (safe != nullptr && (result == 40 || result == 41))
+                            {
+                                auto& voicing = *safe->processor.voicingParam;
+                                voicing.beginChangeGesture();
+                                voicing.setValueNotifyingHost (voicing.convertTo0to1 ((float) (result - 40)));
+                                voicing.endChangeGesture();
                             }
                             else if (safe != nullptr && result == 25)
                                 safe->chooseChordProFile();
@@ -3883,7 +3894,7 @@ void ProgrezzorEditor::updateLearning()
     std::vector<int> notes;
     if (target >= 0 && target < (int) progression.size())
     {
-        const auto voicing = engine::voiceChord (progression[(size_t) target].chord, processor.getKey().tonic);
+        const auto voicing = engine::voiceChord (progression[(size_t) target].chord, processor.getKey().tonic, engine::kCentreNote, processor.getVoicingMode(), processor.getKey().scale);
         for (int i = 0; i < voicing.count; ++i)
             notes.push_back (voicing.notes[(size_t) i]);
     }
