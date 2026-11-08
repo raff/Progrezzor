@@ -112,6 +112,12 @@ Kræver et MIDI-tastatur.
 - [ ] Hold musen over en knap: tooltip'en er smal, har flere linier og står tydeligt forskudt fra musen.
 - [ ] Settings (tandhjulet) > Help > Show tooltips: slå fra, og ingen tooltips vises. Slå til igen. Valget huskes i alle projekter.
 
+## 2k. Quick-text med takter (branch feature/quicktext-bars)
+- [ ] Tryk på blyanten og skriv `| C | Am | F | G |`, Enter: fire blokke på 1 takt hver.
+- [ ] `| C G | Am |`: to blokke på ½ takt og én på 1 takt. `| C | % | F | / |`: C, C, F, F.
+- [ ] Indsæt et diagram over flere linjer (kopiér fra en tekst): linjeskift og mellemrum er lige meget.
+- [ ] Den gamle notation virker stadig (`Am*2 F:2`). Et ukendt ord eller en tredje akkord i en takt er rødt, og resten virker.
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

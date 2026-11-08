@@ -107,6 +107,7 @@ struct Word
     Block block;
     int count = 1;
     std::string problem; // empty if the word was read
+    bool explicitLength = false; // the word has its own length (:2), so a bar does not share it
 };
 
 // The chord part of a word: the root, the kind, an inversion (/) and an octave (+1, -1). False if it cannot be read.
@@ -229,6 +230,7 @@ Word readWord (const std::string& word, double barBeats)
                 return out;
             }
             haveLength = true;
+            out.explicitLength = true;
             bars = number;
         }
         else
@@ -283,9 +285,134 @@ std::string formatQuickText (const Progression& progression, const Key& key, dou
     return text;
 }
 
+namespace
+{
+// One word of a bar, read: its blocks, or what is wrong with it
+struct BarEntry
+{
+    Block block;
+    bool explicitLength = false;
+    bool repeat = false;   // % or /: the chord before it again
+    int start = 0, end = 0; // where the word is in the text
+};
+
+// Bar notation: | C | Am | F | G |. Every bar is one bar long; two words in a bar share it (half a bar each); % or / is the chord
+// before again. A word with its own length (C:2) keeps it.
+void parseBars (const std::string& text, const Key& key, double barBeats, bool lockToScale, QuickTextResult& result)
+{
+    const int length = (int) text.size();
+    int barStart = 0;
+    while (barStart <= length)
+    {
+        int barEnd = barStart;
+        while (barEnd < length && text[(size_t) barEnd] != '|')
+            ++barEnd;
+
+        // The words of this bar
+        std::vector<BarEntry> entries;
+        int i = barStart;
+        while (i < barEnd)
+        {
+            if (isSeparatorAt (text, (size_t) i))
+            {
+                ++i;
+                continue;
+            }
+            int end = i;
+            while (end < barEnd && ! isSeparatorAt (text, (size_t) end))
+                ++end;
+            const std::string word = text.substr ((size_t) i, (size_t) (end - i));
+
+            if (word == "%" || word == "/")
+            {
+                BarEntry entry;
+                entry.repeat = true;
+                entry.start = i;
+                entry.end = end;
+                entries.push_back (entry);
+            }
+            else
+            {
+                auto read = readWord (word, barBeats);
+                if (! read.problem.empty())
+                    result.problems.push_back ({ i, end, read.problem });
+                else
+                    for (int n = 0; n < read.count; ++n)
+                    {
+                        BarEntry entry;
+                        entry.block = read.block;
+                        entry.explicitLength = read.explicitLength;
+                        entry.start = i;
+                        entry.end = end;
+                        entries.push_back (entry);
+                    }
+            }
+            i = end;
+        }
+
+        // How many words share the bar: those without a length of their own
+        int sharing = 0;
+        for (const auto& entry : entries)
+            sharing += entry.explicitLength ? 0 : 1;
+        const bool alone = sharing == (int) entries.size();
+        int shared = 0;
+        for (auto& entry : entries)
+        {
+            if (! entry.explicitLength && alone)
+            {
+                if (shared >= 2) // a bar holds one chord or two: the smallest block is half a bar
+                {
+                    result.problems.push_back ({ entry.start, entry.end, "A bar holds two chords at the most"});
+                    continue;
+                }
+                ++shared;
+            }
+
+            Block block = entry.block;
+            if (entry.repeat)
+            {
+                if (result.blocks.empty())
+                {
+                    result.problems.push_back ({ entry.start, entry.end, "Nothing to repeat yet"});
+                    continue;
+                }
+                block = result.blocks.back();
+            }
+            else
+            {
+                const bool outside = ! block.rest && lockToScale && ! chordFitsScale ({ wrap12 (block.chord.root - key.tonic), block.chord.type, block.chord.inversion, block.chord.octave }, key.scale);
+                if (! block.rest)
+                    block.chord.root = wrap12 (block.chord.root - key.tonic);
+                block.disabled = outside;
+            }
+
+            if (! (entry.explicitLength && ! entry.repeat))
+                block.beats = std::clamp (barBeats / (double) std::min (std::max (sharing, 1), 2), kMinBlockBeats, kMaxBlockBeats);
+
+            if ((int) result.blocks.size() >= kMaxBlocks)
+            {
+                result.problems.push_back ({ entry.start, entry.end, "No room for this: the bar holds " + std::to_string (kMaxBlocks) + " chords" });
+                continue;
+            }
+            result.blocks.push_back (block);
+            if (block.disabled)
+                ++result.outsideScale;
+        }
+
+        barStart = barEnd + 1;
+    }
+}
+}
+
 QuickTextResult parseQuickText (const std::string& text, const Key& key, double barBeats, bool lockToScale)
 {
     QuickTextResult result;
+    if (text.find ('|') != std::string::npos)
+    {
+        parseBars (text, key, barBeats, lockToScale, result);
+        return result;
+    }
+
     const int length = (int) text.size();
     int i = 0;
     while (i < length)

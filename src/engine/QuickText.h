@@ -17,6 +17,13 @@
 //   Am/C      Am with C in the bass (an inversion that is chosen, so it is kept)
 //   Am+1      Am an octave up (+1, +2) or down (-1, -2); it comes right after the chord, before : and *: Am-1:2*2
 //
+// Bars: with a | in the text the chord chart is read bar by bar, and the line breaks and extra spaces do not matter:
+//   | C | Am | F | G |   every bar is one block of one bar
+//   | C G |              two chords in a bar share it: two blocks of half a bar (a bar holds two at the most)
+//   | C | % | F | / |     % or / is the chord before again
+//   | C:2 | G |           a word with its own length keeps it
+// The notation above works inside the bars too (| Am*2 | is two half bars).
+//
 // R (or Rest) is a pause: R, R:2, Rest*2. * means how many, : means how long (in bars). Chords are separated by a space, a comma or a hyphen. A word that cannot be
 // read is reported (where it is and what is wrong) and the rest is read as usual. Nothing is ever corrected by itself.
 namespace engine
