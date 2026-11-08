@@ -2502,6 +2502,27 @@ void ProgressionBar::chooseHomeOctave (int octaves)
     repaint (stripBounds);
 }
 
+// The first item of the inversion list: "Automatic", ticked while the chord has no chosen inversion. With Voicing on Close to home
+// it also says what is played ("Automatic (nearest: G7/B)").
+static juce::String automaticInversionLabel (ProgrezzorProcessor& processor, const engine::Chord& chord)
+{
+    juce::String label ("Automatic");
+    if (processor.getVoicingMode() != engine::VoicingMode::CloseToHome)
+        return label;
+
+    const auto key = processor.getKey();
+    const engine::Chord plain { chord.root, chord.type, engine::kAutoInversion };
+    const int lowest = engine::voiceChord (plain, key.tonic, engine::kCentreNote, processor.getVoicingMode(), key.scale).notes[0];
+    const auto& shape = engine::shapeOf (chord.type);
+    for (int k = 0; k < shape.count; ++k)
+        if (engine::wrap12 (key.tonic + chord.root + shape.intervals[k]) == engine::wrap12 (lowest))
+        {
+            const engine::Chord heard { chord.root, chord.type, k };
+            return label + " (nearest: " + juce::String (engine::chordName (heard, key)) + ")";
+        }
+    return label;
+}
+
 // The menu of a block (right-click, or the gear). It changes this block only, never the pad it came from. Every change is one
 // step for Undo. A pause only has a length, Duplicate and Delete.
 void ProgressionBar::showBlockMenu (int index)
@@ -2532,6 +2553,7 @@ void ProgressionBar::showBlockMenu (int index)
         if (notes > 1)
         {
             menu.addSeparator();
+            menu.addItem (200, automaticInversionLabel (processor, block.chord), true, block.chord.inversion < 0);
             for (int k = 1; k < notes; ++k)
             {
                 const engine::Chord chord { block.chord.root, block.chord.type, k };
@@ -2546,6 +2568,7 @@ void ProgressionBar::showBlockMenu (int index)
         }
 
         menu.addSeparator();
+        menu.addItem (300, "Octave: " + juce::String (block.chord.octave > 0 ? "+" : "") + juce::String (block.chord.octave), false, block.chord.octave != 0);
         menu.addItem (301, "Octave up", block.chord.octave < engine::kMaxOctaveShift);
         menu.addItem (302, "Octave down", block.chord.octave > -engine::kMaxOctaveShift);
         menu.addSeparator();
@@ -3980,6 +4003,7 @@ void ProgrezzorEditor::showVariantMenu (int pad)
     if (notes > 1)
     {
         menu.addSeparator();
+        menu.addItem (200, automaticInversionLabel (processor, current), true, current.inversion < 0);
         for (int k = 1; k < notes; ++k)
         {
             const engine::Chord chord { base.root, current.type, k };
@@ -4008,7 +4032,7 @@ void ProgrezzorEditor::showVariantMenu (int pad)
                                 return;
                             }
                             if (result >= 200)
-                                proc.setPadVariant (pad, current.type, result - 200);
+                                proc.setPadVariant (pad, current.type, result == 200 ? engine::kAutoInversion : result - 200);
                             else if ((engine::ChordType) (result - 100) == base.type)
                                 proc.clearPadVariant (pad); // back to the pad's own chord
                             else
