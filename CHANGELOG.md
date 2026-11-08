@@ -10,26 +10,26 @@ tag the commit (`vX.Y.Z`).
 
 ## [Unreleased]
 
+### Added
+- **Chord rhythm.** A Hold | Arp | Rhythm switch at the top of the arp panel. Rhythm strikes the whole chord in one of 12 patterns (Offbeat, Stab, Double stab, Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse, Euclid), at 1/8 or 1/16, with Short, Medium or Long notes. It starts again in every block, follows the host's grid, and the MIDI file has the same strikes.
+- **Chord wheel.** A small wheel beside the key opens the circle of fifths in a panel that stays open until you close it. The chords of the seven pads have the pad colours, the others are dim. Click a chord to hear it, double-click to use it as the key.
+- **Block menu.** Right-click a block, or use the small gear on mouseover, to change its chord type, inversion, octave and length, or to lock, duplicate or delete it. Right-click no longer deletes at once; the Delete key still deletes the selected block. A pause has only length, Duplicate and Delete.
+- **More chords outside the key.** With Lock to scale on (as standard), the chord menus of the pads and the blocks end with "More chords outside the key...", which turns the lock off and opens the menu again with every chord.
+- **Bass note.** Settings has "Bass note" (off as standard, saved with the project): one low note under every chord, also in the loop and the MIDI file. With the arp or rhythm on it lies as one long note under it.
+- **Suggest with inversions.** Suggest can use inversions where they give a smoother bass line (C, G/B, Am, F). The block shows the name with a slash. Settings has "Inversions in suggestions" (on as standard).
+- **Rec.** A switch with a red dot: while it is on, every chord you play (mouse or MIDI keyboard) is added to the end of the bar as one block. It replaces Capture.
+- **Rests.** A blank pad on the right is a pause. Drag it into the bar, or click it with Rec on. A pause is silent in the loop and in the MIDI file, and Quick-text knows it as `R`.
+- **Learn.** A Learn button in the bar: hold the keys of each chord of the progression on a MIDI keyboard, one chord after the other, in any octave. The next chord is marked in the bar, a right chord ticks it off, and a wrong one flashes red. After two wrong tries, or from the start if you switch on hints in Settings, a piece of a keyboard shows which keys to hold.
+- **Preview sound.** The sound chooser has a loudspeaker (crossed out and dim when the sound is Off), a line over Off and a clearer tooltip. Settings has "Preview sound" to switch the sound off and on. The sound "Pad" is now called "Soft Pad".
+- **Tooltips** are narrower (several lines), lie clear of the mouse and have a coloured edge. Settings has "Show tooltips" to switch them off.
+- **Clearer text.** Small text uses the Inter typeface (SemiBold), which is easier to read on a screen; the big names (logo, chords, Suggest) keep the display face. Nothing is smaller than 13 px, and text keeps its distance from the edges of buttons, tiles and blocks.
+- **VST3 as an instrument.** The VST3 registers as an instrument, so it can be put on an instrument track; the CLAP stays a MIDI effect (note effect).
+- A new project starts in C Major with the Bright mood. The question "Replace the chords in the bar?" sits in a small card in the middle of the bar.
 
 ### Fixed
-- With Arp on and the loop running, a note from the old chord could sound right before the bar line, just before the new chord's first note. The arp steps now follow the host's grid.
-
-### Added
-- With Lock to scale on, the chord menus (the gear on a pad and the menu of a block) end with "More chords outside the key...", which turns the lock off and opens the menu again with every chord.
-- A menu on every block (right-click, or the small gear on mouseover): chord type, inversion, octave, length, Lock, Duplicate and Delete. Right-click no longer deletes at once; the Delete key still deletes the selected block.
-- Chord rhythm: a Hold | Arp | Rhythm switch at the top of the arp panel. Rhythm strikes the whole chord in one of 12 patterns (Offbeat, Stab, Double stab, Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse, Euclid), at 1/8 or 1/16, with Short, Medium or Long notes. It follows the host's grid, and the MIDI file has the same strikes.
-- A bass note: Settings has "Bass note" (off as standard, saved with the project). It adds one low note under every chord, also in the loop and the MIDI file. With Arp on it lies as one long note under the arp.
-- Suggest can now use inversions where they give a smoother bass line (C, G/B, Am, F). The block shows the name with a slash. Settings has "Inversions in suggestions" (on as standard); off gives only plain chords.
-- **Learn.** A Learn button in the bar: hold the keys of each chord of the progression on a MIDI keyboard, one chord after the other, in any octave. The next chord is marked in the bar, a right chord ticks it off, and a wrong one flashes red. After two wrong tries, or from the start if you switch on hints in Settings, a piece of a keyboard shows which keys to hold.
-
-### Changed
-- Small text now uses the Inter typeface (SemiBold), which is clearer on screen than the cut-corner display face. The big names (logo, chords, Suggest) keep Chakra Petch.
-- Text is easier to read: nothing is smaller than 13 px any more, and text is no longer squeezed sideways where there is room to make the field wider.
-- Tooltips are narrower (several lines), lie clear of the mouse and have a coloured edge. Settings has "Show tooltips" to switch them off.
-- Text in buttons, tiles and blocks keeps its distance from the edges (and shrinks a little when it would not fit); a few buttons are a little wider.
-- The sound chooser has a loudspeaker (crossed out and dim when the sound is Off), a line over Off and a clearer tooltip. The sound "Pad" is now called "Soft Pad". Settings has "Preview sound" under Sound to switch the preview sound off and on.
-- A new project starts in C Major with the Bright mood (it was A Minor and Melancholic).
-- The question "Replace the chords in the bar?" now sits in a small card in the middle of the bar, and Capture asks it too before it replaces chords you made.
+- The chords no longer jump an octave in the middle of the scale. The root of the first chord sits between F#3 and F4, every other chord has its root 0 to 11 semitones above it, so the seven pads always climb (C4 D4 E4 F4 G4 A4 B4 in C Major).
+- With the arp on and the loop running, a note from the old chord could sound right before the bar line, just before the new chord's first note. The arp steps now follow the host's grid.
+- Text sitting too close to the edge of buttons and tiles (Short, Medium, Long, long pattern names and more), and a Settings gear that was too small, are fixed.
 
 ## [0.1.0] – 2026-11-07
 
