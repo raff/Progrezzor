@@ -43,7 +43,7 @@ Alt ligger på én skærm uden faner.
 
 Regler:
 
-- Tekst i knapper, felter og blokke holder altid mindst 8 px fra kanten og krymper lidt (ned til 70 %) i stedet for at røre kanten, uanset skrifttype (hjælpefunktionen theme::drawFitted). Tooltips er smalle (cirka 170 px tekst, flere linier), står tydeligt forskudt fra musen og har en farvet kant. Settings har "Show tooltips" (til som standard, gemt for alle projekter).
+- Tekst i knapper, felter og blokke holder altid mindst 8 px fra kanten og krymper lidt (ned til 70 %) i stedet for at røre kanten, uanset skrifttype (hjælpefunktionen theme::drawFitted). Tooltips er smalle (cirka 210 px tekst i stor skrift (17), flere linier), står tydeligt forskudt fra musen og har en farvet kant. Settings har "Show tooltips" (til som standard, gemt for alle projekter).
 - Første klik på en pad giver lyd, uden routing eller opsætning.
 - Gode standarder, så man kan spille med det samme. Standard er C Major og stemningen Bright (den mest almindelige og enkle). Ændret 2026-11-07 efter Henriks ønske.
 - Pads og blokke viser akkordnavnet og, småt, akkordens plads i tonearten som romertal (I, ii, III, IV, v, VI, VII, ii° for formindsket). Henrik ønskede det 2026-11-07. Store bogstaver er dur, små er mol. Ingen andre teoriord.

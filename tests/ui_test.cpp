@@ -1933,7 +1933,7 @@ int main (int argc, char** argv)
         const juce::String tip = "Preview sound. Choose Off when Progrezzor plays another instrument.";
         const juce::Point<int> mouse (400, 200);
         const auto bounds = lf.getTooltipBounds (tip, mouse, { 0, 0, 1000, 560 });
-        check (bounds.getWidth() <= 215 && bounds.getHeight() > 50, "a tooltip is narrow and takes several lines");
+        check (bounds.getWidth() <= 250 && bounds.getHeight() > 60, "a tooltip is narrow and takes several lines");
         check (! bounds.contains (mouse) && (bounds.getX() - mouse.x >= 20 || mouse.x - bounds.getRight() >= 20), "and it lies well away from the mouse");
         const auto edge = lf.getTooltipBounds (tip, { 990, 550 }, { 0, 0, 1000, 560 });
         check (edge.getRight() <= 1000 && edge.getBottom() <= 560 && ! edge.contains (juce::Point<int> (990, 550)), "also near the edge of the window");

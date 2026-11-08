@@ -199,13 +199,13 @@ public:
 
     juce::Font getLabelFont (juce::Label& label) override { return label.getFont(); }
     // Tooltips: narrow, so the text takes several lines, and well away from the mouse so that it is plain that it is a tooltip
-    static constexpr float kTooltipTextWidth = 170.0f;
+    static constexpr float kTooltipTextWidth = 210.0f;
 
     juce::TextLayout tooltipLayout (const juce::String& tip, juce::Colour colour) const
     {
         juce::AttributedString string;
         string.setJustification (juce::Justification::topLeft);
-        string.append (tip, labelFont (13.0f), colour);
+        string.append (tip, labelFont (17.0f), colour);
         string.setWordWrap (juce::AttributedString::byWord);
         juce::TextLayout layout;
         layout.createLayout (string, kTooltipTextWidth);
@@ -215,7 +215,7 @@ public:
     juce::Rectangle<int> getTooltipBounds (const juce::String& tip, juce::Point<int> screenPos, juce::Rectangle<int> parentArea) override
     {
         const auto layout = tooltipLayout (tip, text);
-        const int w = (int) std::ceil (layout.getWidth()) + 24, h = (int) std::ceil (layout.getHeight()) + 20;
+        const int w = (int) std::ceil (layout.getWidth()) + 30, h = (int) std::ceil (layout.getHeight()) + 24;
         const int gapX = 26, gapY = 30; // clear of the mouse pointer
         const int x = screenPos.x + gapX + w > parentArea.getRight() ? screenPos.x - gapX - w : screenPos.x + gapX;
         const int y = screenPos.y + gapY + h > parentArea.getBottom() ? screenPos.y - gapY - h : screenPos.y + gapY;
@@ -230,7 +230,7 @@ public:
         g.drawRect (bounds, 1.5f);
         g.setColour (accent);
         g.fillRect (bounds.withWidth (4.0f)); // a coloured edge, so that it stands out from what is behind it
-        tooltipLayout (tip, text).draw (g, bounds.reduced (14.0f, 10.0f).withTrimmedLeft (0.0f));
+        tooltipLayout (tip, text).draw (g, bounds.reduced (17.0f, 12.0f));
     }
 
     // A small loudspeaker: with sound waves when it is on, crossed out when it is off
