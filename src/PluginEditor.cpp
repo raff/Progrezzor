@@ -1897,36 +1897,31 @@ public:
     }
 };
 
-// Capture: while it is on, every chord you play (on a pad with the mouse, or from the MIDI keyboard) is put at the end of the
+// Rec: while it is on, every chord you play (on a pad with the mouse, or from the MIDI keyboard) is put at the end of the
 // bar as a chord of one bar. It is a switch, so it is clear when it is on. Undo takes the chords away again.
-void ProgressionBar::setCapturing (bool on)
+void ProgressionBar::setRec (bool on)
 {
-    capturing = on && editing && ! textMode && ! processor.isLearning();
-    captureButton.setToggleState (capturing, juce::dontSendNotification);
-    captureSeen = processor.getPlayedCount();
+    recOn = on && editing && ! textMode && ! processor.isLearning();
+    recButton.setToggleState (recOn, juce::dontSendNotification);
+    recSeen = processor.getPlayedCount();
     repaint (trayBounds);
-}
-
-void ProgressionBar::toggleCapture()
-{
-    setCapturing (! capturing);
 }
 
 void ProgressionBar::takePlayedChords()
 {
-    if (! capturing)
+    if (! recOn)
         return;
     if (! editing || textMode || processor.isLearning()) // Play, Quick-text and Learn switch it off
     {
-        setCapturing (false);
+        setRec (false);
         return;
     }
-    const auto played = processor.chordsPlayedSince (captureSeen);
-    captureSeen = processor.getPlayedCount();
+    const auto played = processor.chordsPlayedSince (recSeen);
+    recSeen = processor.getPlayedCount();
     for (const auto& chord : played)
         processor.editProgression (engine::withInserted (processor.getProgression(), (int) processor.getProgression().size(), chord, processor.getHostBarBeats()));
     if (! played.empty())
-        captureVersion = processor.getProgressionVersion();
+        recVersion = processor.getProgressionVersion();
 }
 
 void ProgressionBar::toggleLearn()
@@ -2002,12 +1997,12 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     learnButton.onClick = [this] { toggleLearn(); };
     addAndMakeVisible (learnButton);
 
-    captureButton.setToggle();
-    captureButton.setRecordDot();
-    captureButton.setTooltip ("Rec: while it is on, every chord you play is added to the end of the bar, one bar each. Undo takes them away");
-    captureButton.setComponentID ("rec");
-    captureButton.onClick = [this] { setCapturing (captureButton.getToggleState()); };
-    addAndMakeVisible (captureButton);
+    recButton.setToggle();
+    recButton.setRecordDot();
+    recButton.setTooltip ("Rec: while it is on, every chord you play is added to the end of the bar, one bar each. Undo takes them away");
+    recButton.setComponentID ("rec");
+    recButton.onClick = [this] { setRec (recButton.getToggleState()); };
+    addAndMakeVisible (recButton);
 
     arpButton.setTooltip ("Arp: play everything one note at a time (the MIDI file follows)");
     arpButton.setComponentID ("arp");
@@ -2298,7 +2293,7 @@ void ProgressionBar::updateButtons()
     arpButton.setToggleState (processor.arpOnParam->get(), juce::dontSendNotification);
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
     takePlayedChords();
-    captureButton.setEnabled (editing && ! textMode && ! processor.isLearning());
+    recButton.setEnabled (editing && ! textMode && ! processor.isLearning());
 
     // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
     const int octave = processor.getGeneralOctave();
@@ -2552,12 +2547,12 @@ int ProgressionBar::blockAtScreenPoint (juce::Point<int> screen) const
 
 void ProgressionBar::setDragActive (bool nowActive)
 {
-    if (nowActive && ! dragActive && capturing)
+    if (nowActive && ! dragActive && recOn)
     {
-        // A pad that is pulled down into the bar was pressed first, and Capture has already taken that press. The drop is the
-        // one that counts, so the chord is not in the bar twice: take the one Capture added back.
+        // A pad that is pulled down into the bar was pressed first, and Rec has already taken that press. The drop is the
+        // one that counts, so the chord is not in the bar twice: take the one Rec added back.
         takePlayedChords();
-        if (processor.getProgressionVersion() == captureVersion && processor.canUndo())
+        if (processor.getProgressionVersion() == recVersion && processor.canUndo())
             processor.undo();
     }
     if (nowActive != dragActive)
@@ -2597,11 +2592,11 @@ bool ProgressionBar::replaceBlockWithRest (int index)
 // setDragActive takes this one back, as it does for a chord.)
 void ProgressionBar::addRestWhileRecording()
 {
-    if (! capturing || ! editing || textMode)
+    if (! recOn || ! editing || textMode)
         return;
     takePlayedChords(); // chords played before the pad was pressed come first
     processor.editProgression (engine::withInsertedRest (processor.getProgression(), (int) processor.getProgression().size(), processor.getHostBarBeats()));
-    captureVersion = processor.getProgressionVersion();
+    recVersion = processor.getProgressionVersion();
 }
 
 bool ProgressionBar::deleteSelected()
@@ -2891,7 +2886,7 @@ void ProgressionBar::paint (juce::Graphics& g)
         g.setColour (theme::dimText);
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
             g.setFont (l->labelFont (16.0f));
-        g.drawText (editing ? "Drag a chord down here, or press Suggest" : capturing ? "Rec is on: play a chord and it lands here" : "Press Suggest, or switch Rec on and play",
+        g.drawText (editing ? "Drag a chord down here, or press Suggest" : recOn ? "Rec is on: play a chord and it lands here" : "Press Suggest, or switch Rec on and play",
                     trayBounds, juce::Justification::centred);
     }
 
@@ -3051,10 +3046,10 @@ void ProgressionBar::resized()
     dragTile.setBounds (upper.removeFromRight (std::min (68, std::max (56, upper.getHeight()))));
     upper.removeFromRight (10);
     auto right = upper;
-    auto captureRow = right.removeFromTop (rowHeight);
-    settingsButton.setBounds (captureRow.removeFromRight ((right.getWidth() - 12) / 3));
-    captureRow.removeFromRight (6);
-    captureButton.setBounds (captureRow);
+    auto recRow = right.removeFromTop (rowHeight);
+    settingsButton.setBounds (recRow.removeFromRight ((right.getWidth() - 12) / 3));
+    recRow.removeFromRight (6);
+    recButton.setBounds (recRow);
     right.removeFromTop (5);
     auto smallRow = right.removeFromTop (rowHeight);
     const int smallWidth = (smallRow.getWidth() - 12) / 3;

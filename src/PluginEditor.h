@@ -106,7 +106,7 @@ public:
     BarButton (const juce::String& name, Icon i) : juce::Button (name), icon (i) {}
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
     void setAccented (bool nowAccented) { accented = nowAccented; } // filled with the accent colour: the one thing to press
-    // A button that stays down (Capture): filled with the accent colour while it is on
+    // A button that stays down (Rec): filled with the accent colour while it is on
     void setToggle() { setClickingTogglesState (true); }
     void setRecordDot() { recordDot = true; } // a red dot before the label, like a record button
 
@@ -285,9 +285,8 @@ public:
     void showBlockMenu (int index); // right-click or the gear on a block
     void showArpPanel();
     void toggleLearn();
-    void toggleCapture();
-    bool isCapturing() const { return capturing; }
-    BarButton& getCaptureButton() { return captureButton; }
+    bool isRecOn() const { return recOn; }
+    BarButton& getRecButton() { return recButton; }
     std::unique_ptr<juce::Component> makeArpPanel(); // the panel behind the Arp button (also for the tests)
     void toggleArp();
     bool arpPanelShown = false;
@@ -339,12 +338,12 @@ private:
     BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     ArpToggle arpButton;
     LearnToggle learnButton;
-    BarButton captureButton { "Rec", BarButton::Icon::None };
-    bool capturing = false;
-    unsigned captureSeen = 0; // how many played chords had been played when Capture went on, or were last taken
-    void setCapturing (bool on);
+    BarButton recButton { "Rec", BarButton::Icon::None };
+    bool recOn = false;
+    unsigned recSeen = 0; // how many played chords had been played when Rec went on, or were last taken
+    void setRec (bool on);
     void takePlayedChords();
-    int captureVersion = -1; // the version of the bar right after Capture last added something
+    int recVersion = -1; // the version of the bar right after Rec last added something
     BarButton arpOptionsButton { "Arp options", BarButton::Icon::Dots };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };

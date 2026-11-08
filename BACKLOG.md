@@ -24,7 +24,7 @@ Ideas outside the current milestone go here.
 - Flere skalaer (nu kun Minor, Major, Dorian, Phrygian). SeqVerse har omkring 40, men Progrezzor skal kunne bygge 7 pads med pæne treklange, så kun skalaer med 7 toner kommer i betragtning. Forslag i prioriteret rækkefølge: Mixolydian, Lydian (let), Harmonic Minor, Melodic Minor, senere Locrian, Phrygian Dominant, Harmonic Major. Hver ny skala skal have: pad-akkorder, stavning af toner (b eller #), og nok rundgange i alle 8 stemninger (mindst 5 der kan foreslås, ellers bruger Suggest kun pads). Pentatoniske skalaer, blues og hel-tone passer ikke til de 7 pads.
 - Arp: BYGGET 2026-11-07 (se CLAUDE.md, afsnittet Arp). Ikke med endnu: chance for huller i rytmen, flere retninger fra SeqVerse (Converge, Thumb, Pinky, osv.), swing, notelængde, og et lys i ringen der viser hvilket trin der spiller nu.
 
-- Rec, på prøve på branchen feature/capture-toggle: skal den slukke sig selv, fx efter 8 akkorder eller når man trykker Suggest? Ikke besluttet. Den gamle historiestribe ligger på feature/capture-history.
+- Rec: skal den slukke sig selv, fx efter 8 akkorder eller når man trykker Suggest? Ikke besluttet.
 
 ## Senere, kun hvis brugere efterspørger det
 
