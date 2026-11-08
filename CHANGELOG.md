@@ -15,6 +15,7 @@ tag the commit (`vX.Y.Z`).
 - With Arp on and the loop running, a note from the old chord could sound right before the bar line, just before the new chord's first note. The arp steps now follow the host's grid.
 
 ### Added
+- With Lock to scale on, the chord menus (the gear on a pad and the menu of a block) end with "More chords outside the key...", which turns the lock off and opens the menu again with every chord.
 - A menu on every block (right-click, or the small gear on mouseover): chord type, inversion, octave, length, Lock, Duplicate and Delete. Right-click no longer deletes at once; the Delete key still deletes the selected block.
 - Chord rhythm: a Hold | Arp | Rhythm switch at the top of the arp panel. Rhythm strikes the whole chord in one of 12 patterns (Offbeat, Stab, Double stab, Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse, Euclid), at 1/8 or 1/16, with Short, Medium or Long notes. It follows the host's grid, and the MIDI file has the same strikes.
 - A bass note: Settings has "Bass note" (off as standard, saved with the project). It adds one low note under every chord, also in the loop and the MIDI file. With Arp on it lies as one long note under the arp.

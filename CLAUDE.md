@@ -101,7 +101,7 @@ Akkordlogik, stemmeføring, rundgange, Suggest og Quick-text er nyt. CI og relea
 
 - Slået til som standard.
 - Pads følger altid skalaen. 🎲 vælger kun rundgange i skalaen. Pad-varianter, brugeren selv har valgt, bruges alligevel.
-- ⚙️ viser kun passende varianter, når låsen er til, og alle varianter, når den er fra.
+- ⚙️ viser kun passende varianter, når låsen er til, og alle varianter, når den er fra. Når låsen er til, har akkordmenuen (⚙️ på pads og menuen på blokke) et sidste punkt, adskilt fra resten: "More chords outside the key...". Det slår låsen fra og åbner samme menu igen med alle akkorder. Er låsen fra, vises punktet ikke (Henrik, 2026-11-08).
 - Quick-text: En akkord uden for skalaen bliver en markeret, deaktiveret blok, når låsen er til. Vis en kort besked med en Allow-knap, der slår låsen fra, så akkorden spiller med det samme.
 - Plugin'et må aldrig selv rette en akkord til en anden.
 - Skift af toneart eller skala ændrer ikke eksisterende blokke uden for skalaen. De bliver kun markeret.

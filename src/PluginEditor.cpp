@@ -2382,6 +2382,12 @@ void ProgressionBar::showBlockMenu (int index)
             }
         }
 
+        if (processor.isLockedToScale()) // the way past the lock is plain to see: the last item of the chord list, apart from the rest
+        {
+            menu.addSeparator();
+            menu.addItem (400, "More chords outside the key...");
+        }
+
         menu.addSeparator();
         menu.addItem (301, "Octave up", block.chord.octave < engine::kMaxOctaveShift);
         menu.addItem (302, "Octave down", block.chord.octave > -engine::kMaxOctaveShift);
@@ -2401,8 +2407,15 @@ void ProgressionBar::showBlockMenu (int index)
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (blocks[index]).withMinimumWidth (140),
                         [safe, index] (int result)
                         {
-                            if (safe != nullptr)
-                                safe->applyBlockMenuChoice (index, result);
+                            if (safe == nullptr)
+                                return;
+                            if (result == 400) // the lock goes off and the same menu opens again, with every chord
+                            {
+                                safe->processor.turnLockOff();
+                                juce::MessageManager::callAsync ([safe, index] { if (safe != nullptr) safe->showBlockMenu (index); });
+                                return;
+                            }
+                            safe->applyBlockMenuChoice (index, result);
                         });
 }
 
@@ -3623,6 +3636,12 @@ void ProgrezzorEditor::showVariantMenu (int pad)
         }
     }
 
+    if (processor.isLockedToScale()) // the way past the lock is plain to see: the last item, apart from the rest
+    {
+        menu.addSeparator();
+        menu.addItem (400, "More chords outside the key...");
+    }
+
     juce::Component::SafePointer<ProgrezzorEditor> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&pads[(size_t) pad]),
                         [safe, pad, base, current] (int result)
@@ -3631,6 +3650,12 @@ void ProgrezzorEditor::showVariantMenu (int pad)
                                 return;
 
                             auto& proc = safe->processor;
+                            if (result == 400) // the lock goes off and the same menu opens again, with every chord
+                            {
+                                proc.turnLockOff();
+                                juce::MessageManager::callAsync ([safe, pad] { if (safe != nullptr) safe->showVariantMenu (pad); });
+                                return;
+                            }
                             if (result >= 200)
                                 proc.setPadVariant (pad, current.type, result - 200);
                             else if ((engine::ChordType) (result - 100) == base.type)
