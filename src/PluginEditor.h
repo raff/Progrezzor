@@ -340,6 +340,7 @@ public:
     BarButton& getOctaveDownButton() { return octaveDownButton; }
     const juce::String& getOctaveLabel() const { return octaveLabel; }
     BarButton& getReplaceButton() { return replaceButton; }
+    BarButton& getCancelReplaceButton() { return cancelReplaceButton; }
 
 private:
     int gapAt (juce::Point<int> p) const;
@@ -356,6 +357,7 @@ private:
     bool lastPlayOn = false;                    // to see when Play changes, which switches Edit
     bool editing = false;
     BarButton replaceButton { "Replace", BarButton::Icon::None };
+    BarButton cancelReplaceButton { "Cancel", BarButton::Icon::None }; // not everyone knows that Esc cancels
     bool askingReplace = false;
     int askedAtVersion = -1;
     BarButton undoButton { "Undo", BarButton::Icon::Undo };

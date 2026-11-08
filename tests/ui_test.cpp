@@ -436,6 +436,13 @@ int main (int argc, char** argv)
                        "the question is in the middle of the bar (the Replace button is on the right of the middle)");
             }
             snapshot ("suggest_asks");
+            check (bar.getCancelReplaceButton().isVisible() && bar.getCancelReplaceButton().getRight() <= bar.getReplaceButton().getX(), "there is a Cancel button next to Replace");
+            bar.getCancelReplaceButton().triggerClick();
+            settle (50);
+            check (processor.getProgression() == mine && ! bar.getReplaceButton().isVisible() && ! bar.getCancelReplaceButton().isVisible(),
+                   "Cancel leaves the chords as they are and closes the question");
+            ui.getSuggestButton().triggerClick();
+            settle (50);
             bar.getReplaceButton().triggerClick();
             settle (50);
             check (processor.getProgression() != mine, "Replace puts in the suggestion");

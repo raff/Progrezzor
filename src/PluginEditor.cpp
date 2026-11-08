@@ -1791,7 +1791,7 @@ public:
         if (buttonsBelow)
             g.drawText (text, getLocalBounds().withHeight (56).withTrimmedLeft (22).withTrimmedRight (16), juce::Justification::centredLeft);
         else
-            g.drawText (text, getLocalBounds().withTrimmedRight (120).withTrimmedLeft (22), juce::Justification::centredLeft);
+            g.drawText (text, getLocalBounds().withTrimmedRight (240).withTrimmedLeft (22), juce::Justification::centredLeft);
     }
 };
 
@@ -2054,6 +2054,11 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
         updateNotice();
     };
     addChildComponent (replaceButton);
+    cancelReplaceButton.setTooltip ("Keep the chords as they are");
+    cancelReplaceButton.setVisible (false);
+    cancelReplaceButton.setComponentID ("replace-cancel");
+    cancelReplaceButton.onClick = [this] { cancelAsk(); };
+    addChildComponent (cancelReplaceButton);
 
     quickTextButton.setTooltip ("Type the chords, like Am F C G:2, or a chart like | Am | F | C G | %. Enter uses it, Esc cancels");
     quickTextButton.setVisible (false);
@@ -2383,6 +2388,7 @@ void ProgressionBar::updateNotice()
         noticeHasAllow = false;
         allowButton.setVisible (false);
         replaceButton.setVisible (false);
+        cancelReplaceButton.setVisible (false);
         askCard->text = noticeText;
         askCard->buttonsBelow = true;
         askCard->setVisible (true);
@@ -2409,6 +2415,7 @@ void ProgressionBar::updateNotice()
         noticeHasAllow = false;
         allowButton.setVisible (false);
         replaceButton.setVisible (true);
+        cancelReplaceButton.setVisible (true);
         askCard->text = "Replace the chords in the bar?";
         askCard->setVisible (true);
         if (noticeText != asked || noticeBounds.isEmpty())
@@ -2419,6 +2426,7 @@ void ProgressionBar::updateNotice()
         return;
     }
     replaceButton.setVisible (false);
+    cancelReplaceButton.setVisible (false);
     askCard->setVisible (false);
 
     silentCount = 0;
@@ -3461,11 +3469,13 @@ void ProgressionBar::resized()
     else if (askingReplace)
     {
         // The question sits in the middle of the tray, over the blocks
-        const juce::Rectangle<int> card = juce::Rectangle<int> (0, 0, 470, 76).withCentre (trayBounds.getCentre());
+        const juce::Rectangle<int> card = juce::Rectangle<int> (0, 0, 590, 76).withCentre (trayBounds.getCentre());
         askCard->setBounds (card);
         replaceButton.setBounds (juce::Rectangle<int> (card.getRight() - 24 - 100, card.getCentreY() - 19, 100, 38));
+        cancelReplaceButton.setBounds (replaceButton.getBounds().translated (-(100 + 10), 0));
         askCard->toFront (false);
         replaceButton.toFront (false);
+        cancelReplaceButton.toFront (false);
     }
     else if (noticeText.isNotEmpty())
     {
