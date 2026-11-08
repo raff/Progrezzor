@@ -72,7 +72,7 @@ public:
     juce::AudioParameterChoice* rhythmSpeedParam = nullptr;
     juce::AudioParameterChoice* rhythmLengthParam = nullptr;
     juce::AudioParameterChoice* keyboardModeParam = nullptr; // White keys (as standard) or Chord roots: which pad a MIDI key plays
-    juce::AudioParameterChoice* voicingParam = nullptr; // Settings > Voicing: Root position (as standard) or Close to home
+    juce::AudioParameterChoice* voicingParam = nullptr; // Settings > Voicing: Root position (as standard) or Nearest inversion
     juce::AudioParameterBool* bassParam = nullptr;    // an extra bass note under every chord (Settings: Bass note), off as standard
     juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)

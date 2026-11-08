@@ -2502,12 +2502,12 @@ void ProgressionBar::chooseHomeOctave (int octaves)
     repaint (stripBounds);
 }
 
-// The first item of the inversion list: "Automatic", ticked while the chord has no chosen inversion. With Voicing on Close to home
+// The first item of the inversion list: "Automatic", ticked while the chord has no chosen inversion. With Voicing on Nearest inversion
 // it also says what is played ("Automatic (nearest: G7/B)").
 static juce::String automaticInversionLabel (ProgrezzorProcessor& processor, const engine::Chord& chord)
 {
     juce::String label ("Automatic");
-    if (processor.getVoicingMode() != engine::VoicingMode::CloseToHome)
+    if (processor.getVoicingMode() != engine::VoicingMode::NearestInversion)
         return label;
 
     const auto key = processor.getKey();
@@ -2792,7 +2792,11 @@ void ProgressionBar::showSettingsMenu()
     menu.addSeparator();
     menu.addSectionHeader ("Voicing"); // saved with the project
     menu.addItem (40, "Root position", true, processor.voicingParam->getIndex() == 0);
-    menu.addItem (41, "Close to home", true, processor.voicingParam->getIndex() == 1);
+    menu.addItem (41, "Nearest inversion", true, processor.voicingParam->getIndex() == 1);
+    // A menu item cannot carry a tooltip, so the explanation stands under it (in short lines)
+    menu.addItem (101, "Each chord uses the inversion closest", false, false);
+    menu.addItem (102, "to the home chord, like a keyboard player", false, false);
+    menu.addItem (103, "keeping the hand in one place.", false, false);
     menu.addSeparator();
     menu.addSectionHeader ("Keyboard"); // which pad a MIDI key plays, saved with the project
     menu.addItem (30, "White keys", true, processor.keyboardModeParam->getIndex() == ProgrezzorProcessor::kKeyboardWhiteKeys);

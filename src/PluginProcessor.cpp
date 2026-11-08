@@ -58,7 +58,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     addParameter (arpRotationParam = new juce::AudioParameterInt ({ "arpRotation", 1 }, "Arp Rotation", 0, engine::kMaxArpSteps - 1, 0));
     addParameter (octaveParam = new juce::AudioParameterInt ({ "octave", 1 }, "Octave", -engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, 0));
     addParameter (bassParam = new juce::AudioParameterBool ({ "bassNote", 1 }, "Bass Note", false)); // added last: earlier projects keep theirs
-    addParameter (voicingParam = new juce::AudioParameterChoice ({ "voicing", 1 }, "Voicing", juce::StringArray { "Root position", "Close to home" }, 0)); // added after the others: earlier projects keep theirs
+    addParameter (voicingParam = new juce::AudioParameterChoice ({ "voicing", 1 }, "Voicing", juce::StringArray { "Root position", "Nearest inversion" }, 0)); // added after the others: earlier projects keep theirs
     addParameter (keyboardModeParam = new juce::AudioParameterChoice ({ "keyboardMode", 1 }, "Keyboard", juce::StringArray { "White keys", "Chord roots" }, kKeyboardWhiteKeys));
     addParameter (rhythmModeParam = new juce::AudioParameterBool ({ "arpRhythm", 1 }, "Chord Rhythm", false));
     addParameter (rhythmPatternParam = new juce::AudioParameterChoice ({ "rhythmPattern", 1 }, "Rhythm Pattern",

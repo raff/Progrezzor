@@ -886,11 +886,11 @@ void testChosenInversion()
     (void) c;
 }
 
-// Voicing > Close to home: each chord near the tonic chord, so the voices hardly jump
+// Voicing > Nearest inversion: each chord near the tonic chord, so the voices hardly jump
 void testCloseVoicing()
 {
     std::printf ("close voicing\n");
-    const auto close = VoicingMode::CloseToHome;
+    const auto close = VoicingMode::NearestInversion;
     const auto notesOf = [] (const Voicing& v) { return std::vector<int> (v.notes.begin(), v.notes.begin() + v.count); };
     const Key key { 0, ScaleId::Major };
     const Chord g7 { 7, ChordType::Dom7, kAutoInversion };

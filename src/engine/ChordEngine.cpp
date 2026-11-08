@@ -212,7 +212,7 @@ Voicing voiceChord (const Chord& chord, int tonic, int centreNote, VoicingMode m
     const int tonicRoot = low + wrap12 (tonic - low);
     Voicing v = invert (chord, tonicRoot + wrap12 (chord.root), inversion);
 
-    if (mode == VoicingMode::CloseToHome && chord.inversion < 0)
+    if (mode == VoicingMode::NearestInversion && chord.inversion < 0)
     {
         // Try every inversion in a few octaves and keep the one nearest the tonic chord. The first of equals wins (lowest
         // inversion, then lowest octave), so the answer never depends on anything but the chord.
