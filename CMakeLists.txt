@@ -27,7 +27,7 @@ add_subdirectory(${CLAP_JUCE_EXTENSIONS_DIR} clap-juce-extensions EXCLUDE_FROM_A
 add_library(progrezzor_engine STATIC
     src/engine/ChordEngine.cpp src/engine/ChordEngine.h src/engine/Music.h src/engine/NoteTracker.h
     src/engine/Library.cpp src/engine/Library.h src/engine/Progression.h
-    src/engine/QuickText.cpp src/engine/QuickText.h src/engine/LoopPlan.cpp src/engine/LoopPlan.h src/engine/TripleBuffer.h src/engine/NextPads.h)
+    src/engine/QuickText.cpp src/engine/QuickText.h src/engine/ChordPro.cpp src/engine/ChordPro.h src/engine/LoopPlan.cpp src/engine/LoopPlan.h src/engine/TripleBuffer.h src/engine/NextPads.h)
 target_include_directories(progrezzor_engine PUBLIC src)
 target_compile_options(progrezzor_engine PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 set_target_properties(progrezzor_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -105,6 +105,7 @@ add_test(NAME clap_host COMMAND clap_test_host $<TARGET_FILE:Progrezzor_CLAP>)
 add_executable(engine_test tests/engine_test.cpp)
 target_link_libraries(engine_test PRIVATE progrezzor_engine)
 target_compile_options(engine_test PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
+target_compile_definitions(engine_test PRIVATE CHORDPRO_TEST_DIR="${CMAKE_SOURCE_DIR}/tests/chordpro") # the small example files
 add_test(NAME engine_unit_tests COMMAND engine_test)
 
 # Headless editor test: builds the real editor and processor without a host or a window, and plays pads. Given a file
@@ -121,6 +122,7 @@ target_compile_definitions(ProgrezzorUiTest PRIVATE
     JucePlugin_Name="Progrezzor"
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    CHORDPRO_TEST_DIR="${CMAKE_SOURCE_DIR}/tests/chordpro" # the small example files
     JUCE_MODAL_LOOPS_PERMITTED=1) # the test runs the message loop for a while, so that the editor's timer fires
 
 target_link_libraries(ProgrezzorUiTest

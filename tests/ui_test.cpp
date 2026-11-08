@@ -1984,6 +1984,120 @@ int main (int argc, char** argv)
     }
 
     {
+        std::printf ("ChordPro import\n");
+        auto& bar = static_cast<ProgrezzorEditor*> (editor.get())->getBar();
+        const juce::File folder (CHORDPRO_TEST_DIR);
+        const auto mk = [] (int root, engine::ChordType type) { engine::Block b; b.chord = { root, type, engine::kAutoInversion }; b.beats = 4.0; return b; };
+        const int oldKey = processor.keyParam->getIndex(), oldScale = processor.scaleParam->getIndex();
+        const bool oldLock = processor.isLockedToScale();
+        *processor.keyParam = 0;
+        *processor.scaleParam = (int) engine::ScaleId::Major;
+        *processor.lockParam = true;
+        bar.setEditing (true);
+        processor.setProgression ({ mk (0, engine::ChordType::Major), mk (7, engine::ChordType::Major) });
+        settle (60);
+        const auto barBefore = processor.getProgression();
+        const auto silentBlocks = [&] { int n = 0; for (int i = 0; i < (int) processor.getProgression().size(); ++i) n += processor.isBlockSilent (i) ? 1 : 0; return n; };
+
+        // Play: nothing can be imported, and a file dragged on is not wanted
+        bar.setEditing (false);
+        check (! bar.importChordProFile (folder.getChildFile ("simple.cho")) && ! bar.isInterestedInFileDrag ({ folder.getChildFile ("simple.cho").getFullPathName() }), "in Play nothing is imported");
+        bar.setEditing (true);
+        check (bar.isInterestedInFileDrag ({ folder.getChildFile ("simple.cho").getFullPathName() }) && ! bar.isInterestedInFileDrag ({ "/tmp/song.mid" })
+                   && ! bar.isInterestedInFileDrag ({ "a.cho", "b.cho" }), "a ChordPro file can be dragged on, other files not");
+
+        // A plain file: the chords are in the field as Quick-text, and the bar is not changed until Enter
+        check (bar.importChordProFile (folder.getChildFile ("simple.cho")), "the file is read");
+        settle (60);
+        check (bar.isInTextMode() && bar.getTextEditor().getText() == "C Am F G C Am F G", "the chords are in the Quick-text field");
+        check (processor.getProgression() == barBefore, "the bar is not changed before Enter");
+        snapshot ("chordpro_text");
+        bar.cancelQuickText();
+        check (! bar.isInTextMode() && processor.getProgression() == barBefore, "Esc leaves everything as it was");
+
+        bar.importChordProFile (folder.getChildFile ("simple.cho"));
+        bar.applyQuickText();
+        settle (60);
+        check (! bar.isInTextMode() && processor.getProgression().size() == 8 && std::abs (processor.getProgression()[0].beats - 4.0) < 1.0e-9, "Enter makes eight blocks of one bar");
+        processor.undo();
+        check (processor.getProgression() == barBefore, "Undo brings the old bar back");
+
+        // Parts: a list, and the one that is picked
+        check (bar.readChordProText (folder.getChildFile ("sections.cho").loadFileAsString()) == 5, "the file with parts has a list of five");
+        bar.useChordProPart (1);
+        check (bar.isInTextMode() && bar.getTextEditor().getText() == "F G C", "the chorus that was picked is in the field");
+        bar.cancelQuickText();
+        bar.useChordProPart (4);
+        check (bar.getTextEditor().getText() == "Dm G", "and the bridge");
+        bar.cancelQuickText();
+
+        // The key: asked about, never changed by itself
+        bar.importChordProFile (folder.getChildFile ("key.cho"));
+        settle (60);
+        check (bar.getSwitchKeyButton().isVisible() && bar.getNotice().contains ("G major") && bar.getNotice().contains ("Switch the key?"), "the song's key is asked about");
+        check (processor.keyParam->getIndex() == 0 && processor.getKey().scale == engine::ScaleId::Major, "the key is not changed by itself");
+        snapshot ("chordpro_key");
+        bar.getSwitchKeyButton().triggerClick();
+        settle (60);
+        check (processor.keyParam->getIndex() == 7 && processor.getKey().scale == engine::ScaleId::Major && ! bar.getSwitchKeyButton().isVisible(), "Switch key changes it to G major");
+        check (bar.getTextEditor().getText() == "G Em C D", "the chords in the text are the same");
+        bar.applyQuickText();
+        check (processor.getProgression().size() == 4 && processor.getProgression()[0].chord.root == 0 && processor.getProgression()[3].chord.root == 7 && silentBlocks() == 0, "and they are I, vi, IV and V of G: nothing outside the key");
+        processor.undo();
+        // Already in that key: no question
+        bar.importChordProFile (folder.getChildFile ("key.cho"));
+        check (! bar.getSwitchKeyButton().isVisible(), "a song in the key we are in asks nothing");
+        bar.cancelQuickText();
+        // A minor key
+        bar.importChordProFile (folder.getChildFile ("keyminor.cho"));
+        check (bar.getSwitchKeyButton().isVisible() && bar.getNotice().contains ("F# minor"), "a minor key says so");
+        bar.getSwitchKeyButton().triggerClick();
+        settle (60);
+        check (processor.keyParam->getIndex() == 6 && processor.getKey().scale == engine::ScaleId::Minor, "and switches to F# minor");
+        bar.cancelQuickText();
+        *processor.keyParam = 0;
+        *processor.scaleParam = (int) engine::ScaleId::Major;
+
+        // The text can be changed, and the lock and the marks work as in any Quick-text
+        bar.importChordProFile (folder.getChildFile ("key.cho")); // G Em C D in C major: D is outside the key
+        bar.getSwitchKeyButton().setVisible (false);
+        bar.getTextEditor().setText ("G Em C D", false);
+        bar.applyQuickText();
+        settle (60);
+        check (silentBlocks() == 1 && bar.getAllowButton().isVisible(), "a chord outside the key is silent with the lock on, and Allow is there");
+        processor.undo();
+        settle (60);
+
+        // Odd chords are marked in red, the rest is used
+        bar.importChordProFile (folder.getChildFile ("unknown.cho"));
+        bar.applyQuickText();
+        settle (60);
+        check (bar.isInTextMode() && processor.getProgression().size() == 5 && bar.getNotice().isNotEmpty(), "unknown chords are marked, and the others are used");
+        snapshot ("chordpro_unknown");
+        bar.cancelQuickText();
+        check (processor.getProgression() == barBefore, "Esc takes it all back");
+
+        // An empty file, and too many chords
+        bar.importChordProFile (folder.getChildFile ("empty.cho"));
+        settle (60);
+        check (bar.isInTextMode() && bar.getTextEditor().getText().isEmpty() && bar.getNotice().contains ("No chords found"), "a file without chords says so, and nothing is changed");
+        bar.cancelQuickText();
+        bar.importChordProFile (folder.getChildFile ("toomany.cho"));
+        settle (60);
+        check (bar.getNotice().contains ("first 32"), "too many chords: it says that only the first 32 fit");
+        bar.applyQuickText();
+        settle (60);
+        check (processor.getProgression().size() == 32, "and the first 32 are used");
+        processor.undo();
+
+        processor.setProgression (barBefore);
+        *processor.keyParam = oldKey;
+        *processor.scaleParam = oldScale;
+        *processor.lockParam = oldLock;
+        settle (60);
+    }
+
+    {
         std::printf ("bass note\n");
         check (! processor.bassParam->get(), "the bass note is off as standard");
         *processor.bassParam = true;

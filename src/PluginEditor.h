@@ -3,6 +3,7 @@
 #include "PluginProcessor.h"
 #include "engine/Learn.h"
 #include "engine/NextPads.h"
+#include "engine/ChordPro.h"
 #include "ProgrezzorLookAndFeel.h"
 
 // One big pad: the name of the chord, and it lights up while it sounds. Pressing it with the mouse plays it; letting go
@@ -224,7 +225,7 @@ private:
 };
 
 // The bottom bar: the blocks of the progression side by side
-class ProgressionBar : public juce::Component
+class ProgressionBar : public juce::Component, public juce::FileDragAndDropTarget
 {
 public:
     explicit ProgressionBar (ProgrezzorProcessor&);
@@ -254,6 +255,18 @@ public:
     bool replaceBlockWithRest (int index);                // the block becomes a pause
     void addRestWhileRecording();                         // Rec is on and the blank pad was pressed: a pause at the end
     bool deleteSelected();
+
+    // ChordPro import (Settings > Import ChordPro..., or a file dragged onto the bar): the chords of the file become Quick-text
+    // in the text field, to look at and change. A file with parts asks which one. A key in the file is asked about, never used
+    // by itself. Nothing in the bar changes until Enter.
+    void chooseChordProFile();                              // the file chooser
+    bool importChordProFile (const juce::File&);            // false if it cannot be read
+    int readChordProText (const juce::String& text);        // reads the text and keeps it; gives how many parts it has
+    void importChordProText (const juce::String& text);     // what the file says (also for the tests)
+    void useChordProPart (int index);                       // the part picked from the list (-1: the whole file)
+    BarButton& getSwitchKeyButton() { return switchKeyButton; }
+    bool isInterestedInFileDrag (const juce::StringArray& files) override;
+    void filesDropped (const juce::StringArray& files, int x, int y) override;
     void applyBlockMenuChoice (int index, int result); // the numbers of the items of the block menu: 100+type, 200+inversion, 301/302 octave, 310-313 length, 320 lock, 321 duplicate, 330 delete
 
     // Dragging a chord in from a pad: where it would land
@@ -335,6 +348,14 @@ private:
     BarButton redoButton { "Redo", BarButton::Icon::Redo };
     BarButton quickTextButton { "Text", BarButton::Icon::Pencil };
     BarButton allowButton { "Allow", BarButton::Icon::None };
+    BarButton switchKeyButton { "Switch key", BarButton::Icon::None };
+    bool noticeHasSwitchKey = false;
+    engine::ChordProResult chordPro;       // what the imported file said
+    juce::String importedText, importNote; // the text that was put in the field, and what to say about it while it stays
+    bool importTooMany = false;
+    bool importAsksKey = false;
+    std::unique_ptr<juce::FileChooser> fileChooser;
+    void showChordProText (const std::vector<std::string>& chords);
     BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     ArpToggle arpButton;
     LearnToggle learnButton;

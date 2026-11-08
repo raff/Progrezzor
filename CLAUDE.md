@@ -204,6 +204,18 @@ Takt-notation (Henrik, 2026-11-08): Indeholder teksten et |, læses akkord-diagr
 
 Reglen er: * betyder antal, og : betyder længde. Tekstfeltet viser altid blokkene præcis, som de er, så en blok på 2 takter vises som Am:2. En stavefejl markeres med rødt og stopper ikke resten.
 
+## ChordPro-import
+
+Henrik, 2026-11-08. Genbruger Quick-text.
+
+- "Import ChordPro..." i Settings åbner en filvælger (.cho, .chopro, .crd, .pro). En fil, der trækkes ind på rundgangen, virker også. Kun i Edit (ikke i Play).
+- Kun akkorderne i firkantede parenteser læses, i rækkefølge. Teksten, kommentarer (#-linjer) og alle andre direktiver ignoreres, og \[*Coda\] er en note, ikke en akkord. Hver akkord bliver 1 takt.
+- Har filen afsnit ({start_of_verse}, {start_of_chorus}, {start_of_bridge} og {sov}, {soc}, {sob}, evt. med en etiket efter kolon), vises en liste ("Which part?", med de første akkorder), og brugeren vælger ét. Afsnit uden akkorder udelades, og afsnit der kommer flere gange nummereres (Chorus, Chorus 2). Uden afsnit bruges hele filen.
+- Resultatet vises som tekst i Quick-text-feltet ("C Am F G"), så brugeren kan se og rette det. Enter anvender, Esc fortryder, og rundgangen ændres først ved Enter. Alle Quick-text-regler gælder (Lock to scale, rødt for ukendte, Allow). N.C. og lignende bliver røde.
+- Har filen {key: X}, og den er en anden end plug-in'ets, står der i bunden "The song says it is in G major. Switch the key?" med en knap. Plug-in'et skifter aldrig selv. Akkorderne i teksten er navngivne, så de er de samme akkorder efter et skift.
+- Er der flere akkorder end bjælken kan rumme (32), tages de første, og en kort besked siger det. En fil uden akkorder giver en tom tekst og beskeden "No chords found in that file."
+- Plug-in'et må aldrig levere ChordPro-filer med andres sange. Testfilerne i tests/chordpro er skrevet til projektet.
+
 ## Stemmer
 
 - Preview-lyde bygges som små indbyggede synths uden samples. MIDI-filen indeholder kun noter.

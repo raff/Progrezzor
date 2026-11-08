@@ -14,9 +14,12 @@
 #include "../src/engine/Arp.h"
 #include "../src/engine/Learn.h"
 #include "../src/engine/QuickText.h"
+#include "../src/engine/ChordPro.h"
 
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
+#include <sstream>
 #include <cstring>
 #include <cstdlib>
 #include <atomic>
@@ -634,6 +637,84 @@ void testQuickTextBars()
         many += " Am |";
     r = read (many);
     check ((int) r.blocks.size() == kMaxBlocks && r.problems.size() == 2, "there is room for 32 blocks; the rest is marked");
+}
+
+std::string readTestFile (const std::string& name)
+{
+    std::ifstream in (std::string (CHORDPRO_TEST_DIR) + "/" + name);
+    std::stringstream text;
+    text << in.rdbuf();
+    return text.str();
+}
+
+void testChordPro()
+{
+    std::printf ("ChordPro\n");
+    const Key key { 0, ScaleId::Major };
+    const auto join = [] (const std::vector<std::string>& words)
+    {
+        std::string out;
+        for (const auto& w : words)
+            out += (out.empty() ? "" : " ") + w;
+        return out;
+    };
+
+    // Plain file: the chords in brackets, in order. Words, comments and other directives are not read.
+    auto r = readChordPro (readTestFile ("simple.cho"));
+    check (join (r.chords) == "C Am F G C Am F G" && r.sections.empty() && ! r.hasKey, "a plain file: only the chords in brackets, in order, nothing from comments");
+    check (chordsAsQuickText (r.chords, 32) == "C Am F G C Am F G", "and they become Quick-text, one bar each");
+    const auto q = parseQuickText (chordsAsQuickText (r.chords, 32), key, 4.0, true);
+    check (q.problems.empty() && q.blocks.size() == 8 && q.blocks[0].beats == 4.0, "which Quick-text reads as eight blocks of one bar");
+
+    // Sections: verse, chorus, bridge, the short names, labels, the empty one left out, the chords outside left out
+    r = readChordPro (readTestFile ("sections.cho"));
+    check (r.sections.size() == 5, "five sections with chords (the empty one is left out)");
+    if (r.sections.size() == 5)
+    {
+        check (r.sections[0].name == "Verse one" && join (r.sections[0].chords) == "C Am", "a section with a label: its label and its chords");
+        check (r.sections[1].name == "Chorus" && join (r.sections[1].chords) == "F G C", "start_of_chorus and end_of_chorus");
+        check (r.sections[2].name == "Verse" && join (r.sections[2].chords) == "Em Am", "sov and eov");
+        check (r.sections[3].name == "Chorus 2" && join (r.sections[3].chords) == "F G", "a section that comes twice is numbered");
+        check (r.sections[4].name == "Bridge" && join (r.sections[4].chords) == "Dm G", "sob and eob");
+    }
+    check (join (r.chords) == "C Am F G C Dm Em Am F G Dm G", "the whole file has every chord, also the ones outside the sections");
+
+    // Odd chords are handed on, and Quick-text marks what it does not know
+    r = readChordPro (readTestFile ("unknown.cho"));
+    check (join (r.chords) == "C N.C. Xyz Am G7 C/G Fmaj7", "unknown words stay in, and [*Coda] is a note, not a chord");
+    const auto odd = parseQuickText (chordsAsQuickText (r.chords, 32), key, 4.0, true);
+    check (odd.problems.size() == 2 && odd.blocks.size() == 5, "Quick-text marks N.C. and Xyz, and reads the other five");
+
+    // The key
+    r = readChordPro (readTestFile ("key.cho"));
+    check (r.hasKey && r.keyName == "G" && r.keyTonic == 7 && ! r.keyMinor, "{key: G}");
+    check (chordProKeyDiffers (r, key) && ! chordProKeyDiffers (r, Key { 7, ScaleId::Major }) && chordProKeyDiffers (r, Key { 7, ScaleId::Minor }), "it differs from C Major, not from G Major, and a minor key is another");
+    r = readChordPro (readTestFile ("keyminor.cho"));
+    check (r.hasKey && r.keyTonic == 6 && r.keyMinor && ! chordProKeyDiffers (r, Key { 6, ScaleId::Dorian }), "{key: F#m} is a minor key; Dorian counts as minor");
+    check (! readChordPro ("{key: nonsense}\n[C]x").hasKey && readChordPro ("{key: Bb}\n[C]x").keyTonic == 10, "a key that cannot be read is ignored; Bb is 10");
+    check (! readChordPro ("[C]x").hasKey && ! chordProKeyDiffers (readChordPro ("[C]x"), key), "no key in the file: no question");
+
+    // Empty files
+    r = readChordPro (readTestFile ("empty.cho"));
+    check (r.chords.empty() && r.sections.empty(), "a file without chords gives nothing");
+    check (readChordPro ("").chords.empty() && chordsAsQuickText ({}, 32).empty(), "an empty file gives nothing");
+    check (readChordPro ("[C\n[G]x").chords.size() == 1 && readChordPro ("{sov\n[C]x").chords.size() == 1, "a bracket that is not closed does not stop the reading");
+
+    // Too many chords: the first 32, and it says so
+    r = readChordPro (readTestFile ("toomany.cho"));
+    bool tooMany = false;
+    const auto text = chordsAsQuickText (r.chords, kMaxBlocks, &tooMany);
+    const auto many = parseQuickText (text, key, 4.0, true);
+    check (r.chords.size() == 40 && tooMany && many.blocks.size() == (size_t) kMaxBlocks && many.problems.empty(), "40 chords: the first 32 are taken, and tooMany says it");
+    check (chordsAsQuickText (readChordPro (readTestFile ("simple.cho")).chords, kMaxBlocks, &tooMany).size() > 0 && ! tooMany, "8 chords: nothing left out");
+
+    // Upper case, windows line ends, a directive without a colon
+    r = readChordPro ("{SOV}\r\n[C]a [G]b\r\n{EOV}\r\n{Key G}\r\n");
+    check (r.sections.size() == 1 && r.sections[0].name == "Verse" && join (r.sections[0].chords) == "C G" && r.hasKey && r.keyTonic == 7, "capitals, Windows line ends and {key G} without a colon");
+
+    // The file names
+    check (isChordProFileName ("a.cho") && isChordProFileName ("a.CHOPRO") && isChordProFileName ("b.crd") && isChordProFileName ("c.Pro")
+           && ! isChordProFileName ("a.txt") && ! isChordProFileName ("cho") && ! isChordProFileName ("a.mid"), "the file endings .cho .chopro .crd .pro");
 }
 
 void testChosenInversion()
@@ -1759,6 +1840,7 @@ int main()
     testOctaves();
     testQuickText();
     testQuickTextBars();
+    testChordPro();
     testLoopPlan();
     testEditing();
     testExport();
