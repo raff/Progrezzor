@@ -5,7 +5,7 @@ Jam. Build. Drag. Done.
 A very easy MIDI chord tool for every kind of music. Jam on the pads, find a progression, drag the MIDI out. You do not
 need to know any music theory.
 
-This is the development version after 0.1.0 (see CHANGELOG.md). Free software (GNU AGPLv3). Built and tested on Linux, as
+This is version 0.9.0, an internal test build that is never released (the first public release will be 1.0.0). See CHANGELOG.md. Free software (GNU AGPLv3). Built and tested on Linux, as
 CLAP and VST3. Windows has not been tried yet.
 
 ## What it does
