@@ -1325,8 +1325,10 @@ private:
             g.strokePath (shape, juce::PathStrokeType (2.6f));
         }
 
-        // The name, in the spelling of the key
-        const auto name = engine::chordName (s.chord, key);
+        // The names round the wheel are always the same, whatever the key. Only the chord in the middle is spelled after the key.
+        static const char* const majorNames[12] = { "C", "G", "D", "A", "E", "B", "F#/Gb", "Db", "Ab", "Eb", "Bb", "F" };
+        static const char* const minorNames[12] = { "Am", "Em", "Bm", "F#m", "C#m", "G#m", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm" };
+        const juce::String name = s.ring == 0 ? majorNames[s.slot] : s.ring == 1 ? minorNames[s.slot] : juce::String (engine::chordName (s.chord, key));
         const auto at = s.ring == 2 ? c : pointAt (s.ring, s.slot, ringMiddle (s.ring));
         if (l != nullptr)
             g.setFont (s.ring == 2 ? l->titleFont (22.0f) : l->titleFont (s.ring == 0 ? 22.0f : 18.0f));
