@@ -139,7 +139,8 @@ private:
 // A block of the progression: the name of its chord. Holding it plays the chord. Its width follows its length.
 //   - drag the right edge: the length (steps of half a bar)
 //   - drag the block: move it (Ctrl, Option on Mac: copy it)
-//   - right-click: delete. Click: select (Delete removes it). A chord dragged from a pad onto it replaces it.
+//   - right-click, or the small gear on mouseover: the block menu (type, inversion, octave, length, lock, duplicate, delete).
+//     Click: select (Delete removes it). A chord dragged from a pad onto it replaces it.
 //   - the lock (on mouseover, always when locked) keeps the block when Suggest replaces the rest
 class BlockButton : public juce::Component, public juce::SettableTooltipClient
 {
@@ -149,6 +150,7 @@ public:
     std::function<void()> onSelect;       // toggles the selection
     std::function<void()> onToggleLock;
     std::function<void()> onDelete;
+    std::function<void()> onMenu;         // right-click or the gear: the menu of this block
     std::function<void (int steps)> onOctave; // the arrows (in Edit, on mouseover): +1 up, -1 down
     std::function<void()> onResizeStart;
     std::function<void (int dx)> onResizeDrag;
@@ -189,6 +191,7 @@ private:
     enum class Mode { None, Press, Resize, Move };
 
     juce::Rectangle<int> lockArea() const { return { 2, 2, 26, 26 }; }
+    juce::Rectangle<int> gearArea() const { return { 2, getHeight() - 28, 26, 26 }; }
     // The two arrows lie over each other (up above, down below) just inside the right edge, which is for the length
     // The two small arrows for the octave of this block: one in the top right corner, one in the bottom right corner. They are
     // small, so that a click on the chord itself never hits them.
@@ -251,6 +254,7 @@ public:
     bool replaceBlockWithRest (int index);                // the block becomes a pause
     void addRestWhileRecording();                         // Rec is on and the blank pad was pressed: a pause at the end
     bool deleteSelected();
+    void applyBlockMenuChoice (int index, int result); // the numbers of the items of the block menu: 100+type, 200+inversion, 301/302 octave, 310-313 length, 320 lock, 321 duplicate, 330 delete
 
     // Dragging a chord in from a pad: where it would land
     bool containsScreenPoint (juce::Point<int> screen) const;
@@ -278,6 +282,7 @@ public:
     BlockButton* getBlock (int i) { return blocks[i]; }
     void shiftGeneralOctave (int steps);
     void showSettingsMenu();
+    void showBlockMenu (int index); // right-click or the gear on a block
     void showArpPanel();
     void toggleLearn();
     void toggleCapture();

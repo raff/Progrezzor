@@ -895,6 +895,10 @@ void BlockButton::paint (juce::Graphics& g)
     if (locked || (editable && hovered()))
         drawLock (g, lockArea().toFloat().reduced (5.0f), locked ? (heldByMouse ? theme::onAccent : juce::Colours::white) : juce::Colours::white.withAlpha (0.75f), locked);
 
+    // The gear: the menu of the block, in Edit on mouseover
+    if (editable && hovered())
+        drawGear (g, gearArea().toFloat().reduced (5.0f), heldByMouse ? theme::onAccent : juce::Colours::white.withAlpha (0.75f));
+
     // The arrows for the octave of this block, in Edit on mouseover
     if (editable && hovered() && ! rest)
     {
@@ -936,10 +940,10 @@ void BlockButton::mouseDown (const juce::MouseEvent& e)
         return;
     }
 
-    if (e.mods.isPopupMenu())
+    if (e.mods.isPopupMenu() || gearArea().contains (e.getPosition()))
     {
-        if (onDelete)
-            onDelete();
+        if (onMenu)
+            onMenu();
         return;
     }
 
@@ -2225,6 +2229,95 @@ void ProgressionBar::chooseHomeOctave (int octaves)
     repaint (stripBounds);
 }
 
+// The menu of a block (right-click, or the gear). It changes this block only, never the pad it came from. Every change is one
+// step for Undo. A pause only has a length, Duplicate and Delete.
+void ProgressionBar::showBlockMenu (int index)
+{
+    if (! editing || index < 0 || index >= (int) processor.getProgression().size())
+        return;
+
+    const auto key = processor.getKey();
+    const auto block = processor.getProgression()[(size_t) index];
+    const double bar = processor.getHostBarBeats();
+    constexpr double lengths[4] = { 0.5, 1.0, 2.0, 4.0 };
+    const char* lengthNames[4] = { "1/2 bar", "1 bar", "2 bars", "4 bars" };
+
+    juce::PopupMenu menu;
+    if (! block.rest)
+    {
+        // The same list as the gear on a pad; with Lock to scale on, only the chords that fit (and the one it has now)
+        for (int t = 0; t < engine::kNumChordTypes; ++t)
+        {
+            const engine::Chord chord { block.chord.root, (engine::ChordType) t, engine::kAutoInversion };
+            if (processor.isLockedToScale() && chord.type != block.chord.type && ! engine::chordFitsScale (chord, key.scale))
+                continue;
+            menu.addItem (100 + t, juce::String (engine::chordName (chord, key)), true,
+                          block.chord.type == chord.type && block.chord.inversion == engine::kAutoInversion);
+        }
+
+        const int notes = engine::shapeOf (block.chord.type).count;
+        if (notes > 1)
+        {
+            menu.addSeparator();
+            for (int k = 1; k < notes; ++k)
+            {
+                const engine::Chord chord { block.chord.root, block.chord.type, k };
+                menu.addItem (200 + k, juce::String (engine::chordName (chord, key)), true, block.chord.inversion == k);
+            }
+        }
+
+        menu.addSeparator();
+        menu.addItem (301, "Octave up", block.chord.octave < engine::kMaxOctaveShift);
+        menu.addItem (302, "Octave down", block.chord.octave > -engine::kMaxOctaveShift);
+        menu.addSeparator();
+    }
+
+    for (int i = 0; i < 4; ++i)
+        menu.addItem (310 + i, lengthNames[i], true, std::abs (block.beats - lengths[i] * bar) < 1.0e-6);
+    menu.addSeparator();
+    if (! block.rest)
+        menu.addItem (320, "Lock", true, block.locked);
+    menu.addItem (321, "Duplicate");
+    menu.addSeparator();
+    menu.addItem (330, "Delete");
+
+    juce::Component::SafePointer<ProgressionBar> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (blocks[index]).withMinimumWidth (140),
+                        [safe, index] (int result)
+                        {
+                            if (safe != nullptr)
+                                safe->applyBlockMenuChoice (index, result);
+                        });
+}
+
+// What a choice in the block menu does (the numbers are the ones showBlockMenu gives the items)
+void ProgressionBar::applyBlockMenuChoice (int index, int result)
+{
+    if (result <= 0 || index < 0 || index >= (int) processor.getProgression().size())
+        return;
+
+    constexpr double lengths[4] = { 0.5, 1.0, 2.0, 4.0 };
+    const double bar = processor.getHostBarBeats();
+    const auto& now = processor.getProgression();
+    if (result >= 330)
+    {
+        processor.editProgression (engine::withErased (now, index));
+        clearSelection();
+    }
+    else if (result == 321)
+        processor.editProgression (engine::withDuplicated (now, index, index + 1));
+    else if (result == 320)
+        processor.editProgression (engine::withLockToggled (now, index));
+    else if (result >= 310)
+        processor.editProgression (engine::withLength (now, index, lengths[result - 310] * bar));
+    else if (result == 301 || result == 302)
+        processor.editProgression (engine::withOctaveShift (now, index, result == 301 ? 1 : -1));
+    else if (result >= 200)
+        processor.editProgression (engine::withInversion (now, index, result - 200));
+    else if (result >= 100)
+        processor.editProgression (engine::withChordType (now, index, (engine::ChordType) (result - 100)));
+}
+
 void ProgressionBar::showSettingsMenu()
 {
     juce::PopupMenu menu;
@@ -2442,6 +2535,7 @@ void ProgressionBar::refresh()
             {
                 processor.editProgression (engine::withOctaveShift (processor.getProgression(), i, steps));
             };
+            block->onMenu = [this, i] { showBlockMenu (i); };
             block->onDelete = [this, i]
             {
                 processor.editProgression (engine::withErased (processor.getProgression(), i));

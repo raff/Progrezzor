@@ -87,6 +87,16 @@ Kræver et MIDI-tastatur.
 - [ ] Gem projektet med den tændt, åbn det igen: den er stadig tændt. Et nyt projekt har den slukket.
 - [ ] Ingen hængende noter, når du slipper en pad, stopper transporten eller slår Bass note fra.
 
+## 2h. Blokmenu (branch feature/edit-blocks)
+- [ ] Højreklik på en blok: en menu åbner (ingen sletning). Den har akkordtyper, omvendinger, Octave up/down, længde, Lock, Duplicate og nederst Delete.
+- [ ] Hold musen over en blok: et lille ⚙️ vises nederst til venstre og åbner den samme menu.
+- [ ] Skift type, omvending, oktav og længde: kun den ene blok ændres, pad'en gør ikke. Slå Lock to scale til: kun passende typer vises.
+- [ ] Fortryd (Ctrl+Z) tager hver ændring tilbage, en ad gangen.
+- [ ] Delete-tasten sletter stadig en markeret blok.
+- [ ] Højreklik på en pause: kun længde, Duplicate og Delete.
+- [ ] I Play kan intet ændres, og der er ingen menu.
+- [ ] Træk MIDI ud: filen har blokkens type, omvending, oktav og længde.
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

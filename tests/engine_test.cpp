@@ -408,6 +408,39 @@ void testBassNote()
     check (ons == offs && t.soundingNotes() == 0, "release lets go of the bass note too: nothing hangs");
 }
 
+void testBlockMenuEdits()
+{
+    std::printf ("block menu edits\n");
+    const Key key { 0, ScaleId::Major };
+    Progression p { { Chord { 0, ChordType::Major, kAutoInversion }, 4.0, false }, { Chord { 7, ChordType::Major, kAutoInversion }, 4.0, false } };
+    const auto pads = [&] { std::array<Chord, 7> a; for (int i = 0; i < 7; ++i) a[(size_t) i] = padChord (key.scale, i); return a; }();
+
+    auto q = withChordType (p, 1, ChordType::Dom7);
+    check (q[1].chord.type == ChordType::Dom7 && q[1].chord.root == 7 && q[0] == p[0], "the type changes in that block only");
+    q = withInversion (q, 1, 2);
+    check (q[1].chord.inversion == 2, "the inversion is set");
+    q = withChordType (q, 1, ChordType::Minor);
+    check (q[1].chord.inversion == kAutoInversion, "a new type starts in root position");
+    q = withInversion (withInversion (q, 1, 1), 1, 0);
+    check (q[1].chord.inversion == kAutoInversion, "inversion 0 is root position");
+    check (pads[4] == padChord (key.scale, 4), "the pads are not touched");
+
+    // Type, inversion, octave and length are all in the MIDI file
+    q = withLength (withOctaveShift (withInversion (withChordType (p, 1, ChordType::Dom7), 1, 1), 1, 1), 1, 2.0);
+    const auto notes = exportNotes (q, key.tonic, key.scale);
+    const auto voiced = voiceChord (q[1].chord, key.tonic);
+    std::vector<int> fromFile;
+    for (const auto& n : notes)
+        if (std::abs (n.start - 4.0) < 1.0e-9 && std::abs (n.length - 2.0) < 1.0e-9)
+            fromFile.push_back (n.note);
+    check (fromFile.size() == 4 && fromFile[0] == voiced.notes[0] && wrap12 (fromFile[0]) == 11 && voiced.octave == 1,
+           "the file has G7/B: the notes, an octave up, 2 beats long");
+
+    // A pause is left as it is
+    auto r = withRestAt (p, 0);
+    check (withChordType (r, 0, ChordType::Minor)[0].rest && withInversion (r, 0, 1)[0].chord == r[0].chord, "a pause has no type and no inversion");
+}
+
 void testChosenInversion()
 {
     std::printf ("chosen inversion\n");
@@ -1544,6 +1577,7 @@ int main()
     testVoicingBasics();
     testPadsClimb();
     testBassNote();
+    testBlockMenuEdits();
     testSuggestInversions();
     testChosenInversion();
     testPredictableVoicing();
