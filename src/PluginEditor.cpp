@@ -2145,6 +2145,17 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     };
     addAndMakeVisible (redoButton);
 
+    clearButton.setTooltip ("Clear: remove all the chords from the bar (Undo brings them back)");
+    clearButton.setComponentID ("clear");
+    clearButton.onClick = [this]
+    {
+        if (! editing || textMode || processor.getProgression().empty())
+            return;
+        clearSelection();
+        processor.editProgression ({});
+    };
+    addAndMakeVisible (clearButton);
+
 
     dragTile.makeFile = [this] { return processor.saveMidi(); };
     dragTile.setTooltip ("Drag this into your DAW: the progression as a MIDI file");
@@ -2469,6 +2480,7 @@ void ProgressionBar::updateButtons()
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
     takePlayedChords();
     recButton.setEnabled (! textMode && ! processor.isLearning());
+    clearButton.setEnabled (editing && ! textMode && ! processor.getProgression().empty());
 
     // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
     const int octave = processor.getGeneralOctave();
@@ -3453,6 +3465,7 @@ void ProgressionBar::resized()
 
     // What is left in the middle is the tray the blocks sit in, with the name of the area above it
     labelBounds = area.removeFromTop (labelHeight);
+    clearButton.setBounds (juce::Rectangle<int> (labelBounds).removeFromRight (74).withSizeKeepingCentre (74, 24)); // at the end of the name's row
     trayBounds = area;
 
     // A short message under the blocks or the text, when there is one (with the Allow button at its end)

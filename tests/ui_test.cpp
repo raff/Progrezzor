@@ -463,6 +463,18 @@ int main (int argc, char** argv)
             settle (50);
         }
 
+        // Clear empties the bar in one step, and Undo brings it back
+        {
+            const auto mine = processor.getProgression();
+            check (! mine.empty() && bar.getClearButton().isEnabled(), "Clear is there when the bar has chords and can be edited");
+            bar.getClearButton().triggerClick();
+            settle (50);
+            check (processor.getProgression().empty() && ! bar.getClearButton().isEnabled(), "Clear empties the bar");
+            processor.undo();
+            settle (50);
+            check (processor.getProgression() == mine, "and Undo brings everything back in one step");
+        }
+
         // Rec is a switch: while it is on, every chord played goes at the end of the bar as one bar
         {
             const auto barBefore = processor.getProgression();

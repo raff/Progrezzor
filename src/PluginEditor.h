@@ -339,6 +339,7 @@ public:
     BarButton& getOctaveUpButton() { return octaveUpButton; }
     BarButton& getOctaveDownButton() { return octaveDownButton; }
     const juce::String& getOctaveLabel() const { return octaveLabel; }
+    BarButton& getClearButton() { return clearButton; }
     BarButton& getReplaceButton() { return replaceButton; }
     BarButton& getCancelReplaceButton() { return cancelReplaceButton; }
 
@@ -362,6 +363,7 @@ private:
     int askedAtVersion = -1;
     BarButton undoButton { "Undo", BarButton::Icon::Undo };
     BarButton redoButton { "Redo", BarButton::Icon::Redo };
+    BarButton clearButton { "Clear", BarButton::Icon::None }; // empties the bar (Undo brings it back)
     BarButton quickTextButton { "Text", BarButton::Icon::Pencil };
     BarButton allowButton { "Allow", BarButton::Icon::None };
     BarButton switchKeyButton { "Switch key", BarButton::Icon::None };
