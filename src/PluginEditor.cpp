@@ -199,7 +199,7 @@ void PadButton::paint (juce::Graphics& g)
     const float height = juce::jlimit (16.0f, 64.0f, std::min ((float) getHeight() * 0.24f, (float) getWidth() * 0.28f));
     if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
         g.setFont (l->titleFont (height));
-    const auto textArea = face.reduced (6.0f, 10.0f).toNearestInt();
+    const auto textArea = face.reduced (10.0f, 10.0f).toNearestInt();
     const auto ink = theme::textOn (base);
     g.setColour (theme::shade.withAlpha (ink.getBrightness() > 0.5f ? 0.28f : 0.0f));
     g.drawFittedText (chordName, textArea.translated (0, 2), juce::Justification::centred, 1, 0.6f);
@@ -387,7 +387,7 @@ void ArpToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
     }
     if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
         g.setFont (l->titleFont (13.0f));
-    g.drawText ("Arp", face.withTrimmedTop (face.getHeight() * 0.5f).toNearestInt(), juce::Justification::centred);
+    theme::drawFitted (g, "Arp", face.withTrimmedTop (face.getHeight() * 0.5f).toNearestInt(), juce::Justification::centred, 6);
 }
 
 // ---- LearnToggle ---------------------------------------------------------------------------------------------------
@@ -420,7 +420,7 @@ void LearnToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButto
     g.drawLine (c.x + 16.0f * k, c.y + 1.0f * k, c.x + 16.0f * k, c.y + 12.0f * k, 2.0f * k);
     if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
         g.setFont (l->titleFont (13.0f));
-    g.drawText ("Learn", face.withTrimmedTop (face.getHeight() * 0.62f).toNearestInt(), juce::Justification::centred);
+    theme::drawFitted (g, "Learn", face.withTrimmedTop (face.getHeight() * 0.62f).toNearestInt(), juce::Justification::centred, 6);
 }
 
 // ---- BarButton -----------------------------------------------------------------------------------------------------
@@ -507,9 +507,9 @@ void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
                     labelArea = labelArea.withTrimmedLeft ((int) (dot + gap));
                 }
                 g.setColour (theme::shade.withAlpha (accented ? 0.0f : 0.35f));
-                g.drawText (getButtonText().isEmpty() ? getName() : getButtonText(), labelArea.translated (0, 1), juce::Justification::centred);
+                theme::drawFitted (g, getButtonText().isEmpty() ? getName() : getButtonText(), labelArea.translated (0, 1), juce::Justification::centred, 10);
                 g.setColour (colour);
-                g.drawText (getButtonText().isEmpty() ? getName() : getButtonText(), labelArea, juce::Justification::centred);
+                theme::drawFitted (g, getButtonText().isEmpty() ? getName() : getButtonText(), labelArea, juce::Justification::centred, 10);
             }
             break;
     }
@@ -561,7 +561,7 @@ void DragTile::paint (juce::Graphics& g)
     if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
         g.setFont (l->titleFont (14.0f));
     g.setColour (ready ? theme::text : theme::dimText.withAlpha (0.5f));
-    g.drawText ("Drag", face.toNearestInt().withTop (juce::roundToInt (page.getBottom())).reduced (2), juce::Justification::centred);
+    theme::drawFitted (g, "Drag", face.toNearestInt().withTop (juce::roundToInt (page.getBottom())), juce::Justification::centred, 8);
 }
 
 // The drag is the operating system's: the DAW takes the file as it takes one from a file manager
@@ -831,7 +831,7 @@ void BlockButton::paint (juce::Graphics& g)
             drawRestSign (g, juce::Rectangle<float> (bounds.getX() + 4.0f, top - nameHeight * 0.15f, bounds.getWidth() - 8.0f, nameHeight * 1.3f),
                           restBars, lit ? theme::onAccent : ink.withAlpha (0.8f), l->titleFont (juce::jlimit (10.0f, 16.0f, nameSize * 0.45f)));
         else
-            g.drawFittedText (chordName, juce::Rectangle<float> (bounds.getX() + 4.0f, top, bounds.getWidth() - 8.0f, nameHeight).toNearestInt(),
+            g.drawFittedText (chordName, juce::Rectangle<float> (bounds.getX() + 8.0f, top, bounds.getWidth() - 16.0f, nameHeight).toNearestInt(),
                               juce::Justification::centred, 1, 0.6f);
 
         // Under the name, in one line: where the chord sits in the key (I, ii, III ...), how long it lasts, and how far the chord
@@ -870,9 +870,9 @@ void BlockButton::paint (juce::Graphics& g)
         };
 
         auto parts = make (true, false);
-        if (totalWidth (parts) > bounds.getWidth() - 8.0f)
+        if (totalWidth (parts) > bounds.getWidth() - 20.0f)
             parts = make (true, true);
-        if (totalWidth (parts) > bounds.getWidth() - 8.0f)
+        if (totalWidth (parts) > bounds.getWidth() - 20.0f)
             parts = make (false, true);
 
         float x = (float) row.getCentreX() - totalWidth (parts) * 0.5f;
@@ -1532,8 +1532,8 @@ private:
     // ---- where everything is ----
     juce::Rectangle<int> modeRect (int i) const { return { 16 + i * 114, 10, 108, 28 }; }
     juce::Rectangle<int> tileRect (int i) const { return { 16 + (i % 4) * 88, 66 + (i / 4) * 50, 80, 44 }; }
-    juce::Rectangle<int> speedRect (int i) const { return { 16 + i * 84, 236, 78, 26 }; }
-    juce::Rectangle<int> lengthRect (int i) const { return { 190 + i * 56, 236, 52, 26 }; }
+    juce::Rectangle<int> speedRect (int i) const { return { 16 + i * 70, 236, 64, 26 }; }
+    juce::Rectangle<int> lengthRect (int i) const { return { 164 + i * 64, 236, 60, 26 }; }
     juce::Rectangle<int> euclidHitsRect() const { return { 16, 272, 160, 22 }; }
     juce::Rectangle<int> euclidTurnRect() const { return { 190, 272, 160, 22 }; }
     juce::Rectangle<int> stripRect() const { return { 16, 304, 340, 36 }; }
@@ -1574,7 +1574,7 @@ private:
             if (l != nullptr)
                 g.setFont (l->titleFont (11.0f));
             g.setColour (selected ? theme::onAccent : theme::text);
-            g.drawFittedText (engine::rhythmPatternNames[i], r.withTrimmedTop (r.getHeight() - 20.0f).withTrimmedBottom (3.0f).toNearestInt(), juce::Justification::centred, 1, 0.7f);
+            theme::drawFitted (g, engine::rhythmPatternNames[i], r.withTrimmedTop (r.getHeight() - 20.0f).withTrimmedBottom (3.0f).toNearestInt(), juce::Justification::centred, 8);
         }
 
         label ("SPEED", 218);
@@ -1583,7 +1583,7 @@ private:
         if (l != nullptr)
             g.setFont (l->labelFont (12.0f));
         g.setColour (theme::dimText);
-        g.drawText ("LENGTH", 190, 218, 120, 16, juce::Justification::centredLeft);
+        g.drawText ("LENGTH", 164, 218, 120, 16, juce::Justification::centredLeft);
         for (int i = 0; i < engine::kNumRhythmLengths; ++i)
             drawPill (g, lengthRect (i), engine::rhythmLengthNames[i], rhythm.length == i, false);
 
@@ -1629,7 +1629,7 @@ private:
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
             g.setFont (l->titleFont (12.0f));
         g.setColour (selected ? theme::onAccent : theme::text);
-        g.drawText (text, r.withTrimmedTop (r.getHeight() - 24.0f).withTrimmedBottom (6.0f).toNearestInt(), juce::Justification::centred);
+        theme::drawFitted (g, text, r.withTrimmedTop (r.getHeight() - 24.0f).withTrimmedBottom (6.0f).toNearestInt(), juce::Justification::centred, 8);
     }
 
     static void drawStyleIcon (juce::Graphics& g, juce::Rectangle<float> r, int style, bool selected)
@@ -1665,7 +1665,7 @@ private:
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
             g.setFont (l->titleFont (big ? 14.0f : 12.0f));
         g.setColour (on ? theme::onAccent : theme::text);
-        g.drawText (text, face.toNearestInt(), juce::Justification::centred);
+        theme::drawFitted (g, text, face.toNearestInt(), juce::Justification::centred, 8);
     }
 
     void drawStepper (juce::Graphics& g, juce::Rectangle<int> r, const char* name, int value) const
@@ -1677,7 +1677,7 @@ private:
             g.setFont (l->titleFont (12.0f));
         g.drawText ("-", r.withWidth (22), juce::Justification::centred);
         g.drawText ("+", r.withTrimmedLeft (r.getWidth() - 22), juce::Justification::centred);
-        g.drawText (juce::String (name) + " " + juce::String (value), r.reduced (22, 0), juce::Justification::centred);
+        theme::drawFitted (g, juce::String (name) + " " + juce::String (value), r.reduced (22, 0), juce::Justification::centred, 6);
     }
 
     void drawRing (juce::Graphics& g, juce::Rectangle<int> area, const engine::ArpSettings& arp) const
@@ -2441,6 +2441,9 @@ void ProgressionBar::showSettingsMenu()
     menu.addSectionHeader ("Sound");
     menu.addItem (22, "Bass note", true, processor.bassParam->get());
     menu.addItem (23, "Preview sound", true, processor.voiceParam->getIndex() != PadSynth::Off);
+    menu.addSeparator();
+    menu.addSectionHeader ("Help");
+    menu.addItem (24, "Show tooltips", true, processor.getShowTooltips());
 
     juce::Component::SafePointer<ProgressionBar> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (260),
@@ -2456,6 +2459,8 @@ void ProgressionBar::showSettingsMenu()
                             {
                                 safe->processor.togglePreviewSound();
                             }
+                            else if (safe != nullptr && result == 24)
+                                safe->processor.setShowTooltips (! safe->processor.getShowTooltips());
                             else if (safe != nullptr && result == 22)
                             {
                                 auto& bass = *safe->processor.bassParam; // saved with the project
@@ -3173,6 +3178,8 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     : AudioProcessorEditor (p), processor (p), bar (p)
 {
     setLookAndFeel (&look);
+    if (processor.getShowTooltips())
+        tooltipWindow = std::make_unique<juce::TooltipWindow> (this, 600);
 
     title.setText ("Progrezzor", juce::dontSendNotification);
     title.setFont (look.titleFont (22.0f));
@@ -3432,6 +3439,10 @@ void ProgrezzorEditor::timerCallback()
         updateNames();
 
     bar.updateButtons();
+
+    // Tooltips can be switched off in Settings
+    if (processor.getShowTooltips() != (tooltipWindow != nullptr))
+        tooltipWindow = processor.getShowTooltips() ? std::make_unique<juce::TooltipWindow> (this, 600) : nullptr;
 
     // The sound chooser: the text is dim while the sound is Off
     const bool previewOff = processor.voiceParam->getIndex() == PadSynth::Off;
@@ -3725,12 +3736,12 @@ void ProgrezzorEditor::resized()
     // The right side first; the title gives way if the window is narrow
     suggestButton.setBounds (top.removeFromRight (132));
     top.removeFromRight (12);
-    folderButton.setBounds (top.removeFromRight (90));
+    folderButton.setBounds (top.removeFromRight (104));
     top.removeFromRight (6);
-    saveButton.setBounds (top.removeFromRight (80));
+    saveButton.setBounds (top.removeFromRight (92));
     top.removeFromRight (8);
 
-    const int leftOfTitle = 8 + 76 + 6 + 28 + 6 + 96 + 6 + 38 + 6 + 104 + 6 + 118;
+    const int leftOfTitle = 8 + 76 + 6 + 28 + 6 + 96 + 6 + 38 + 6 + 116 + 6 + 118;
     const int titleWidth = top.getWidth() - leftOfTitle;
     title.setVisible (titleWidth >= 40);
     if (titleWidth >= 40)
@@ -3746,7 +3757,7 @@ void ProgrezzorEditor::resized()
     top.removeFromLeft (6);
     lockButton.setBounds (top.removeFromLeft (38));
     top.removeFromLeft (6);
-    moodBox.setBounds (top.removeFromLeft (104));
+    moodBox.setBounds (top.removeFromLeft (116));
     top.removeFromLeft (6);
     voiceBox.setBounds (top.removeFromLeft (118));
 

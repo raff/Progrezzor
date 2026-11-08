@@ -1860,7 +1860,7 @@ int main (int argc, char** argv)
         check (processor.rhythmPatternParam->getIndex() == 6, "a pattern is chosen from the tiles");
         click ({ 16 + 84 + 20, 245 });                // 1/16
         check (processor.rhythmSpeedParam->getIndex() == 1, "Speed 1/16");
-        click ({ 190 + 56 * 2 + 20, 245 });           // Long
+        click ({ 164 + 64 * 2 + 20, 245 });           // Long
         check (processor.rhythmLengthParam->getIndex() == 2, "Length Long");
         shot ("rhythm_gallop");
         click ({ 16 + 88 * 3 + 20, 66 + 100 + 20 });  // Euclid
@@ -1924,6 +1924,41 @@ int main (int argc, char** argv)
         (void) ui;
         *processor.voiceParam = 0;
         runBlock (processor);
+    }
+
+    {
+        std::printf ("tooltips\n");
+        auto& ui = *static_cast<ProgrezzorEditor*> (editor.get());
+        auto& lf = static_cast<theme::LookAndFeel&> (ui.getLookAndFeel());
+        const juce::String tip = "Preview sound. Choose Off when Progrezzor plays another instrument.";
+        const juce::Point<int> mouse (400, 200);
+        const auto bounds = lf.getTooltipBounds (tip, mouse, { 0, 0, 1000, 560 });
+        check (bounds.getWidth() <= 215 && bounds.getHeight() > 50, "a tooltip is narrow and takes several lines");
+        check (! bounds.contains (mouse) && (bounds.getX() - mouse.x >= 20 || mouse.x - bounds.getRight() >= 20), "and it lies well away from the mouse");
+        const auto edge = lf.getTooltipBounds (tip, { 990, 550 }, { 0, 0, 1000, 560 });
+        check (edge.getRight() <= 1000 && edge.getBottom() <= 560 && ! edge.contains (juce::Point<int> (990, 550)), "also near the edge of the window");
+        if (! prefix.empty())
+        {
+            juce::Image image (juce::Image::ARGB, bounds.getWidth() + 40, bounds.getHeight() + 40, true);
+            juce::Graphics g (image);
+            g.fillAll (theme::background);
+            g.setOrigin (20, 20);
+            lf.drawTooltip (g, tip, bounds.getWidth(), bounds.getHeight());
+            juce::File file (prefix + "_tooltip.png");
+            file.deleteFile();
+            if (auto stream = file.createOutputStream())
+                juce::PNGImageFormat().writeImageToStream (image, *stream);
+        }
+
+        // Off in Settings: the tooltip window goes away; kept for every project
+        processor.setShowTooltips (false);
+        settle (200);
+        {
+            ProgrezzorProcessor another;
+            check (! another.getShowTooltips(), "the choice about tooltips is kept for every project");
+        }
+        processor.setShowTooltips (true);
+        settle (200);
     }
 
     {

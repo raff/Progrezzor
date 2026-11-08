@@ -431,7 +431,7 @@ private:
     std::unique_ptr<juce::Component> wheelPanel; // the chord wheel, a panel inside the window (open or not is kept while the window lives)
     LockToggle lockButton;
     std::unique_ptr<juce::ButtonParameterAttachment> lockAttachment;
-    juce::TooltipWindow tooltipWindow { this, 600 };
+    std::unique_ptr<juce::TooltipWindow> tooltipWindow; // gone when tooltips are switched off in Settings
     SuggestButton suggestButton;
     juce::Rectangle<int> padLabel;
     BarButton saveButton { "Save MIDI", BarButton::Icon::None };

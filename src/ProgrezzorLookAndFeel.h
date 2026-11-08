@@ -101,6 +101,14 @@ inline juce::Colour textOn (juce::Colour face)
     return face.getPerceivedBrightness() > 0.62f ? juce::Colour (0xff1b1118) : juce::Colour (0xfffbf9ff);
 }
 
+// Text inside a button, a tile or a block: always at least `margin` pixels from the edges. If it does not fit, it is squeezed a
+// little (down to 70 %) rather than touching the edge. Whatever the font is, the text never ends up against the border.
+inline void drawFitted (juce::Graphics& g, const juce::String& string, juce::Rectangle<int> area,
+                        juce::Justification justification = juce::Justification::centred, int margin = 8)
+{
+    g.drawFittedText (string, area.reduced (margin, 0), justification, 1, 0.7f);
+}
+
 // A chunky key: a face with a darker lip under it, a thin bevel (light along the top, dark along the bottom), a soft gloss
 // on the upper half and a layered shadow. Pressed, the face sinks onto the lip. Gives the face, where the text goes.
 inline juce::Rectangle<float> drawKey (juce::Graphics& g, juce::Rectangle<float> r, juce::Colour base, float corner,
@@ -190,6 +198,41 @@ public:
     juce::Font titleFont (float height) const { return juce::Font (juce::FontOptions (titleFace).withHeight (height)); }
 
     juce::Font getLabelFont (juce::Label& label) override { return label.getFont(); }
+    // Tooltips: narrow, so the text takes several lines, and well away from the mouse so that it is plain that it is a tooltip
+    static constexpr float kTooltipTextWidth = 170.0f;
+
+    juce::TextLayout tooltipLayout (const juce::String& tip, juce::Colour colour) const
+    {
+        juce::AttributedString string;
+        string.setJustification (juce::Justification::topLeft);
+        string.append (tip, labelFont (13.0f), colour);
+        string.setWordWrap (juce::AttributedString::byWord);
+        juce::TextLayout layout;
+        layout.createLayout (string, kTooltipTextWidth);
+        return layout;
+    }
+
+    juce::Rectangle<int> getTooltipBounds (const juce::String& tip, juce::Point<int> screenPos, juce::Rectangle<int> parentArea) override
+    {
+        const auto layout = tooltipLayout (tip, text);
+        const int w = (int) std::ceil (layout.getWidth()) + 24, h = (int) std::ceil (layout.getHeight()) + 20;
+        const int gapX = 26, gapY = 30; // clear of the mouse pointer
+        const int x = screenPos.x + gapX + w > parentArea.getRight() ? screenPos.x - gapX - w : screenPos.x + gapX;
+        const int y = screenPos.y + gapY + h > parentArea.getBottom() ? screenPos.y - gapY - h : screenPos.y + gapY;
+        return juce::Rectangle<int> (x, y, w, h).constrainedWithin (parentArea);
+    }
+
+    void drawTooltip (juce::Graphics& g, const juce::String& tip, int width, int height) override
+    {
+        const auto bounds = juce::Rectangle<float> ((float) width, (float) height);
+        g.fillAll (popup);
+        g.setColour (accent.withAlpha (0.85f));
+        g.drawRect (bounds, 1.5f);
+        g.setColour (accent);
+        g.fillRect (bounds.withWidth (4.0f)); // a coloured edge, so that it stands out from what is behind it
+        tooltipLayout (tip, text).draw (g, bounds.reduced (14.0f, 10.0f).withTrimmedLeft (0.0f));
+    }
+
     // A small loudspeaker: with sound waves when it is on, crossed out when it is off
     static void drawSpeaker (juce::Graphics& g, juce::Rectangle<float> r, juce::Colour colour, bool sound)
     {

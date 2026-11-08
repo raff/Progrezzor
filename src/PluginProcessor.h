@@ -183,6 +183,8 @@ public:
     // keys are held.
     bool isLearning() const { return learnOn.load(); }
     void setLearning (bool nowLearning);
+    bool getShowTooltips() const { return showTooltips.load(); } // tooltips on, as standard; kept for every project
+    void setShowTooltips (bool nowOn);
     bool getLearnHints() const { return learnHints.load(); } // hints (the keys to hold) from the start
     void setLearnHints (bool nowOn); // message thread: kept in the settings file
     void togglePreviewSound(); // Settings: Preview sound. Off, or back to the sound chosen last. Message thread.
@@ -293,6 +295,7 @@ private:
     std::atomic<int> homeOctave { 0 };
     std::atomic<bool> learnOn { false };
     std::atomic<bool> learnHints { false };
+    std::atomic<bool> showTooltips { true };
     std::atomic<bool> suggestInversions { true };
     std::atomic<int> lastPreviewVoice { 0 }; // the sound that was chosen last (not Off), for the Preview sound switch in Settings
     std::array<std::atomic<std::uint64_t>, 2> heldKeys {}; // the keys of the MIDI keyboard that are down
