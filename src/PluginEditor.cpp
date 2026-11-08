@@ -1356,7 +1356,7 @@ class ArpPanel : public juce::Component, private juce::Timer
 public:
     explicit ArpPanel (ProgrezzorProcessor& p) : processor (p)
     {
-        setSize (372, 352);
+        setSize (372, 366);
         startTimerHz (15);
     }
 
@@ -1531,12 +1531,12 @@ private:
 
     // ---- where everything is ----
     juce::Rectangle<int> modeRect (int i) const { return { 16 + i * 114, 10, 108, 28 }; }
-    juce::Rectangle<int> tileRect (int i) const { return { 16 + (i % 4) * 88, 66 + (i / 4) * 50, 80, 44 }; }
-    juce::Rectangle<int> speedRect (int i) const { return { 16 + i * 70, 236, 64, 26 }; }
-    juce::Rectangle<int> lengthRect (int i) const { return { 164 + i * 64, 236, 60, 26 }; }
-    juce::Rectangle<int> euclidHitsRect() const { return { 16, 272, 160, 22 }; }
-    juce::Rectangle<int> euclidTurnRect() const { return { 190, 272, 160, 22 }; }
-    juce::Rectangle<int> stripRect() const { return { 16, 304, 340, 36 }; }
+    juce::Rectangle<int> tileRect (int i) const { return { 16 + (i % 4) * 86, 66 + (i / 4) * 56, 82, 50 }; }
+    juce::Rectangle<int> speedRect (int i) const { return { 16 + i * 70, 258, 64, 26 }; }
+    juce::Rectangle<int> lengthRect (int i) const { return { 164 + i * 64, 258, 60, 26 }; }
+    juce::Rectangle<int> euclidHitsRect() const { return { 16, 294, 160, 22 }; }
+    juce::Rectangle<int> euclidTurnRect() const { return { 190, 294, 160, 22 }; }
+    juce::Rectangle<int> stripRect() const { return { 16, 324, 340, 36 }; }
 
     int currentMode() const { return ! processor.arpOnParam->get() ? 0 : processor.rhythmModeParam->get() ? 2 : 1; }
 
@@ -1563,6 +1563,17 @@ private:
     {
         auto rhythm = processor.getRhythmSettings();
         label ("PATTERN", 48);
+
+        // One size for every name, small enough that the longest one has room to breathe in its tile
+        float nameSize = 12.0f;
+        if (l != nullptr)
+        {
+            float widest = 1.0f;
+            for (int i = 0; i < engine::kNumRhythmPatterns; ++i)
+                widest = std::max (widest, (float) juce::GlyphArrangement::getStringWidthInt (l->titleFont (nameSize), engine::rhythmPatternNames[i]));
+            nameSize = juce::jlimit (9.0f, 12.0f, nameSize * ((float) tileRect (0).getWidth() - 28.0f) / widest);
+        }
+
         for (int i = 0; i < engine::kNumRhythmPatterns; ++i)
         {
             const auto r = tileRect (i).toFloat();
@@ -1570,20 +1581,20 @@ private:
             drawTile (g, r, selected);
             auto shown = rhythm;
             shown.pattern = i;
-            drawSlots (g, r.withTrimmedBottom (20.0f).reduced (8.0f, 0.0f).withTrimmedTop (4.0f), shown, selected ? theme::onAccent : theme::text, (selected ? theme::onAccent : theme::text).withAlpha (0.3f), 4.5f);
+            drawSlots (g, r.withTrimmedBottom (24.0f).reduced (14.0f, 0.0f).withTrimmedTop (6.0f), shown, selected ? theme::onAccent : theme::text, (selected ? theme::onAccent : theme::text).withAlpha (0.3f), 4.5f);
             if (l != nullptr)
-                g.setFont (l->titleFont (11.0f));
+                g.setFont (l->titleFont (nameSize));
             g.setColour (selected ? theme::onAccent : theme::text);
-            theme::drawFitted (g, engine::rhythmPatternNames[i], r.withTrimmedTop (r.getHeight() - 20.0f).withTrimmedBottom (3.0f).toNearestInt(), juce::Justification::centred, 8);
+            theme::drawFitted (g, engine::rhythmPatternNames[i], r.withTrimmedTop (r.getHeight() - 24.0f).withTrimmedBottom (8.0f).toNearestInt(), juce::Justification::centred, 12);
         }
 
-        label ("SPEED", 218);
+        label ("SPEED", 240);
         for (int i = 0; i < engine::kNumRhythmSpeeds; ++i)
             drawPill (g, speedRect (i), engine::rhythmSpeedNames[i], rhythm.speed == i, false);
         if (l != nullptr)
             g.setFont (l->labelFont (12.0f));
         g.setColour (theme::dimText);
-        g.drawText ("LENGTH", 164, 218, 120, 16, juce::Justification::centredLeft);
+        g.drawText ("LENGTH", 164, 240, 120, 16, juce::Justification::centredLeft);
         for (int i = 0; i < engine::kNumRhythmLengths; ++i)
             drawPill (g, lengthRect (i), engine::rhythmLengthNames[i], rhythm.length == i, false);
 

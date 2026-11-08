@@ -1856,17 +1856,17 @@ int main (int argc, char** argv)
         click ({ 16 + 114 * 2 + 20, 20 }); // Rhythm
         check (processor.arpOnParam->get() && processor.rhythmModeParam->get() && processor.getRhythmSettings().on && ! processor.getArpSettings().on, "the switch: Rhythm");
         shot ("rhythm_panel");
-        click ({ 16 + 88 * 2 + 20, 66 + 50 + 20 });   // third tile in the second row: pattern 6, Gallop
+        click ({ 16 + 86 * 2 + 20, 66 + 56 + 20 });   // third tile in the second row: pattern 6, Gallop
         check (processor.rhythmPatternParam->getIndex() == 6, "a pattern is chosen from the tiles");
-        click ({ 16 + 84 + 20, 245 });                // 1/16
+        click ({ 16 + 70 + 20, 270 });                // 1/16
         check (processor.rhythmSpeedParam->getIndex() == 1, "Speed 1/16");
-        click ({ 164 + 64 * 2 + 20, 245 });           // Long
+        click ({ 164 + 64 * 2 + 20, 270 });           // Long
         check (processor.rhythmLengthParam->getIndex() == 2, "Length Long");
         shot ("rhythm_gallop");
-        click ({ 16 + 88 * 3 + 20, 66 + 100 + 20 });  // Euclid
+        click ({ 16 + 86 * 3 + 20, 66 + 112 + 20 });  // Euclid
         check (processor.rhythmPatternParam->getIndex() == 11, "Euclid");
-        click ({ 16 + 150, 280 });                    // Hits +
-        click ({ 190 + 150, 280 });                   // Turn +
+        click ({ 16 + 150, 302 });                    // Hits +
+        click ({ 190 + 150, 302 });                   // Turn +
         check (processor.arpHitsParam->get() == 9 && processor.arpRotationParam->get() == 1, "Euclid has Hits and Turn");
         shot ("rhythm_euclid");
         click ({ 16 + 114 + 20, 20 });                // Arp
