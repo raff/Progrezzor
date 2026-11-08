@@ -28,10 +28,10 @@ struct ExportNote
 // Every block strikes its chord at its start and lets go at its end, also when the next block has the same chord
 // A pause, and a block that is silent (see isBlockDisabled), give a rest of their length, as it does when the loop plays.
 // With `arp` on, a block gives the notes of the arpeggio instead of the chord, step by step as it plays.
-// `octaveShift` (the Oct buttons): the file has the notes that are heard.
+// `octaveShift` (the Oct buttons): the file has the notes that are heard. With `bass` on every block has its bass note too.
 inline std::vector<ExportNote> exportNotes (const Progression& progression, int tonic, ScaleId scale = ScaleId::Minor,
                                             bool lockToScale = false, int octaveShift = 0, int centreNote = kCentreNote,
-                                            ArpSettings arp = {})
+                                            ArpSettings arp = {}, bool bass = false)
 {
     std::vector<ExportNote> notes;
     double start = 0.0;
@@ -45,6 +45,8 @@ inline std::vector<ExportNote> exportNotes (const Progression& progression, int 
 
         const auto voicing = voiceChord (block.chord, tonic, centreNote);
         const auto heard = shiftedByOctaves (voicing, octaveShift);
+        if (bass) // the bass note lies under the whole block, also when the chord is an arp
+            notes.push_back ({ start, block.beats, bassNote (block.chord, tonic, octaveShift, centreNote), kExportVelocity });
         if (arp.on)
         {
             // The arp: the same steps as when it plays, counted from the start of the block

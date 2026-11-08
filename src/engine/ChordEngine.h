@@ -123,10 +123,17 @@ constexpr int kCentreNote = 60;  // the chords gather around C4
 // a chosen inversion. The chord's own octave shift (Chord::octave) is added on top.
 Voicing voiceChord (const Chord& chord, int tonic, int centreNote = kCentreNote);
 
+// The general register: the whole voicing moved up or down by whole octaves (the Oct buttons), never past the ends of the
 // MIDI range. Chords are voiced before this, so the register never pulls the next chord with it.
-// MIDI range. The voice leading works on the voicing before this, so the register never pulls the next chord with it.
 constexpr int kMaxGeneralOctave = 2; // the Oct buttons
 constexpr int kMaxHomeOctave = 2;    // where the chords usually sit (Settings), on top of the Oct buttons
 constexpr int kMaxTotalOctave = kMaxGeneralOctave + kMaxHomeOctave;
 Voicing shiftedByOctaves (Voicing voicing, int octaves);
+
+// The bass note: one extra note under the chord, in E2 to D#3 (the pitch class of the lowest note of the chord, so the root
+// in root position and the bass of a chosen inversion, E for C/E). Always the same note for the same chord and key. The chord
+// itself is not touched. The chord's own octave shift (Chord::octave) is added. `generalOctaves` (the Oct buttons) moves it
+// like the chord; it stays inside the MIDI range.
+constexpr int kBassLowest = 40; // E2
+int bassNote (const Chord& chord, int tonic, int generalOctaves = 0, int centreNote = kCentreNote);
 }

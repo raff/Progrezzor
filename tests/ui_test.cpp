@@ -1745,6 +1745,37 @@ int main (int argc, char** argv)
         settle (60);
     }
 
+    {
+        std::printf ("bass note\n");
+        check (! processor.bassParam->get(), "the bass note is off as standard");
+        *processor.bassParam = true;
+        juce::MemoryBlock savedBass;
+        processor.getStateInformation (savedBass);
+        ProgrezzorProcessor withBass;
+        withBass.setStateInformation (savedBass.getData(), (int) savedBass.getSize());
+        check (withBass.bassParam->get(), "the bass note is saved with the project");
+        *processor.bassParam = false;
+        juce::MemoryBlock savedNoBass;
+        processor.getStateInformation (savedNoBass);
+        withBass.setStateInformation (savedNoBass.getData(), (int) savedNoBass.getSize());
+        check (! withBass.bassParam->get(), "and so is off");
+
+        processor.pressPad (0);
+        runBlock (processor);
+        check (processor.soundingNotes() == 3, "with the bass note off a pad has three notes");
+        processor.releasePad (0);
+        runBlock (processor);
+        *processor.bassParam = true;
+        processor.pressPad (0);
+        runBlock (processor);
+        check (processor.soundingNotes() == 4, "with it on a pad has the bass note too");
+        snapshot ("bass_on");
+        processor.releasePad (0);
+        runBlock (processor);
+        check (processor.soundingNotes() == 0, "no notes sound when the pad is let go");
+        *processor.bassParam = false;
+    }
+
     editor.reset();
     std::printf (failures == 0 ? "ALL OK\n" : "%d FAILED\n", failures);
     return failures == 0 ? 0 : 1;

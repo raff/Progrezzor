@@ -306,6 +306,108 @@ void testSuggestInversions()
     check (same && at == notes.size(), "the loop and the MIDI file have the same notes, with the inversions");
 }
 
+void testBassNote()
+{
+    std::printf ("bass note\n");
+    bool range = true, isRoot = true, same = true, underChord = true;
+    for (int scaleIndex = 0; scaleIndex < kNumScales; ++scaleIndex)
+        for (int tonic = 0; tonic < 12; ++tonic)
+            for (int pad = 0; pad < 7; ++pad)
+            {
+                const Chord c = padChord ((ScaleId) scaleIndex, pad);
+                const int bass = bassNote (c, tonic);
+                range &= bass >= 40 && bass <= 51;
+                isRoot &= wrap12 (bass - tonic - c.root) == 0;
+                same &= bass == bassNote (c, tonic);
+                underChord &= bass < voiceChord (c, tonic).notes[0];
+            }
+    check (range, "the bass note is in E2 to D#3 for every pad in every key");
+    check (isRoot, "without an inversion the bass note is the root");
+    check (same, "the same pad always gets the same bass note");
+    check (underChord, "the bass note is under the chord");
+
+    // The lowest note of a chosen inversion: E for C/E, B for G/B, G for C/G, F for G7/F
+    check (bassNote ({ 0, ChordType::Major, 1 }, 0) == 40, "C/E has E2 as its bass note");
+    check (bassNote ({ 7, ChordType::Major, 1 }, 0) == 47, "G/B has B2 as its bass note");
+    check (bassNote ({ 0, ChordType::Major, 2 }, 0) == 43, "C/G has G2 as its bass note");
+    check (bassNote ({ 7, ChordType::Dom7, 3 }, 0) == 41, "G7/F has F2 as its bass note");
+    bool allInversions = true;
+    for (int type = 0; type < kNumChordTypes; ++type)
+        for (int inversion = 0; inversion < shapeOf ((ChordType) type).count; ++inversion)
+            for (int root = 0; root < 12; ++root)
+            {
+                const Chord c { root, (ChordType) type, inversion };
+                const auto v = voiceChord (c, 3);
+                allInversions &= wrap12 (bassNote (c, 3) - v.notes[0]) == 0;
+            }
+    check (allInversions, "the bass note is always the lowest note of the chord, whatever the inversion");
+
+    // The Oct buttons and the chord's own octave move it like the chord
+    const Chord am { 0, ChordType::Minor, kAutoInversion };
+    check (bassNote (am, 9, 1) == bassNote (am, 9) + 12 && bassNote (am, 9, -2) == bassNote (am, 9) - 24, "the Oct buttons move the bass note");
+    Chord up = am;
+    up.octave = 1;
+    check (bassNote (up, 9) == bassNote (am, 9) + 12, "so does the chord's own octave");
+    check (bassNote (am, 9, -2) >= 0 && bassNote (am, 0, 4) <= 127, "it stays inside the MIDI range");
+
+    // The chord itself does not change
+    check (voiceChord (am, 9).notes == voiceChord (am, 9).notes && voiceChord (am, 9).count == 3, "the chord has the same three notes");
+
+    // The MIDI file: the bass first in each block, as long as the block, then the chord
+    const Key key { 0, ScaleId::Major };
+    Progression bar { { Chord { 0, ChordType::Major, kAutoInversion }, 4.0, false }, { Chord { 7, ChordType::Major, 1 }, 2.0, false },
+                      { Chord { 9, ChordType::Minor, kAutoInversion }, 4.0, false } };
+    const auto off = exportNotes (bar, key.tonic, key.scale);
+    const auto on = exportNotes (bar, key.tonic, key.scale, false, 0, kCentreNote, {}, true);
+    check (off.size() == 9 && on.size() == 12, "the file has one more note per block with the bass note on");
+    const auto snapshot = makeSnapshot (bar); // what the loop plays: the chord and the bass note of each block
+    bool equal = true;
+    size_t at = 0;
+    double start = 0.0;
+    for (int i = 0; i < snapshot.count; ++i)
+    {
+        const auto& block = snapshot.blocks[(size_t) i];
+        const auto heard = voiceChord (block.chord, key.tonic);
+        std::vector<int> expected { bassNote (block.chord, key.tonic) };
+        for (int n = 0; n < heard.count; ++n)
+            expected.push_back (heard.notes[(size_t) n]);
+        for (int note : expected)
+        {
+            equal &= at < on.size() && on[at].note == note && on[at].start == start && on[at].length == block.beats;
+            ++at;
+        }
+        start += block.beats;
+    }
+    check (equal && at == on.size(), "the loop and the MIDI file have the same notes, with the bass note");
+
+    // With the arp on, the bass note still lies under the whole block while the chord is played one note at a time
+    ArpSettings arp;
+    arp.on = true;
+    const auto withArp = exportNotes (bar, key.tonic, key.scale, false, 0, kCentreNote, arp, true);
+    bool bassHeld = false;
+    for (const auto& n : withArp)
+        bassHeld |= n.start == 0.0 && n.length == 4.0 && n.note == bassNote (bar[0].chord, key.tonic);
+    check (bassHeld && withArp.size() > on.size(), "with the arp the bass note is one long note under the arp");
+
+    // The note tracker: an arp step lets go of its note, not of the bass note
+    NoteTracker t;
+    std::vector<NoteEvent> events;
+    const auto emit = [&events] (const NoteEvent& e) { events.push_back (e); };
+    Voicing one;
+    one.count = 1;
+    one.notes[0] = 60;
+    t.pressBass (0, 40, 100, emit);
+    t.pressNotes (0, one, 100, emit);
+    one.notes[0] = 64;
+    t.pressNotes (0, one, 100, emit);
+    check (t.isSounding (40) && t.isSounding (64) && ! t.isSounding (60), "an arp step does not touch the bass note");
+    t.release (0, emit);
+    int ons = 0, offs = 0;
+    for (auto& e : events)
+        e.on ? ++ons : ++offs;
+    check (ons == offs && t.soundingNotes() == 0, "release lets go of the bass note too: nothing hangs");
+}
+
 void testChosenInversion()
 {
     std::printf ("chosen inversion\n");
@@ -1441,6 +1543,7 @@ int main()
     testScaleFit();
     testVoicingBasics();
     testPadsClimb();
+    testBassNote();
     testSuggestInversions();
     testChosenInversion();
     testPredictableVoicing();

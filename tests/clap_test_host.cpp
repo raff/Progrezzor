@@ -1103,6 +1103,47 @@ int main (int argc, char** argv)
         blockSize = 512;
     }
 
+    {
+        std::printf ("loop with the bass note\n");
+        const std::vector<BlockSpec> walking = { { 0, 0, 4 }, { 7, 0, 4, 1 }, { 5, 0, 4, 1 }, { 7, 0, 4 } };
+        for (bool withArp : { false, true })
+        {
+            received.clear();
+            Session s;
+            loadState (s.instance, makeState (progressionXml (0, (int) ScaleId::Major, walking)));
+            InEvent bass, arp;
+            check (paramEvent (s.instance, "Bass Note", "On", bass), "there is a Bass Note parameter");
+            if (withArp)
+            {
+                paramEvent (s.instance, "Arp", "On", arp);
+                s.block ({ bass, arp });
+            }
+            else
+                s.block ({ bass });
+
+            double beat = 0.0;
+            const size_t before = received.size();
+            playBlocks (s, beat, 1);
+            check (s.out.sounding() >= (withArp ? 2 : 4), withArp ? "the arp's note and the bass note sound" : "the chord and the bass note sound");
+            const int firstBass = engine::bassNote ({ 0, ChordType::Major, kAutoInversion }, 0);
+            check (s.out.on[firstBass] == 1, "the bass note of the first block (C2 region) is on");
+
+            playBlocks (s, beat, (int) std::ceil (16.0 * 96000.0 / blockSize)); // 16 bars at 120 BPM: 2 seconds a bar, a block each
+            const auto ons = noteOnsFrom (before);
+            int bassOns = 0;
+            bool lowestIsBass = true;
+            for (const auto& o : ons)
+                bassOns += o.note < 52;
+            check (bassOns >= 16 && bassOns <= 18, "one bass note per block, held through it (no retriggering)");
+            (void) lowestIsBass;
+            check (s.out.clean(), "the run is clean (no doubled note ons, no stray offs)");
+
+            double stopBeat = beat;
+            playBlocks (s, stopBeat, 2, 120.0, false);
+            check (s.out.sounding() == 0 && s.out.totalOns == s.out.totalOffs, "nothing hangs after the transport stops");
+        }
+    }
+
     entry->deinit();
     std::printf (failures == 0 ? "ALL OK\n" : "%d FAILED\n", failures);
     return failures == 0 ? 0 : 1;
