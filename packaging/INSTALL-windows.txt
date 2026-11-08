@@ -1,0 +1,40 @@
+Progrezzor – installation on Windows (internal test build)
+==========================================================
+
+The archive contains Progrezzor in two plug-in formats, CLAP and VST®3.
+Install the one your DAW uses, or both. Progrezzor has so far only been
+built and tested on Linux, so on Windows it is not tried yet.
+
+For your user only (no administrator rights needed):
+
+    CLAP:  copy Progrezzor.clap to   %LOCALAPPDATA%\Programs\Common\CLAP\
+    VST3:  copy the Progrezzor.vst3 folder to   %LOCALAPPDATA%\Programs\Common\VST3\
+
+For all users (needs administrator rights):
+
+    CLAP:  C:\Program Files\Common Files\CLAP\
+    VST3:  C:\Program Files\Common Files\VST3\
+
+Create the folder if it does not exist, then restart your DAW or rescan
+plug-ins.
+
+How to use it:
+
+  - Put Progrezzor on a MIDI track and a synth after it. The notes come out
+    of Progrezzor and go on to the synth. Progrezzor also has a small sound
+    of its own, so you can hear what you play. Turn it off with the sound
+    chooser (Off) when your synth plays the notes.
+  - Click the pads, or play the white keys of a MIDI keyboard.
+  - Drag a MIDI file out of the Drag tile into your DAW. The same file is
+    saved in the Progrezzor folder in your music folder (Open Folder).
+
+Your own settings are saved in %APPDATA%\Progrezzor\. Removing the plug-in
+leaves them in place.
+
+Progrezzor is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License, version 3 (LICENSE.txt).
+It comes with no warranty.
+
+Third-party licences are listed in THIRD-PARTY-NOTICES.txt.
+
+VST is a registered trademark of Steinberg Media Technologies GmbH.
