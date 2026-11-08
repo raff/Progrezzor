@@ -1858,9 +1858,9 @@ int main (int argc, char** argv)
         shot ("rhythm_panel");
         click ({ 16 + 86 * 2 + 20, 66 + 56 + 20 });   // third tile in the second row: pattern 6, Gallop
         check (processor.rhythmPatternParam->getIndex() == 6, "a pattern is chosen from the tiles");
-        click ({ 16 + 70 + 20, 270 });                // 1/16
+        click ({ 16 + 68 + 20, 270 });                // 1/16
         check (processor.rhythmSpeedParam->getIndex() == 1, "Speed 1/16");
-        click ({ 164 + 64 * 2 + 20, 270 });           // Long
+        click ({ 156 + 68 * 2 + 20, 270 });           // Long
         check (processor.rhythmLengthParam->getIndex() == 2, "Length Long");
         shot ("rhythm_gallop");
         click ({ 16 + 86 * 3 + 20, 66 + 112 + 20 });  // Euclid

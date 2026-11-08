@@ -22,6 +22,7 @@ tag the commit (`vX.Y.Z`).
 - **Learn.** A Learn button in the bar: hold the keys of each chord of the progression on a MIDI keyboard, one chord after the other, in any octave. The next chord is marked in the bar, a right chord ticks it off, and a wrong one flashes red. After two wrong tries, or from the start if you switch on hints in Settings, a piece of a keyboard shows which keys to hold.
 
 ### Changed
+- Text is easier to read: nothing is smaller than 13 px any more, and text is no longer squeezed sideways where there is room to make the field wider.
 - Tooltips are narrower (several lines), lie clear of the mouse and have a coloured edge. Settings has "Show tooltips" to switch them off.
 - Text in buttons, tiles and blocks keeps its distance from the edges (and shrinks a little when it would not fit); a few buttons are a little wider.
 - The sound chooser has a loudspeaker (crossed out and dim when the sound is Off), a line over Off and a clearer tooltip. The sound "Pad" is now called "Soft Pad". Settings has "Preview sound" under Sound to switch the preview sound off and on.

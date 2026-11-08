@@ -823,7 +823,7 @@ void BlockButton::paint (juce::Graphics& g)
         // The name and the length sit together in the middle of the face, not down at the bottom. They follow the height of
         // the block: big when there is room, smaller when many rows share the bar.
         const float nameSize = juce::jlimit (12.0f, 34.0f, bounds.getHeight() * 0.40f);
-        const float lengthSize = juce::jlimit (10.0f, 15.0f, bounds.getHeight() * 0.22f);
+        const float lengthSize = juce::jlimit (13.0f, 15.0f, bounds.getHeight() * 0.22f);
         const float nameHeight = nameSize * 1.12f, lengthHeight = lengthSize * 1.2f;
         const float top = bounds.getCentreY() - (nameHeight + lengthHeight) * 0.5f;
         g.setFont (l->titleFont (nameSize));
@@ -844,12 +844,12 @@ void BlockButton::paint (juce::Graphics& g)
         const juce::Colour markInk = lit ? theme::onAccent : theme::accent;
 
         struct Part { juce::String text; juce::Font font; juce::Colour colour; float width; };
-        const auto make = [&] (bool withNumeral, bool shortMark)
+        const auto make = [&] (bool withNumeral, bool shortMark, bool shortLength = false)
         {
             std::vector<Part> parts;
             if (withNumeral && numeral.isNotEmpty())
                 parts.push_back ({ numeral, boldFont, numeralInk, 0.0f });
-            parts.push_back ({ lengthLabel, lengthFont, lengthInk, 0.0f });
+            parts.push_back ({ shortLength ? lengthLabel.upToLastOccurrenceOf (" ", false, false) : lengthLabel, lengthFont, lengthInk, 0.0f }); // 1/2 instead of 1/2 bar
             if (octave != 0)
             {
                 auto mark = octaveMark (octave);
@@ -874,6 +874,8 @@ void BlockButton::paint (juce::Graphics& g)
             parts = make (true, true);
         if (totalWidth (parts) > bounds.getWidth() - 20.0f)
             parts = make (false, true);
+        if (totalWidth (parts) > bounds.getWidth() - 20.0f)
+            parts = make (false, true, true);
 
         float x = (float) row.getCentreX() - totalWidth (parts) * 0.5f;
         for (const auto& part : parts)
@@ -1374,7 +1376,7 @@ public:
         const auto label = [&] (const juce::String& text, int y)
         {
             if (l != nullptr)
-                g.setFont (l->labelFont (12.0f));
+                g.setFont (l->labelFont (13.0f));
             g.setColour (theme::dimText);
             g.drawText (text, 16, y, 200, 16, juce::Justification::centredLeft);
         };
@@ -1532,8 +1534,8 @@ private:
     // ---- where everything is ----
     juce::Rectangle<int> modeRect (int i) const { return { 16 + i * 114, 10, 108, 28 }; }
     juce::Rectangle<int> tileRect (int i) const { return { 16 + (i % 4) * 86, 66 + (i / 4) * 56, 82, 50 }; }
-    juce::Rectangle<int> speedRect (int i) const { return { 16 + i * 70, 258, 64, 26 }; }
-    juce::Rectangle<int> lengthRect (int i) const { return { 164 + i * 64, 258, 60, 26 }; }
+    juce::Rectangle<int> speedRect (int i) const { return { 16 + i * 68, 258, 62, 28 }; }
+    juce::Rectangle<int> lengthRect (int i) const { return { 156 + i * 68, 258, 64, 28 }; }
     juce::Rectangle<int> euclidHitsRect() const { return { 16, 294, 160, 22 }; }
     juce::Rectangle<int> euclidTurnRect() const { return { 190, 294, 160, 22 }; }
     juce::Rectangle<int> stripRect() const { return { 16, 324, 340, 36 }; }
@@ -1565,13 +1567,13 @@ private:
         label ("PATTERN", 48);
 
         // One size for every name, small enough that the longest one has room to breathe in its tile
-        float nameSize = 12.0f;
+        float nameSize = 13.0f;
         if (l != nullptr)
         {
             float widest = 1.0f;
             for (int i = 0; i < engine::kNumRhythmPatterns; ++i)
                 widest = std::max (widest, (float) juce::GlyphArrangement::getStringWidthInt (l->titleFont (nameSize), engine::rhythmPatternNames[i]));
-            nameSize = juce::jlimit (9.0f, 12.0f, nameSize * ((float) tileRect (0).getWidth() - 28.0f) / widest);
+            nameSize = juce::jlimit (11.0f, 13.0f, nameSize * ((float) tileRect (0).getWidth() - 28.0f) / widest);
         }
 
         for (int i = 0; i < engine::kNumRhythmPatterns; ++i)
@@ -1592,9 +1594,9 @@ private:
         for (int i = 0; i < engine::kNumRhythmSpeeds; ++i)
             drawPill (g, speedRect (i), engine::rhythmSpeedNames[i], rhythm.speed == i, false);
         if (l != nullptr)
-            g.setFont (l->labelFont (12.0f));
+            g.setFont (l->labelFont (13.0f));
         g.setColour (theme::dimText);
-        g.drawText ("LENGTH", 164, 240, 120, 16, juce::Justification::centredLeft);
+        g.drawText ("LENGTH", 156, 240, 120, 16, juce::Justification::centredLeft);
         for (int i = 0; i < engine::kNumRhythmLengths; ++i)
             drawPill (g, lengthRect (i), engine::rhythmLengthNames[i], rhythm.length == i, false);
 
@@ -1638,7 +1640,7 @@ private:
     void drawTileLabel (juce::Graphics& g, juce::Rectangle<float> r, const char* text, bool selected) const
     {
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
-            g.setFont (l->titleFont (12.0f));
+            g.setFont (l->titleFont (13.0f));
         g.setColour (selected ? theme::onAccent : theme::text);
         theme::drawFitted (g, text, r.withTrimmedTop (r.getHeight() - 24.0f).withTrimmedBottom (6.0f).toNearestInt(), juce::Justification::centred, 8);
     }
@@ -1674,7 +1676,7 @@ private:
     {
         const auto face = theme::drawKey (g, r.toFloat(), on ? (big ? theme::go : theme::accent) : theme::pad, big ? 12.0f : 8.0f, 3.0f, false, false);
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
-            g.setFont (l->titleFont (big ? 14.0f : 12.0f));
+            g.setFont (l->titleFont (big ? 15.0f : 13.0f));
         g.setColour (on ? theme::onAccent : theme::text);
         theme::drawFitted (g, text, face.toNearestInt(), juce::Justification::centred, 8);
     }
@@ -1685,7 +1687,7 @@ private:
         g.fillRoundedRectangle (r.toFloat(), 8.0f);
         g.setColour (theme::text);
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
-            g.setFont (l->titleFont (12.0f));
+            g.setFont (l->titleFont (13.0f));
         g.drawText ("-", r.withWidth (22), juce::Justification::centred);
         g.drawText ("+", r.withTrimmedLeft (r.getWidth() - 22), juce::Justification::centred);
         theme::drawFitted (g, juce::String (name) + " " + juce::String (value), r.reduced (22, 0), juce::Justification::centred, 6);
@@ -1859,7 +1861,7 @@ public:
         };
 
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
-            g.setFont (l->titleFont (12.0f));
+            g.setFont (l->titleFont (13.0f));
         for (const auto& w : whites)
         {
             const auto key = juce::Rectangle<float> (w.second, keys.getY(), whiteWidth, keys.getHeight());
@@ -1889,7 +1891,7 @@ public:
             }
 
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
-            g.setFont (l->labelFont (12.0f));
+            g.setFont (l->labelFont (13.0f));
         g.setColour (theme::dimText);
         g.drawText (caption, r.withHeight (18.0f).reduced (14.0f, 0.0f).translated (0.0f, 2.0f).toNearestInt(), juce::Justification::centredLeft);
     }
@@ -2818,13 +2820,13 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
     g.fillRect (middleC - 1.0f, area.getY(), 2.0f, area.getHeight());
     {
         const juce::String text = "Mid C";
-        const float labelWidth = 30.0f, labelHeight = 11.0f;
+        const float labelWidth = 44.0f, labelHeight = 16.0f;
         const float labelX = juce::jlimit (area.getX(), area.getRight() - labelWidth, middleC - labelWidth * 0.5f);
         const auto label = juce::Rectangle<float> (labelX, area.getBottom() - labelHeight, labelWidth, labelHeight);
         g.setColour (theme::chordColour (7));
         g.fillRoundedRectangle (label, 3.0f);
         g.setColour (theme::onAccent);
-        g.setFont (juce::Font (juce::FontOptions (9.5f)).boldened());
+        g.setFont (juce::Font (juce::FontOptions (13.0f)).boldened());
         g.drawText (text, label.toNearestInt(), juce::Justification::centred);
     }
 
@@ -2931,7 +2933,7 @@ void ProgressionBar::paint (juce::Graphics& g)
 
         if (! textMode && slots.size() == (size_t) processor.getProgression().size())
         {
-            g.setFont (l->labelFont (11.0f));
+            g.setFont (l->labelFont (13.0f));
             const double barBeats = std::max (1.0, processor.getHostBarBeats());
             double start = 0.0;
             for (size_t i = 0; i < slots.size(); ++i)
