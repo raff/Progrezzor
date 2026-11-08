@@ -22,6 +22,7 @@ tag the commit (`vX.Y.Z`).
 - **Learn.** A Learn button in the bar: hold the keys of each chord of the progression on a MIDI keyboard, one chord after the other, in any octave. The next chord is marked in the bar, a right chord ticks it off, and a wrong one flashes red. After two wrong tries, or from the start if you switch on hints in Settings, a piece of a keyboard shows which keys to hold.
 
 ### Changed
+- The sound chooser has a loudspeaker (crossed out and dim when the sound is Off), a line over Off and a clearer tooltip. The sound "Pad" is now called "Soft Pad". Settings has "Preview sound" under Sound to switch the preview sound off and on.
 - A new project starts in C Major with the Bright mood (it was A Minor and Melancholic).
 - The question "Replace the chords in the bar?" now sits in a small card in the middle of the bar, and Capture asks it too before it replaces chords you made.
 

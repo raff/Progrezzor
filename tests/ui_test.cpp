@@ -1898,6 +1898,35 @@ int main (int argc, char** argv)
     }
 
     {
+        std::printf ("preview sound\n");
+        auto& ui = *static_cast<ProgrezzorEditor*> (editor.get());
+        check (processor.voiceParam->getIndex() == 0 && processor.voiceParam->getCurrentChoiceName() == "Soft Pad", "preview is on as standard, with Soft Pad");
+        settle (60);
+        snapshot ("sound_on");
+
+        // A project saved with the old Pad (number 0) still has the same sound
+        juce::MemoryBlock oldProject;
+        processor.getStateInformation (oldProject);
+        ProgrezzorProcessor loaded;
+        loaded.setStateInformation (oldProject.getData(), (int) oldProject.getSize());
+        check (loaded.voiceParam->getIndex() == 0 && loaded.voiceParam->getCurrentChoiceName() == "Soft Pad", "a saved project still loads its sound");
+
+        // Settings: Preview sound goes off and comes back to the sound chosen last
+        *processor.voiceParam = 3; // Organ
+        runBlock (processor);
+        processor.togglePreviewSound();
+        check (processor.voiceParam->getIndex() == PadSynth::Off, "Preview sound off");
+        settle (80);
+        snapshot ("sound_off");
+        runBlock (processor);
+        processor.togglePreviewSound();
+        check (processor.voiceParam->getIndex() == 3, "and on again: the sound that was chosen last (Organ)");
+        (void) ui;
+        *processor.voiceParam = 0;
+        runBlock (processor);
+    }
+
+    {
         std::printf ("bass note\n");
         check (! processor.bassParam->get(), "the bass note is off as standard");
         *processor.bassParam = true;
