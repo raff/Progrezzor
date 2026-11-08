@@ -269,7 +269,7 @@ private:
     bool loopActive = false;     // the host plays, Play is on and there is a progression
     engine::Chord loopChord;     // the chord the loop is sounding, and the tonic it was voiced for
     int loopTonic = -1;
-    int userHolds = 0;           // pads, keys and blocks held by the user; while there are any, the loop is silent
+    int userHolds = 0;           // pads, keys and blocks held by the user (they play on top of the loop, which never goes quiet for them)
     double sampleRate = 44100.0;
     double internalPpq = 0.0;    // only used when the host does not tell its position, or its position stands still while it plays
     double lastHostBeat = -1.0e300; // the host's position at the last block, to see if it is stuck

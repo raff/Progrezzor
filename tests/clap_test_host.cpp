@@ -1029,7 +1029,7 @@ int main (int argc, char** argv)
     }
 
     {
-        std::printf ("loop: a held pad goes first, and the loop is quiet meanwhile\n");
+        std::printf ("loop: a held pad plays on top, and the loop goes on\n");
         received.clear();
         Session s;
         loadState (s.instance, makeState (progressionXml (9, 0, amFCG)));
@@ -1046,16 +1046,16 @@ int main (int argc, char** argv)
             pcs.push_back (n % 12);
         std::sort (pcs.begin(), pcs.end());
         pcs.erase (std::unique (pcs.begin(), pcs.end()), pcs.end());
-        check (pcs == std::vector<int> ({ 2, 5, 9 }), "only the pad (Dm) sounds while it is held: the loop is silent");
+        check (pcs == std::vector<int> ({ 0, 2, 4, 5, 9 }), "the pad (Dm) sounds on top of the loop (Am) while it is held");
 
-        // Over the next bar line: the loop does not come back while the pad is held
+        // Over the next bar line: the loop goes on to F under the held pad
         playBlocks (s, beat, 250);
         pcs.clear();
         for (int n : s.out.soundingNotes())
             pcs.push_back (n % 12);
         std::sort (pcs.begin(), pcs.end());
         pcs.erase (std::unique (pcs.begin(), pcs.end()), pcs.end());
-        check (pcs == std::vector<int> ({ 2, 5, 9 }), "still only the pad after the bar line");
+        check (pcs == std::vector<int> ({ 0, 2, 5, 9 }), "after the bar line the loop has F and the pad still sounds");
         check (s.out.clean(), "no stray notes");
         (void) pressed;
 
@@ -1065,7 +1065,7 @@ int main (int argc, char** argv)
             pcs.push_back (n % 12);
         std::sort (pcs.begin(), pcs.end());
         pcs.erase (std::unique (pcs.begin(), pcs.end()), pcs.end());
-        check (pcs == std::vector<int> ({ 0, 5, 9 }), "when the pad is let go, the loop is heard again with the block of that position (F)");
+        check (pcs == std::vector<int> ({ 0, 5, 9 }), "when the pad is let go, only the loop is left (F)");
         check (s.out.clean(), "and nothing hangs");
     }
 
