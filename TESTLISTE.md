@@ -79,6 +79,14 @@ Kræver et MIDI-tastatur.
 - [ ] Ændr en pad til en variant (fx G til G7), tryk Suggest: blokken med G bliver G7, ikke G/B.
 - [ ] Træk MIDI ud: tonerne er de samme som dem, du hører, også for G/B (B er den dybeste tone).
 
+## 2g. Bastone (branch feature/bass-note)
+- [ ] Settings (tandhjulet): "Bass note" er slukket som standard. Tænd den og klik på pad 1 til 7: en dyb tone kommer under hver akkord (grundtonen), og akkorden er den samme som før.
+- [ ] Skift til en blok med omvending (fx G/B): bastonen er B, den dybeste tone.
+- [ ] Spil rundgangen med Bass note og Arp tændt: bastonen ligger som én lang tone under arpeggioen og skifter ved hver blok.
+- [ ] Træk MIDI ud: bastonen er med, og lyden svarer til filen. Slå den fra: filen har kun akkorderne.
+- [ ] Gem projektet med den tændt, åbn det igen: den er stadig tændt. Et nyt projekt har den slukket.
+- [ ] Ingen hængende noter, når du slipper en pad, stopper transporten eller slår Bass note fra.
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

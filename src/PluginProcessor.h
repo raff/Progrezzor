@@ -64,6 +64,7 @@ public:
     juce::AudioParameterInt* arpHitsParam = nullptr;
     juce::AudioParameterInt* arpRotationParam = nullptr;
     juce::AudioParameterInt* octaveParam = nullptr;   // the general register: -2 to +2 octaves for everything that sounds and is exported
+    juce::AudioParameterBool* bassParam = nullptr;    // an extra bass note under every chord (Settings: Bass note), off as standard
     juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)
 
@@ -232,6 +233,7 @@ private:
     double bufferStartBeat = 0.0;     // the host's position (quarter notes) at the first sample of this block
     double bufferBeatsPerSample = 0.0;
     engine::ArpSettings blockArp; // the arp as it is during this block
+    bool blockBass = false;       // the bass note as it is during this block
 
     // The loop (audio thread). The progression reaches it through a lock-free hand-over.
     engine::TripleBuffer<engine::LoopSnapshot> loopBuffer;

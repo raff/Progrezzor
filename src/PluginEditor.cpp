@@ -2241,6 +2241,9 @@ void ProgressionBar::showSettingsMenu()
     menu.addSeparator();
     menu.addSectionHeader ("Suggest");
     menu.addItem (21, "Inversions in suggestions", true, processor.getSuggestInversions());
+    menu.addSeparator();
+    menu.addSectionHeader ("Sound");
+    menu.addItem (22, "Bass note", true, processor.bassParam->get());
 
     juce::Component::SafePointer<ProgressionBar> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (260),
@@ -2252,6 +2255,13 @@ void ProgressionBar::showSettingsMenu()
                                 safe->processor.setLearnHints (! safe->processor.getLearnHints());
                             else if (safe != nullptr && result == 21)
                                 safe->processor.setSuggestInversions (! safe->processor.getSuggestInversions());
+                            else if (safe != nullptr && result == 22)
+                            {
+                                auto& bass = *safe->processor.bassParam; // saved with the project
+                                bass.beginChangeGesture();
+                                bass.setValueNotifyingHost (bass.get() ? 0.0f : 1.0f);
+                                bass.endChangeGesture();
+                            }
                         });
 }
 

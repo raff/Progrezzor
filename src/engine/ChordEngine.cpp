@@ -200,4 +200,18 @@ Voicing voiceChord (const Chord& chord, int tonic, int centreNote)
         v.notes[(size_t) i] += 12 * v.octave;
     return v;
 }
+
+int bassNote (const Chord& chord, int tonic, int generalOctaves, int centreNote)
+{
+    const int lowestOfChord = voiceChord (chord, tonic, centreNote).notes[0] - 12 * std::clamp (chord.octave, -kMaxOctaveShift, kMaxOctaveShift);
+    const int low = kBassLowest + (centreNote - kCentreNote);
+    int note = low + wrap12 (lowestOfChord - low);
+    note += 12 * std::clamp (chord.octave, -kMaxOctaveShift, kMaxOctaveShift);
+    note += 12 * std::clamp (generalOctaves, -kMaxTotalOctave, kMaxTotalOctave);
+    while (note < 0)
+        note += 12;
+    while (note > 127)
+        note -= 12;
+    return note;
+}
 }

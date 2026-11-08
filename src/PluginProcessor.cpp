@@ -57,6 +57,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     addParameter (arpHitsParam = new juce::AudioParameterInt ({ "arpHits", 1 }, "Arp Hits", 1, engine::kMaxArpSteps, 8));
     addParameter (arpRotationParam = new juce::AudioParameterInt ({ "arpRotation", 1 }, "Arp Rotation", 0, engine::kMaxArpSteps - 1, 0));
     addParameter (octaveParam = new juce::AudioParameterInt ({ "octave", 1 }, "Octave", -engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, 0));
+    addParameter (bassParam = new juce::AudioParameterBool ({ "bassNote", 1 }, "Bass Note", false)); // added last: earlier projects keep theirs
 
     // Where the chords usually sit: the user's own setting, the same in every project
     if (const auto settings = juce::parseXML (getSettingsFile()))
@@ -267,6 +268,9 @@ public:
             startArp (source, heard, velocity, position); // the arp: one note at a time
         else
             owner.tracker.press (source, heard, velocity, [&] (const engine::NoteEvent& e) { emit (e, position); });
+        if (owner.blockBass) // the bass note lies under the chord (and under the arp) as long as the source is held
+            owner.tracker.pressBass (source, engine::bassNote (chord, owner.keyParam->getIndex(), owner.getTotalOctave()), velocity,
+                                     [&] (const engine::NoteEvent& e) { emit (e, position); });
 
         if (user) // what the user plays comes before the loop, which is silent as long as a hand is on a pad
             syncLoop (position);
@@ -358,7 +362,7 @@ public:
         const auto emitNow = [&] (const engine::NoteEvent& e) { emit (e, position); };
         const double stepSamples = slot.settings.stepBeats() * owner.samplesPerBeat;
 
-        owner.tracker.release (source, emitNow); // the note of the step before, if it still sounds
+        owner.tracker.releaseNotes (source, emitNow); // the note of the step before, if it still sounds
         slot.offIn = -1.0;
 
         const auto hit = engine::arpStep (slot.settings, slot.pattern, slot.pool, slot.step++);
@@ -367,7 +371,7 @@ public:
             engine::Voicing single;
             single.count = 1;
             single.notes[0] = hit.note;
-            owner.tracker.press (source, single, slot.velocity, emitNow);
+            owner.tracker.pressNotes (source, single, slot.velocity, emitNow);
             slot.offIn = at + engine::kArpGate * stepSamples;
             slot.offBeat = owner.bufferStartBeat + slot.offIn * owner.bufferBeatsPerSample;
         }
@@ -416,7 +420,7 @@ public:
             if (isEnd)
             {
                 const int at = juce::jlimit (0, std::max (0, numSamples - 1), (int) bestTime);
-                owner.tracker.release (bestSource, [&] (const engine::NoteEvent& e) { emit (e, at); });
+                owner.tracker.releaseNotes (bestSource, [&] (const engine::NoteEvent& e) { emit (e, at); });
                 slot.offIn = -1.0;
             }
             else
@@ -544,6 +548,7 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     const double beatsPerSample = bpm / 60.0 / sampleRate;
     samplesPerBeat = sampleRate * 60.0 / bpm;
     blockArp = getArpSettings();
+    blockBass = bassParam->get() && ! learnOn.load(); // in Learn mode the keys play their own notes
     if (learnOn.load())
         blockArp.on = false; // in Learn mode a chord is played whole
     if (blockArp.on != arpWasOn) // Arp was switched: everything that sounds stops, and starts again the other way
@@ -910,7 +915,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto ticks = [] (double beats) { return beats * kTicksPerQuarter; };
 
     juce::MidiMessageSequence sequence;
-    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), getTotalOctave(), engine::kCentreNote, arp))
+    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), getTotalOctave(), engine::kCentreNote, arp, bassParam->get()))
     {
         // All MIDI on channel 1. A note off comes before a note on at the same time, so that equal chords strike again.
         sequence.addEvent (juce::MidiMessage::noteOn (1, note.note, (juce::uint8) note.velocity).withTimeStamp (ticks (note.start)));
@@ -956,6 +961,7 @@ void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
     xml.setAttribute ("mood", moodParam->getIndex());
     xml.setAttribute ("voice", voiceParam->getIndex());
     xml.setAttribute ("octave", octaveParam->get());
+    xml.setAttribute ("bassNote", bassParam->get() ? 1 : 0);
     xml.setAttribute ("arpOn", arpOnParam->get() ? 1 : 0);
     xml.setAttribute ("arpStyle", arpStyleParam->getIndex());
     xml.setAttribute ("arpRate", arpRateParam->getIndex());
@@ -1007,6 +1013,7 @@ void ProgrezzorProcessor::setStateInformation (const void* data, int size)
     *arpHitsParam = juce::jlimit (1, engine::kMaxArpSteps, xml->getIntAttribute ("arpHits", 8));
     *arpRotationParam = juce::jlimit (0, engine::kMaxArpSteps - 1, xml->getIntAttribute ("arpRotation", 0));
     *octaveParam = juce::jlimit (-engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, xml->getIntAttribute ("octave", 0));
+    *bassParam = xml->getIntAttribute ("bassNote", 0) != 0; // projects saved before the bass note have it off
 
     for (int pad = 0; pad < kNumPads; ++pad)
     {

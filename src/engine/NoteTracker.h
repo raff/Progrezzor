@@ -35,6 +35,7 @@ public:
     static constexpr int keySource (int midiNote) { return kNumPadSources + kNumBlockSources + 1 + midiNote; }
 
     // `emit` is called with a NoteEvent for each note that really starts or stops.
+    // press and release work on everything a source holds: its chord and its bass note.
     template <typename Emit>
     void press (int source, const Voicing& voicing, int velocity, Emit&& emit)
     {
@@ -42,22 +43,33 @@ public:
             return;
 
         release (source, emit); // a source that is pressed twice lets go of its first chord first
-
-        held[(size_t) source] = voicing;
-        active[(size_t) source] = true;
-
-        for (int i = 0; i < voicing.count; ++i)
-        {
-            const int note = voicing.notes[(size_t) i];
-            if (note < 0 || note > 127)
-                continue;
-            if (counters[(size_t) note]++ == 0)
-                emit (NoteEvent { note, velocity, true });
-        }
+        pressNotes (source, voicing, velocity, emit);
     }
 
     template <typename Emit>
     void release (int source, Emit&& emit)
+    {
+        releaseNotes (source, emit);
+        releaseBass (source, emit);
+    }
+
+    // Only the notes of the chord (an arp step), the bass note of the source is left as it is
+    template <typename Emit>
+    void pressNotes (int source, const Voicing& voicing, int velocity, Emit&& emit)
+    {
+        if (source < 0 || source >= kNumSources)
+            return;
+
+        releaseNotes (source, emit);
+        held[(size_t) source] = voicing;
+        active[(size_t) source] = true;
+
+        for (int i = 0; i < voicing.count; ++i)
+            start (voicing.notes[(size_t) i], velocity, emit);
+    }
+
+    template <typename Emit>
+    void releaseNotes (int source, Emit&& emit)
     {
         if (source < 0 || source >= kNumSources || ! active[(size_t) source])
             return;
@@ -65,13 +77,30 @@ public:
         active[(size_t) source] = false;
         const auto& voicing = held[(size_t) source];
         for (int i = 0; i < voicing.count; ++i)
-        {
-            const int note = voicing.notes[(size_t) i];
-            if (note < 0 || note > 127)
-                continue;
-            if (--counters[(size_t) note] == 0)
-                emit (NoteEvent { note, 0, false });
-        }
+            stop (voicing.notes[(size_t) i], emit);
+    }
+
+    // The bass note: one note under the chord that lasts as long as the source is held, also while the chord is an arp
+    template <typename Emit>
+    void pressBass (int source, int note, int velocity, Emit&& emit)
+    {
+        if (source < 0 || source >= kNumSources)
+            return;
+
+        releaseBass (source, emit);
+        bassHeld[(size_t) source] = note;
+        start (note, velocity, emit);
+    }
+
+    template <typename Emit>
+    void releaseBass (int source, Emit&& emit)
+    {
+        if (source < 0 || source >= kNumSources || bassHeld[(size_t) source] < 0)
+            return;
+
+        const int note = bassHeld[(size_t) source];
+        bassHeld[(size_t) source] = -1;
+        stop (note, emit);
     }
 
     // Transport stop, bypass, "all notes off": every source lets go
@@ -83,7 +112,7 @@ public:
     }
 
     bool isSounding (int note) const { return note >= 0 && note < 128 && counters[(size_t) note] > 0; }
-    bool isHeld (int source) const { return source >= 0 && source < kNumSources && active[(size_t) source]; }
+    bool isHeld (int source) const { return source >= 0 && source < kNumSources && (active[(size_t) source] || bassHeld[(size_t) source] >= 0); }
 
     int soundingNotes() const
     {
@@ -94,8 +123,27 @@ public:
     }
 
 private:
+    template <typename Emit>
+    void start (int note, int velocity, Emit& emit)
+    {
+        if (note < 0 || note > 127)
+            return;
+        if (counters[(size_t) note]++ == 0)
+            emit (NoteEvent { note, velocity, true });
+    }
+
+    template <typename Emit>
+    void stop (int note, Emit& emit)
+    {
+        if (note < 0 || note > 127)
+            return;
+        if (--counters[(size_t) note] == 0)
+            emit (NoteEvent { note, 0, false });
+    }
+
     std::array<int, 128> counters {};
     std::array<Voicing, kNumSources> held {};
     std::array<bool, kNumSources> active {};
+    std::array<int, kNumSources> bassHeld = [] { std::array<int, kNumSources> a {}; a.fill (-1); return a; }(); // the bass note of a source, -1 if none
 };
 }
