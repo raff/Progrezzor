@@ -2767,6 +2767,10 @@ void ProgressionBar::showSettingsMenu()
     menu.addItem (26, "Copy as text", ! processor.getProgression().empty());
     menu.addItem (27, "Save ChordPro...", ! processor.getProgression().empty());
     menu.addSeparator();
+    menu.addSectionHeader ("Keyboard"); // which pad a MIDI key plays, saved with the project
+    menu.addItem (30, "White keys", true, processor.keyboardModeParam->getIndex() == ProgrezzorProcessor::kKeyboardWhiteKeys);
+    menu.addItem (31, "Chord roots", true, processor.keyboardModeParam->getIndex() == ProgrezzorProcessor::kKeyboardChordRoots);
+    menu.addSeparator();
     menu.addSectionHeader ("Learn");
     menu.addItem (20, "Show hints from the start", true, processor.getLearnHints());
     menu.addSeparator();
@@ -2786,6 +2790,13 @@ void ProgressionBar::showSettingsMenu()
                         {
                             if (safe != nullptr && result >= 1 && result <= 5)
                                 safe->chooseHomeOctave (result - 3);
+                            else if (safe != nullptr && (result == 30 || result == 31))
+                            {
+                                auto& mode = *safe->processor.keyboardModeParam;
+                                mode.beginChangeGesture();
+                                mode.setValueNotifyingHost (mode.convertTo0to1 ((float) (result - 30)));
+                                mode.endChangeGesture();
+                            }
                             else if (safe != nullptr && result == 25)
                                 safe->chooseChordProFile();
                             else if (safe != nullptr && result == 26)

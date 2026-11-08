@@ -71,6 +71,7 @@ public:
     juce::AudioParameterChoice* rhythmPatternParam = nullptr;
     juce::AudioParameterChoice* rhythmSpeedParam = nullptr;
     juce::AudioParameterChoice* rhythmLengthParam = nullptr;
+    juce::AudioParameterChoice* keyboardModeParam = nullptr; // White keys (as standard) or Chord roots: which pad a MIDI key plays
     juce::AudioParameterBool* bassParam = nullptr;    // an extra bass note under every chord (Settings: Bass note), off as standard
     juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)
@@ -167,6 +168,10 @@ public:
     bool isLockedToScale() const { return lockParam->get(); }
     void turnLockOff(); // "More chords outside the key..." in the chord menus: Lock to scale off, so every chord is offered
     // The arp as the parameters have it now. Safe to call from any thread.
+    // The pad that a MIDI key plays, -1 if none. White keys: C to B are pad 1 to 7. Chord roots: the pad whose chord has the key's
+    // note as its root (also a black key, like Bb in D Minor), in every octave.
+    int padForMidiNote (int note) const;
+    static constexpr int kKeyboardWhiteKeys = 0, kKeyboardChordRoots = 1;
     engine::ArpSettings getArpSettings() const;   // .on: the arp (one note at a time) is the mode
     engine::RhythmSettings getRhythmSettings() const; // .on: chord rhythm is the mode
     int getGeneralOctave() const { return octaveParam->get(); }

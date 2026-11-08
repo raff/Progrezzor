@@ -138,6 +138,7 @@ Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Moo
 - Note off sendes for præcis de noter, der blev startet, også hvis toneart eller variant ændres, mens en pad holdes.
 - Alle aktive noter stoppes ved transport stop, bypass og når plugin'et lukkes.
 - Keyboard: Hvide tangenter i alle oktaver spiller pad 1 til 7 (C til B). Sorte tangenter ignoreres. Inputnoter sendes ikke videre. Anslagsstyrken bruges.
+- Keyboard-indstilling (Henrik, 2026-11-08): Settings har under Keyboard "White keys" (som ovenfor, standard) og "Chord roots". Med Chord roots spiller en tangent den pad, hvis akkord har samme grundtone som tangenten, i alle oktaver, også sorte tangenter, når skalaen har en pad-akkord på den tone (fx Bb i D Minor, hvor pad 6 er Bb). Tangenter uden en pad-akkord ignoreres (fx C# og B i D Minor). En pad-variant (Bb7) spilles stadig af sin grundtone. Learn er uændret (tangenterne spiller deres egne toner). Valget gemmes med projektet (parameteren keyboardMode). En tangent, der slippes, slipper altid, også hvis toneart eller indstilling er skiftet imens, så intet hænger.
 
 ## Rundgangen
 

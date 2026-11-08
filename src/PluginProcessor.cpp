@@ -58,6 +58,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     addParameter (arpRotationParam = new juce::AudioParameterInt ({ "arpRotation", 1 }, "Arp Rotation", 0, engine::kMaxArpSteps - 1, 0));
     addParameter (octaveParam = new juce::AudioParameterInt ({ "octave", 1 }, "Octave", -engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, 0));
     addParameter (bassParam = new juce::AudioParameterBool ({ "bassNote", 1 }, "Bass Note", false)); // added last: earlier projects keep theirs
+    addParameter (keyboardModeParam = new juce::AudioParameterChoice ({ "keyboardMode", 1 }, "Keyboard", juce::StringArray { "White keys", "Chord roots" }, kKeyboardWhiteKeys));
     addParameter (rhythmModeParam = new juce::AudioParameterBool ({ "arpRhythm", 1 }, "Chord Rhythm", false));
     addParameter (rhythmPatternParam = new juce::AudioParameterChoice ({ "rhythmPattern", 1 }, "Rhythm Pattern",
                                                                        juce::StringArray (engine::rhythmPatternNames, engine::kNumRhythmPatterns), 0));
@@ -669,16 +670,19 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             continue;
         }
 
-        const int pad = padOfPitchClass[message.note % 12];
-        if (pad < 0)
-            continue; // a black key
-
+        // A key that lets go always lets go, also if what it plays has changed (the key or the setting) while it was held
         const int source = engine::NoteTracker::keySource (message.note);
-        if (message.kind == noteOnMessage)
-            work.pressSource (source, pad, getPadChord (pad),
-                              juce::jlimit (1, 127, message.velocity), message.position);
-        else
+        if (message.kind != noteOnMessage)
+        {
             work.releaseSource (source, message.position);
+            continue;
+        }
+
+        const int pad = padForMidiNote (message.note);
+        if (pad < 0)
+            continue; // a key without a chord
+
+        work.pressSource (source, pad, getPadChord (pad), juce::jlimit (1, 127, message.velocity), message.position);
     }
 
     work.advanceLoop (buffer.getNumSamples());
@@ -849,6 +853,19 @@ std::vector<engine::Chord> ProgrezzorProcessor::recentChords (int count) const
     for (unsigned i = n - (unsigned) take; i != n; ++i)
         chords.push_back (unpackChord (history[i % kHistorySize].load (std::memory_order_relaxed)));
     return chords;
+}
+
+int ProgrezzorProcessor::padForMidiNote (int note) const
+{
+    const int pitchClass = engine::wrap12 (note);
+    if (keyboardModeParam->getIndex() != kKeyboardChordRoots)
+        return padOfPitchClass[pitchClass];
+
+    const int tonic = keyParam->getIndex();
+    for (int pad = 0; pad < kNumPads; ++pad)
+        if (engine::wrap12 (tonic + getPadChord (pad).root) == pitchClass)
+            return pad;
+    return -1;
 }
 
 engine::Chord ProgrezzorProcessor::getPadChord (int pad) const
@@ -1026,6 +1043,7 @@ void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
     xml.setAttribute ("voice", voiceParam->getIndex());
     xml.setAttribute ("octave", octaveParam->get());
     xml.setAttribute ("bassNote", bassParam->get() ? 1 : 0);
+    xml.setAttribute ("keyboardMode", keyboardModeParam->getIndex());
     xml.setAttribute ("arpRhythm", rhythmModeParam->get() ? 1 : 0);
     xml.setAttribute ("rhythmPattern", rhythmPatternParam->getIndex());
     xml.setAttribute ("rhythmSpeed", rhythmSpeedParam->getIndex());
@@ -1085,6 +1103,7 @@ void ProgrezzorProcessor::setStateInformation (const void* data, int size)
     set (*rhythmPatternParam, xml->getIntAttribute ("rhythmPattern", 0));
     set (*rhythmSpeedParam, xml->getIntAttribute ("rhythmSpeed", 0));
     set (*rhythmLengthParam, xml->getIntAttribute ("rhythmLength", 1));
+    set (*keyboardModeParam, xml->getIntAttribute ("keyboardMode", kKeyboardWhiteKeys)); // projects saved before have the white keys
     *bassParam = xml->getIntAttribute ("bassNote", 0) != 0; // projects saved before the bass note have it off
 
     for (int pad = 0; pad < kNumPads; ++pad)
