@@ -152,14 +152,14 @@ std::string romanNumeral (const Chord& chord, ScaleId scale)
 
 namespace
 {
-// Notes of the chord in the given inversion, ascending, around the octave where the tonic is 0..11.
-Voicing invert (const Chord& chord, int tonic, int inversion)
+// Notes of the chord in the given inversion, ascending, with the chord's root at `rootNote` before any inversion.
+Voicing invert (const Chord& chord, int rootNote, int inversion)
 {
     const auto& shape = shapeOf (chord.type);
     Voicing v;
     v.count = shape.count;
     for (int i = 0; i < shape.count; ++i)
-        v.notes[(size_t) i] = wrap12 (tonic + chord.root) + shape.intervals[i] + (i < inversion ? 12 : 0);
+        v.notes[(size_t) i] = rootNote + shape.intervals[i] + (i < inversion ? 12 : 0);
     // The raised notes may now pass others (the root raised an octave is above a seventh, but below a ninth), so sort.
     // A plain insertion sort: five notes at most, and no warnings from the compiler about the array bounds.
     for (int i = 1; i < v.count; ++i)
@@ -167,15 +167,6 @@ Voicing invert (const Chord& chord, int tonic, int inversion)
             std::swap (v.notes[(size_t) j - 1], v.notes[(size_t) j]);
     return v;
 }
-
-double meanOf (const Voicing& v)
-{
-    double sum = 0.0;
-    for (int i = 0; i < v.count; ++i)
-        sum += v.notes[(size_t) i];
-    return sum / v.count;
-}
-
 }
 
 Voicing shiftedByOctaves (Voicing voicing, int octaves)
@@ -194,41 +185,19 @@ Voicing shiftedByOctaves (Voicing voicing, int octaves)
 Voicing voiceChord (const Chord& chord, int tonic, int centreNote)
 {
     // No magic: the notes of a chord depend only on the chord, the key and the register. Nothing that was played before has
-    // any say. Root position, or the inversion that was chosen; the octave is the one that puts the middle of the notes
-    // nearest the centre of the register.
+    // any say. The tonic's root sits in the 12 semitones from centreNote - 6 (F#3 to F4 at the normal centre). Every other
+    // root sits 0 to 11 semitones above it, by the chord's distance from the tonic, so the pads always climb. Root position
+    // (the root is the lowest note), or the inversion that was chosen.
     const int count = shapeOf (chord.type).count;
     const int inversion = chord.inversion < 0 ? 0 : chord.inversion % count;
-    const Voicing base = invert (chord, tonic, inversion);
 
-    Voicing best = base;
-    double bestDistance = 1.0e9;
-    bool found = false;
-    for (int pass = 0; pass < 2 && ! found; ++pass) // the second pass (ignoring the ends of the range) only if nothing fits
-    {
-        for (int octave = -4; octave < 10; ++octave)
-        {
-            Voicing candidate = base;
-            for (int i = 0; i < candidate.count; ++i)
-                candidate.notes[(size_t) i] += 12 * octave;
+    const int low = centreNote - 6;
+    const int tonicRoot = low + wrap12 (tonic - low);
+    Voicing v = invert (chord, tonicRoot + wrap12 (chord.root), inversion);
 
-            if (candidate.notes[0] < 0 || candidate.notes[(size_t) candidate.count - 1] > 127)
-                continue;
-            if (pass == 0 && (candidate.notes[0] < kLowestNote - 12 || candidate.notes[(size_t) candidate.count - 1] > kHighestNote + 12))
-                continue;
-
-            const double distance = std::abs (meanOf (candidate) - (double) centreNote);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                best = candidate;
-                found = true;
-            }
-        }
-    }
-
-    best.octave = std::clamp (chord.octave, -kMaxOctaveShift, kMaxOctaveShift);
-    for (int i = 0; i < best.count; ++i)
-        best.notes[(size_t) i] += 12 * best.octave;
-    return best;
+    v.octave = std::clamp (chord.octave, -kMaxOctaveShift, kMaxOctaveShift);
+    for (int i = 0; i < v.count; ++i)
+        v.notes[(size_t) i] += 12 * v.octave;
+    return v;
 }
 }

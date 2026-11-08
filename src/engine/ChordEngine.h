@@ -47,7 +47,7 @@ constexpr ChordShape chordShapes[kNumChordTypes] = {
 
 constexpr const ChordShape& shapeOf (ChordType type) { return chordShapes[(int) type]; }
 
-// Inversion: 0 is root position, 1 the first inversion and so on. kAutoInversion lets the voice leading choose, a number
+// Inversion: 0 is root position, 1 the first inversion and so on. kAutoInversion means root position, a number
 // is the user's own choice and is always respected. A number past the last note wraps round.
 constexpr int kAutoInversion = -1;
 
@@ -118,11 +118,12 @@ constexpr int kHighestNote = 96; // C7
 constexpr int kCentreNote = 60;  // the chords gather around C4
 
 // Turns a chord into MIDI notes. Always the same notes for the same chord, key and register: nothing that was played before
-// matters (no automatic voice leading). Root position, unless the chord has a chosen inversion, placed so that the middle of
-// the notes is nearest `centreNote`. The chord's own octave shift (Chord::octave) is added on top.
+// matters (no automatic voice leading). The tonic's root sits in F#3 to F4 (centreNote - 6 and 11 above), every other root 0 to
+// 11 semitones above the tonic's, so pads 1 to 7 always climb. Root position (the root is the lowest note) unless the chord has
+// a chosen inversion. The chord's own octave shift (Chord::octave) is added on top.
 Voicing voiceChord (const Chord& chord, int tonic, int centreNote = kCentreNote);
 
-// The general register: the whole voicing moved up or down by whole octaves (the Oct buttons), never past the ends of the
+// MIDI range. Chords are voiced before this, so the register never pulls the next chord with it.
 // MIDI range. The voice leading works on the voicing before this, so the register never pulls the next chord with it.
 constexpr int kMaxGeneralOctave = 2; // the Oct buttons
 constexpr int kMaxHomeOctave = 2;    // where the chords usually sit (Settings), on top of the Oct buttons
