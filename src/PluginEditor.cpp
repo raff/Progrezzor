@@ -1361,12 +1361,11 @@ public:
         auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel());
         const auto arp = processor.getArpSettings();
 
-        // Title and the switch
-        if (l != nullptr)
-            g.setFont (l->titleFont (21.0f));
-        g.setColour (theme::text);
-        g.drawText ("Arp", 16, 12, 80, 28, juce::Justification::centredLeft);
-        drawPill (g, onRect(), arp.on ? "On" : "Off", arp.on, true);
+        // The switch: Hold (the chord as one), Arp (one note at a time) or Rhythm (the whole chord in a pattern)
+        static const char* modeNames[3] = { "Hold", "Arp", "Rhythm" };
+        const int mode = currentMode();
+        for (int i = 0; i < 3; ++i)
+            drawPill (g, modeRect (i), modeNames[i], mode == i, true);
 
         const auto label = [&] (const juce::String& text, int y)
         {
@@ -1375,6 +1374,12 @@ public:
             g.setColour (theme::dimText);
             g.drawText (text, 16, y, 200, 16, juce::Justification::centredLeft);
         };
+
+        if (mode == 2)
+        {
+            paintRhythm (g, l, label);
+            return;
+        }
 
         // The pattern: four little pictures of how the notes move
         label ("PATTERN", 48);
@@ -1426,8 +1431,39 @@ public:
         const auto p = e.getPosition();
         const auto arp = processor.getArpSettings();
 
-        if (onRect().contains (p))
-            setBool (processor.arpOnParam, ! arp.on);
+        for (int i = 0; i < 3; ++i)
+            if (modeRect (i).contains (p))
+            {
+                setBool (processor.arpOnParam, i != 0);
+                if (i != 0)
+                    setBool (processor.rhythmModeParam, i == 2);
+                repaint();
+                return;
+            }
+
+        if (currentMode() == 2)
+        {
+            const auto rhythm = processor.getRhythmSettings();
+            for (int i = 0; i < engine::kNumRhythmPatterns; ++i)
+                if (tileRect (i).contains (p))
+                    setChoice (processor.rhythmPatternParam, i);
+            for (int i = 0; i < engine::kNumRhythmSpeeds; ++i)
+                if (speedRect (i).contains (p))
+                    setChoice (processor.rhythmSpeedParam, i);
+            for (int i = 0; i < engine::kNumRhythmLengths; ++i)
+                if (lengthRect (i).contains (p))
+                    setChoice (processor.rhythmLengthParam, i);
+            if (rhythm.patternIndex() == (int) engine::RhythmPattern::Euclid)
+            {
+                if (euclidHitsRect().contains (p))
+                    setInt (processor.arpHitsParam, juce::jlimit (1, rhythm.slots(), std::min (rhythm.hits, rhythm.slots()) + (p.x > euclidHitsRect().getCentreX() ? 1 : -1)));
+                if (euclidTurnRect().contains (p))
+                    setInt (processor.arpRotationParam, ((processor.arpRotationParam->get() + (p.x > euclidTurnRect().getCentreX() ? 1 : -1)) % rhythm.slots() + rhythm.slots()) % rhythm.slots());
+            }
+            repaint();
+            return;
+        }
+
         for (int i = 0; i < engine::kNumArpStyles; ++i)
             if (styleRect (i).contains (p))
                 setChoice (processor.arpStyleParam, i);
@@ -1490,7 +1526,74 @@ private:
     void timerCallback() override { repaint(); }
 
     // ---- where everything is ----
-    juce::Rectangle<int> onRect() const { return { getWidth() - 16 - 72, 14, 72, 26 }; }
+    juce::Rectangle<int> modeRect (int i) const { return { 16 + i * 114, 10, 108, 28 }; }
+    juce::Rectangle<int> tileRect (int i) const { return { 16 + (i % 4) * 88, 66 + (i / 4) * 50, 80, 44 }; }
+    juce::Rectangle<int> speedRect (int i) const { return { 16 + i * 84, 236, 78, 26 }; }
+    juce::Rectangle<int> lengthRect (int i) const { return { 190 + i * 56, 236, 52, 26 }; }
+    juce::Rectangle<int> euclidHitsRect() const { return { 16, 272, 160, 22 }; }
+    juce::Rectangle<int> euclidTurnRect() const { return { 190, 272, 160, 22 }; }
+    juce::Rectangle<int> stripRect() const { return { 16, 304, 340, 36 }; }
+
+    int currentMode() const { return ! processor.arpOnParam->get() ? 0 : processor.rhythmModeParam->get() ? 2 : 1; }
+
+    // The slots of a pattern as a row of dots: a lit dot is a strike, the first has a ring (the accent)
+    static void drawSlots (juce::Graphics& g, juce::Rectangle<float> r, const engine::RhythmSettings& rhythm, juce::Colour lit, juce::Colour unlit, float dotSize)
+    {
+        const int slots = rhythm.slots();
+        for (int slot = 0; slot < slots; ++slot)
+        {
+            const auto centre = juce::Point<float> (r.getX() + r.getWidth() * ((float) slot + 0.5f) / (float) slots, r.getCentreY());
+            const bool hit = rhythm.isHit (slot);
+            g.setColour (hit ? lit : unlit);
+            const float size = hit ? dotSize : dotSize * 0.5f;
+            g.fillEllipse (juce::Rectangle<float> (size, size).withCentre (centre));
+            if (slot == 0 && hit)
+            {
+                g.setColour (lit.withAlpha (0.8f));
+                g.drawEllipse (juce::Rectangle<float> (size + 4.0f, size + 4.0f).withCentre (centre), 1.2f);
+            }
+        }
+    }
+
+    void paintRhythm (juce::Graphics& g, theme::LookAndFeel* l, const std::function<void (const juce::String&, int)>& label)
+    {
+        auto rhythm = processor.getRhythmSettings();
+        label ("PATTERN", 48);
+        for (int i = 0; i < engine::kNumRhythmPatterns; ++i)
+        {
+            const auto r = tileRect (i).toFloat();
+            const bool selected = rhythm.patternIndex() == i;
+            drawTile (g, r, selected);
+            auto shown = rhythm;
+            shown.pattern = i;
+            drawSlots (g, r.withTrimmedBottom (20.0f).reduced (8.0f, 0.0f).withTrimmedTop (4.0f), shown, selected ? theme::onAccent : theme::text, (selected ? theme::onAccent : theme::text).withAlpha (0.3f), 4.5f);
+            if (l != nullptr)
+                g.setFont (l->titleFont (11.0f));
+            g.setColour (selected ? theme::onAccent : theme::text);
+            g.drawFittedText (engine::rhythmPatternNames[i], r.withTrimmedTop (r.getHeight() - 20.0f).withTrimmedBottom (3.0f).toNearestInt(), juce::Justification::centred, 1, 0.7f);
+        }
+
+        label ("SPEED", 218);
+        for (int i = 0; i < engine::kNumRhythmSpeeds; ++i)
+            drawPill (g, speedRect (i), engine::rhythmSpeedNames[i], rhythm.speed == i, false);
+        if (l != nullptr)
+            g.setFont (l->labelFont (12.0f));
+        g.setColour (theme::dimText);
+        g.drawText ("LENGTH", 190, 218, 120, 16, juce::Justification::centredLeft);
+        for (int i = 0; i < engine::kNumRhythmLengths; ++i)
+            drawPill (g, lengthRect (i), engine::rhythmLengthNames[i], rhythm.length == i, false);
+
+        if (rhythm.patternIndex() == (int) engine::RhythmPattern::Euclid)
+        {
+            drawStepper (g, euclidHitsRect(), "Hits", std::min (rhythm.hits, rhythm.slots()));
+            drawStepper (g, euclidTurnRect(), "Turn", rhythm.rotation % rhythm.slots());
+        }
+
+        // The pattern as it plays in one bar
+        g.setColour (theme::pad.darker (0.3f));
+        g.fillRoundedRectangle (stripRect().toFloat(), 9.0f);
+        drawSlots (g, stripRect().toFloat().reduced (10.0f, 0.0f), rhythm, theme::accent, theme::dimText.withAlpha (0.5f), 11.0f);
+    }
     juce::Rectangle<int> styleRect (int i) const { return { 16 + i * 88, 66, 80, 56 }; }
     juce::Rectangle<int> rateRect (int i) const { return { 16 + i * 88, 148, 80, 50 }; }
     juce::Rectangle<int> ringRect() const { return { 20, 232, 112, 112 }; }
@@ -2175,7 +2278,7 @@ void ProgressionBar::updateButtons()
     const bool playOn = processor.isPlayOn();
     playButton.setToggleState (playOn, juce::dontSendNotification);
     playButton.setEnabled (playOn || ! processor.getProgression().empty()); // an empty bar cannot be played
-    arpButton.setToggleState (processor.getArpSettings().on, juce::dontSendNotification);
+    arpButton.setToggleState (processor.arpOnParam->get(), juce::dontSendNotification);
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
     takePlayedChords();
     captureButton.setEnabled (editing && ! textMode && ! processor.isLearning());

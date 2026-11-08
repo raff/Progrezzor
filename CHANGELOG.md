@@ -15,6 +15,7 @@ tag the commit (`vX.Y.Z`).
 - With Arp on and the loop running, a note from the old chord could sound right before the bar line, just before the new chord's first note. The arp steps now follow the host's grid.
 
 ### Added
+- Chord rhythm: a Hold | Arp | Rhythm switch at the top of the arp panel. Rhythm strikes the whole chord in one of 12 patterns (Offbeat, Stab, Double stab, Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse, Euclid), at 1/8 or 1/16, with Short, Medium or Long notes. It follows the host's grid, and the MIDI file has the same strikes.
 - A bass note: Settings has "Bass note" (off as standard, saved with the project). It adds one low note under every chord, also in the loop and the MIDI file. With Arp on it lies as one long note under the arp.
 - Suggest can now use inversions where they give a smoother bass line (C, G/B, Am, F). The block shows the name with a slash. Settings has "Inversions in suggestions" (on as standard); off gives only plain chords.
 - **Learn.** A Learn button in the bar: hold the keys of each chord of the progression on a MIDI keyboard, one chord after the other, in any octave. The next chord is marked in the bar, a right chord ticks it off, and a wrong one flashes red. After two wrong tries, or from the start if you switch on hints in Settings, a piece of a keyboard shows which keys to hold.

@@ -12,6 +12,7 @@
 #include "engine/NoteTracker.h"
 #include "engine/ProgressionEdit.h"
 #include "engine/MidiExport.h"
+#include "engine/ChordRhythm.h"
 #include "engine/QuickText.h"
 
 // Milestone 2: seven pads that play chords as MIDI (channel 1) and as a built-in Pad sound.
@@ -64,6 +65,12 @@ public:
     juce::AudioParameterInt* arpHitsParam = nullptr;
     juce::AudioParameterInt* arpRotationParam = nullptr;
     juce::AudioParameterInt* octaveParam = nullptr;   // the general register: -2 to +2 octaves for everything that sounds and is exported
+    // Chord rhythm (the Rhythm choice of the arp panel). Hold = Arp off. Arp = arpOn with rhythmMode off. Rhythm = arpOn with
+    // rhythmMode on. Hits and Rotation of the arp are also the Hits and Rotation of the Euclid pattern.
+    juce::AudioParameterBool* rhythmModeParam = nullptr;
+    juce::AudioParameterChoice* rhythmPatternParam = nullptr;
+    juce::AudioParameterChoice* rhythmSpeedParam = nullptr;
+    juce::AudioParameterChoice* rhythmLengthParam = nullptr;
     juce::AudioParameterBool* bassParam = nullptr;    // an extra bass note under every chord (Settings: Bass note), off as standard
     juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)
@@ -159,7 +166,8 @@ public:
     int getVariantVersion() const { return variantVersion.load(); }
     bool isLockedToScale() const { return lockParam->get(); }
     // The arp as the parameters have it now. Safe to call from any thread.
-    engine::ArpSettings getArpSettings() const;
+    engine::ArpSettings getArpSettings() const;   // .on: the arp (one note at a time) is the mode
+    engine::RhythmSettings getRhythmSettings() const; // .on: chord rhythm is the mode
     int getGeneralOctave() const { return octaveParam->get(); }
 
     // Where the chords usually sit (Settings): -2 to +2 octaves from middle C. It is the user's, kept in a file of its own,
@@ -225,14 +233,19 @@ private:
         double blockLen = 0.0;  // beats
         double dueBeat = 0.0;   // where the next step is (infinity: no more steps in this block)
         double offBeat = -1.0;  // where the note that sounds ends, -1 if none
+        bool rhythm = false;    // chord rhythm: every strike is the whole chord (`heard`), not a note of the pool
+        engine::RhythmSettings rhythmSettings;
+        engine::Voicing heard;
+        double stepBeats = 0.5; // the length of a step (or a slot of the rhythm)
     };
     std::array<ArpSlot, engine::NoteTracker::kNumSources> arpSlots {};
     std::array<bool, engine::NoteTracker::kNumSources> sourceActive {}; // a source holds a chord (also in a rest of the arp)
-    bool arpWasOn = false;
+    int patternModeWas = 0; // 0 hold, 1 arp, 2 rhythm: when it changes, everything that sounds stops
     double samplesPerBeat = 22050.0;
     double bufferStartBeat = 0.0;     // the host's position (quarter notes) at the first sample of this block
     double bufferBeatsPerSample = 0.0;
     engine::ArpSettings blockArp; // the arp as it is during this block
+    engine::RhythmSettings blockRhythm; // and the chord rhythm
     bool blockBass = false;       // the bass note as it is during this block
 
     // The loop (audio thread). The progression reaches it through a lock-free hand-over.

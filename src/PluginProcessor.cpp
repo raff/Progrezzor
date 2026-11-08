@@ -58,6 +58,11 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     addParameter (arpRotationParam = new juce::AudioParameterInt ({ "arpRotation", 1 }, "Arp Rotation", 0, engine::kMaxArpSteps - 1, 0));
     addParameter (octaveParam = new juce::AudioParameterInt ({ "octave", 1 }, "Octave", -engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, 0));
     addParameter (bassParam = new juce::AudioParameterBool ({ "bassNote", 1 }, "Bass Note", false)); // added last: earlier projects keep theirs
+    addParameter (rhythmModeParam = new juce::AudioParameterBool ({ "arpRhythm", 1 }, "Chord Rhythm", false));
+    addParameter (rhythmPatternParam = new juce::AudioParameterChoice ({ "rhythmPattern", 1 }, "Rhythm Pattern",
+                                                                       juce::StringArray (engine::rhythmPatternNames, engine::kNumRhythmPatterns), 0));
+    addParameter (rhythmSpeedParam = new juce::AudioParameterChoice ({ "rhythmSpeed", 1 }, "Rhythm Speed", juce::StringArray (engine::rhythmSpeedNames, engine::kNumRhythmSpeeds), 0));
+    addParameter (rhythmLengthParam = new juce::AudioParameterChoice ({ "rhythmLength", 1 }, "Rhythm Length", juce::StringArray (engine::rhythmLengthNames, engine::kNumRhythmLengths), 1));
 
     // Where the chords usually sit: the user's own setting, the same in every project
     if (const auto settings = juce::parseXML (getSettingsFile()))
@@ -76,11 +81,23 @@ ProgrezzorProcessor::ProgrezzorProcessor()
 engine::ArpSettings ProgrezzorProcessor::getArpSettings() const
 {
     engine::ArpSettings settings;
-    settings.on = arpOnParam->get();
+    settings.on = arpOnParam->get() && ! rhythmModeParam->get();
     settings.style = arpStyleParam->getIndex();
     settings.rate = arpRateParam->getIndex();
     settings.octaves = arpOctavesParam->get();
     settings.steps = arpStepsParam->get();
+    settings.hits = arpHitsParam->get();
+    settings.rotation = arpRotationParam->get();
+    return settings;
+}
+
+engine::RhythmSettings ProgrezzorProcessor::getRhythmSettings() const
+{
+    engine::RhythmSettings settings;
+    settings.on = arpOnParam->get() && rhythmModeParam->get();
+    settings.pattern = rhythmPatternParam->getIndex();
+    settings.speed = rhythmSpeedParam->getIndex();
+    settings.length = rhythmLengthParam->getIndex();
     settings.hits = arpHitsParam->get();
     settings.rotation = arpRotationParam->get();
     return settings;
@@ -264,7 +281,7 @@ public:
         if (user)
             ++owner.userHolds;
         owner.sourceActive[(size_t) source] = true;
-        if (owner.blockArp.on)
+        if (owner.blockArp.on || owner.blockRhythm.on)
             startArp (source, heard, velocity, position); // the arp: one note at a time
         else
             owner.tracker.press (source, heard, velocity, [&] (const engine::NoteEvent& e) { emit (e, position); });
@@ -338,6 +355,10 @@ public:
         slot.settings = owner.blockArp;
         slot.pattern = slot.settings.pattern();
         slot.pool = engine::arpPool (heard, slot.settings.octaves);
+        slot.rhythm = owner.blockRhythm.on; // chord rhythm: the whole chord at every strike of the pattern
+        slot.rhythmSettings = owner.blockRhythm;
+        slot.heard = heard;
+        slot.stepBeats = slot.rhythm ? owner.blockRhythm.slotBeats() : slot.settings.stepBeats();
         slot.velocity = velocity;
         slot.step = 0;
         slot.running = true;
@@ -350,7 +371,7 @@ public:
             slot.gridStart = loopBlockStart (position);
             slot.blockLen = snapshot.blocks[(size_t) owner.loopIndex].beats;
             const double now = owner.bufferStartBeat + position * owner.bufferBeatsPerSample;
-            slot.step = std::max<std::int64_t> (0, (std::int64_t) std::floor ((now - slot.gridStart) / slot.settings.stepBeats() + 1.0e-6));
+            slot.step = std::max<std::int64_t> (0, (std::int64_t) std::floor ((now - slot.gridStart) / slot.stepBeats + 1.0e-6));
         }
         playArpStep (source, (double) position);
     }
@@ -360,25 +381,38 @@ public:
         auto& slot = owner.arpSlots[(size_t) source];
         const int position = juce::jlimit (0, std::max (0, numSamples - 1), (int) at);
         const auto emitNow = [&] (const engine::NoteEvent& e) { emit (e, position); };
-        const double stepSamples = slot.settings.stepBeats() * owner.samplesPerBeat;
+        const double stepSamples = slot.stepBeats * owner.samplesPerBeat;
 
         owner.tracker.releaseNotes (source, emitNow); // the note of the step before, if it still sounds
         slot.offIn = -1.0;
 
-        const auto hit = engine::arpStep (slot.settings, slot.pattern, slot.pool, slot.step++);
-        if (hit.play)
+        if (slot.rhythm)
         {
-            engine::Voicing single;
-            single.count = 1;
-            single.notes[0] = hit.note;
-            owner.tracker.pressNotes (source, single, slot.velocity, emitNow);
-            slot.offIn = at + engine::kArpGate * stepSamples;
-            slot.offBeat = owner.bufferStartBeat + slot.offIn * owner.bufferBeatsPerSample;
+            const auto step = slot.step++;
+            if (slot.rhythmSettings.isHit (step))
+            {
+                owner.tracker.pressNotes (source, slot.heard, slot.rhythmSettings.velocityFor (slot.velocity, step), emitNow);
+                slot.offIn = at + slot.rhythmSettings.noteBeats (step) * owner.samplesPerBeat;
+                slot.offBeat = owner.bufferStartBeat + slot.offIn * owner.bufferBeatsPerSample;
+            }
+        }
+        else
+        {
+            const auto hit = engine::arpStep (slot.settings, slot.pattern, slot.pool, slot.step++);
+            if (hit.play)
+            {
+                engine::Voicing single;
+                single.count = 1;
+                single.notes[0] = hit.note;
+                owner.tracker.pressNotes (source, single, slot.velocity, emitNow);
+                slot.offIn = at + engine::kArpGate * stepSamples;
+                slot.offBeat = owner.bufferStartBeat + slot.offIn * owner.bufferBeatsPerSample;
+            }
         }
         slot.dueIn = at + stepSamples;
         if (slot.onGrid) // the next step is on the host's grid, and it is only the block's if it starts before the block ends
         {
-            const double stepBeats = slot.settings.stepBeats();
+            const double stepBeats = slot.stepBeats;
             if ((double) slot.step * stepBeats >= slot.blockLen - 1.0e-9)
                 slot.dueBeat = std::numeric_limits<double>::infinity();
             else
@@ -548,13 +582,15 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     const double beatsPerSample = bpm / 60.0 / sampleRate;
     samplesPerBeat = sampleRate * 60.0 / bpm;
     blockArp = getArpSettings();
+    blockRhythm = getRhythmSettings();
     blockBass = bassParam->get() && ! learnOn.load(); // in Learn mode the keys play their own notes
     if (learnOn.load())
-        blockArp.on = false; // in Learn mode a chord is played whole
-    if (blockArp.on != arpWasOn) // Arp was switched: everything that sounds stops, and starts again the other way
+        blockArp.on = blockRhythm.on = false; // in Learn mode a chord is played whole
+    const int patternMode = blockArp.on ? 1 : blockRhythm.on ? 2 : 0;
+    if (patternMode != patternModeWas) // Hold, Arp or Rhythm was chosen: everything that sounds stops, and starts again the other way
     {
         work.releaseEverything (0);
-        arpWasOn = blockArp.on;
+        patternModeWas = patternMode;
     }
     bufferStartBeat = startBeat;
     bufferBeatsPerSample = beatsPerSample;
@@ -902,6 +938,9 @@ juce::File ProgrezzorProcessor::saveMidi()
     // What the file is made from. The same again gives the same file.
     juce::String madeFrom = juce::String (key.tonic) + "/" + juce::String (getTotalOctave());
     const auto arp = getArpSettings();
+    const auto rhythm = getRhythmSettings();
+    if (rhythm.on)
+        madeFrom << "/rhythm" << rhythm.pattern << "," << rhythm.speed << "," << rhythm.length << "," << rhythm.hits << "," << rhythm.rotation;
     if (arp.on)
         madeFrom << "/arp" << arp.style << "," << arp.rate << "," << arp.octaves << "," << arp.steps << "," << arp.hits << "," << arp.rotation;
     for (const auto& block : progression)
@@ -915,7 +954,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     const auto ticks = [] (double beats) { return beats * kTicksPerQuarter; };
 
     juce::MidiMessageSequence sequence;
-    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), getTotalOctave(), engine::kCentreNote, arp, bassParam->get()))
+    for (const auto& note : engine::exportNotes (progression, key.tonic, key.scale, lockParam->get(), getTotalOctave(), engine::kCentreNote, arp, bassParam->get(), rhythm))
     {
         // All MIDI on channel 1. A note off comes before a note on at the same time, so that equal chords strike again.
         sequence.addEvent (juce::MidiMessage::noteOn (1, note.note, (juce::uint8) note.velocity).withTimeStamp (ticks (note.start)));
@@ -930,7 +969,7 @@ juce::File ProgrezzorProcessor::saveMidi()
     midiFile.addTrack (sequence);
 
     const auto folder = getExportFolder();
-    const auto file = folder.getChildFile (juce::File::createLegalFileName (juce::String (engine::exportFileName (progression, key, arp.on)))).getNonexistentSibling();
+    const auto file = folder.getChildFile (juce::File::createLegalFileName (juce::String (engine::exportFileName (progression, key, arp.on, rhythm.on)))).getNonexistentSibling();
 
     bool written = false;
     if (folder.createDirectory().wasOk())
@@ -962,6 +1001,10 @@ void ProgrezzorProcessor::getStateInformation (juce::MemoryBlock& destination)
     xml.setAttribute ("voice", voiceParam->getIndex());
     xml.setAttribute ("octave", octaveParam->get());
     xml.setAttribute ("bassNote", bassParam->get() ? 1 : 0);
+    xml.setAttribute ("arpRhythm", rhythmModeParam->get() ? 1 : 0);
+    xml.setAttribute ("rhythmPattern", rhythmPatternParam->getIndex());
+    xml.setAttribute ("rhythmSpeed", rhythmSpeedParam->getIndex());
+    xml.setAttribute ("rhythmLength", rhythmLengthParam->getIndex());
     xml.setAttribute ("arpOn", arpOnParam->get() ? 1 : 0);
     xml.setAttribute ("arpStyle", arpStyleParam->getIndex());
     xml.setAttribute ("arpRate", arpRateParam->getIndex());
@@ -1013,6 +1056,10 @@ void ProgrezzorProcessor::setStateInformation (const void* data, int size)
     *arpHitsParam = juce::jlimit (1, engine::kMaxArpSteps, xml->getIntAttribute ("arpHits", 8));
     *arpRotationParam = juce::jlimit (0, engine::kMaxArpSteps - 1, xml->getIntAttribute ("arpRotation", 0));
     *octaveParam = juce::jlimit (-engine::kMaxGeneralOctave, engine::kMaxGeneralOctave, xml->getIntAttribute ("octave", 0));
+    *rhythmModeParam = xml->getIntAttribute ("arpRhythm", 0) != 0; // projects saved before the chord rhythm have the arp as it was
+    set (*rhythmPatternParam, xml->getIntAttribute ("rhythmPattern", 0));
+    set (*rhythmSpeedParam, xml->getIntAttribute ("rhythmSpeed", 0));
+    set (*rhythmLengthParam, xml->getIntAttribute ("rhythmLength", 1));
     *bassParam = xml->getIntAttribute ("bassNote", 0) != 0; // projects saved before the bass note have it off
 
     for (int pad = 0; pad < kNumPads; ++pad)
