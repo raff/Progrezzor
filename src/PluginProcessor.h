@@ -217,11 +217,20 @@ private:
         double dueIn = 0.0;   // samples from the start of this block to the next step
         double offIn = -1.0;  // samples to the end of the note that sounds, -1 if none
         int velocity = 100;
+        // The loop's arp is counted on the host's grid (quarter notes), not by adding step lengths: step k of a block is at
+        // gridStart + k * stepBeats, and only steps before gridStart + blockLen belong to the block. Pads count from the press.
+        bool onGrid = false;
+        double gridStart = 0.0; // the host's position of the start of the block
+        double blockLen = 0.0;  // beats
+        double dueBeat = 0.0;   // where the next step is (infinity: no more steps in this block)
+        double offBeat = -1.0;  // where the note that sounds ends, -1 if none
     };
     std::array<ArpSlot, engine::NoteTracker::kNumSources> arpSlots {};
     std::array<bool, engine::NoteTracker::kNumSources> sourceActive {}; // a source holds a chord (also in a rest of the arp)
     bool arpWasOn = false;
     double samplesPerBeat = 22050.0;
+    double bufferStartBeat = 0.0;     // the host's position (quarter notes) at the first sample of this block
+    double bufferBeatsPerSample = 0.0;
     engine::ArpSettings blockArp; // the arp as it is during this block
 
     // The loop (audio thread). The progression reaches it through a lock-free hand-over.
