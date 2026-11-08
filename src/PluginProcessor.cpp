@@ -974,7 +974,7 @@ juce::File ProgrezzorProcessor::getExportFolder()
 
 juce::File ProgrezzorProcessor::saveMidi()
 {
-    constexpr int kTicksPerQuarter = 960;
+    static constexpr int kTicksPerQuarter = 960;
     const auto key = getKey();
 
     // What the file is made from. The same again gives the same file.

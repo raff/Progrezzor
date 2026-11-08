@@ -1,0 +1,91 @@
+# Copyright (C) 2026 Henrik Juhl. Part of Progrezzor, licensed under the GNU AGPLv3 (see LICENSE).
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Builds Progrezzor (CLAP + VST3) on Linux and Windows, runs the tests and uploads the archives as workflow artifacts.
+# Set up like SubForge's. Progrezzor 0.9.x are internal test builds: nothing here makes a tag or a release.
+# Runs on GitHub only after a push; nothing here is needed for local builds.
+name: Build
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+# The build only reads the repository; the archives go up as workflow artifacts.
+permissions:
+  contents: read
+
+# Dependencies are pinned to exact commits: a tag can be moved to other code later.
+env:
+  JUCE_VERSION: "8.0.15"
+  JUCE_COMMIT: 91ad83ae34a81e0833b1a2b0866f54846370ae53   # the commit of tag 8.0.15
+  CLAP_JUCE_EXTENSIONS_COMMIT: 7adee3a1bd4684d4caa5601100e364abccff4b4d
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-24.04
+            generator: -G Ninja
+            package: package-linux
+            # The headless CLAP host and the editor test run on Linux only
+            targets: Progrezzor_CLAP Progrezzor_VST3 clap_test_host engine_test ProgrezzorUiTest
+          - name: Windows
+            os: windows-2022
+            generator: ""            # Visual Studio 2022 (MSVC), the default on this runner
+            package: package-windows
+            targets: Progrezzor_CLAP Progrezzor_VST3 engine_test
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build xvfb libasound2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev libxrender-dev
+
+      - name: Fetch JUCE and clap-juce-extensions
+        shell: bash
+        run: |
+          git clone --depth 1 --branch "$JUCE_VERSION" https://github.com/juce-framework/JUCE.git _sdks/JUCE
+          test "$(git -C _sdks/JUCE rev-parse HEAD)" = "$JUCE_COMMIT" || { echo "JUCE tag $JUCE_VERSION has moved"; exit 1; }
+          git clone https://github.com/free-audio/clap-juce-extensions.git _sdks/clap-juce-extensions
+          git -C _sdks/clap-juce-extensions checkout "$CLAP_JUCE_EXTENSIONS_COMMIT"
+          git -C _sdks/clap-juce-extensions submodule update --init --recursive
+
+      - name: Configure
+        shell: bash
+        run: >
+          cmake -S . -B build ${{ matrix.generator }}
+          -DCMAKE_BUILD_TYPE=Release
+          -DJUCE_DIR=_sdks/JUCE
+          -DCLAP_JUCE_EXTENSIONS_DIR=_sdks/clap-juce-extensions
+          -DPROGREZZOR_INSTALL_AFTER_BUILD=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel --target ${{ matrix.targets }}
+
+      - name: Tests (Linux, with a virtual screen for the editor test)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ctest --test-dir build -C Release --output-on-failure
+
+      - name: Tests (Windows, the engine tests)
+        if: runner.os == 'Windows'
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package
+        run: cmake --build build --config Release --target ${{ matrix.package }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Progrezzor-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
