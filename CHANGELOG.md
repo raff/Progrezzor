@@ -34,6 +34,7 @@ tag the commit (`vX.Y.Z`).
 - A new project starts in C Major with the Bright mood. The question "Replace the chords in the bar?" sits in a small card in the middle of the bar.
 
 ### Fixed
+- **Windows display scaling in the CLAP version.** With Windows scaling above 100 % (125 %, 150 %) the window came out too big and was cropped in the host. The CLAP editor now stays at 1:1 like the VST3 one, the same fix as in SubForge and SpaceForge.
 - The chords no longer jump an octave in the middle of the scale. The root of the first chord sits between F#3 and F4, every other chord has its root 0 to 11 semitones above it, so the seven pads always climb (C4 D4 E4 F4 G4 A4 B4 in C Major).
 - With the arp on and the loop running, a note from the old chord could sound right before the bar line, just before the new chord's first note. The arp steps now follow the host's grid.
 - Text sitting too close to the edge of buttons and tiles (Short, Medium, Long, long pattern names and more), and a Settings gear that was too small, are fixed.
