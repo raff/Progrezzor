@@ -134,6 +134,13 @@ Kræver et MIDI-tastatur.
 - [ ] Står du allerede i den toneart, sker der ingenting.
 - [ ] ChordPro-fil med {key:}: ingen gætning. Uden {key:}: gættet kommer, når du trykker Enter.
 
+## 2o. Keyboard: Chord roots (branch feature/keyboard-chord-roots)
+- [ ] Settings > Keyboard: "White keys" er valgt som standard og virker som før.
+- [ ] Vælg "Chord roots". I C Major spiller de hvide tangenter pad 1 til 7, og de sorte spiller ingenting.
+- [ ] Skift til D Minor: D E F G A spiller pad 1 til 5, den sorte tangent Bb spiller pad 6, C spiller pad 7. C#, Eb, F#, Ab og B spiller ingenting.
+- [ ] Prøv en toneart med sorte tangenter på padsene (fx Eb Major): Eb, Ab og Bb spiller hver sin pad.
+- [ ] Hold en tangent og skift toneart: når du slipper, hænger der ingen note. Gem og åbn projektet: valget er husket.
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

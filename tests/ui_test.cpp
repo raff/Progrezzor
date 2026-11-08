@@ -2190,6 +2190,106 @@ int main (int argc, char** argv)
     }
 
     {
+        std::printf ("keyboard: chord roots\n");
+        const int oldKey = processor.keyParam->getIndex(), oldScale = processor.scaleParam->getIndex();
+        const auto setKey = [&] (int tonic, int scale) { *processor.keyParam = tonic; *processor.scaleParam = scale; };
+        const auto lit = [&] (int note) // the pads lit while a key is held (0 if it plays nothing), then it lets go
+        {
+            juce::MidiBuffer down, up;
+            down.addEvent (juce::MidiMessage::noteOn (1, note, (juce::uint8) 90), 0);
+            runBlock (processor, down);
+            const unsigned pads = processor.litPads();
+            up.addEvent (juce::MidiMessage::noteOff (1, note), 0);
+            runBlock (processor, up);
+            return pads;
+        };
+        const auto padOf = [] (unsigned mask) { for (int i = 0; i < 7; ++i) if (mask == (1u << i)) return i; return -1; };
+
+        // Standard: the white keys, as before
+        check (processor.keyboardModeParam->getIndex() == 0, "the white keys are the standard");
+        setKey (3, (int) engine::ScaleId::Major); // Eb Major
+        check (padOf (lit (60)) == 0 && padOf (lit (62)) == 1 && padOf (lit (71)) == 6 && lit (61) == 0 && lit (63) == 0, "White keys: C to B are pad 1 to 7, black keys play nothing");
+
+        *processor.keyboardModeParam = ProgrezzorProcessor::kKeyboardChordRoots;
+
+        // C Major: the pads are C Dm Em F G Am Bdim, so the white keys, and the black keys play nothing
+        setKey (0, (int) engine::ScaleId::Major);
+        bool cMajor = true;
+        const int cNotes[7] = { 0, 2, 4, 5, 7, 9, 11 };
+        for (int octave = 1; octave <= 8; ++octave)
+            for (int pad = 0; pad < 7; ++pad)
+                if (12 * octave + cNotes[pad] <= 127)
+                    cMajor &= padOf (lit (12 * octave + cNotes[pad])) == pad;
+        check (cMajor, "C Major: the white keys play pad 1 to 7 in every octave");
+        bool blackSilent = true;
+        for (int octave = 1; octave <= 8; ++octave)
+            for (int pitch : { 1, 3, 6, 8, 10 })
+                if (12 * octave + pitch <= 127)
+                    blackSilent &= lit (12 * octave + pitch) == 0;
+        check (blackSilent, "C Major: the black keys play nothing");
+
+        // D Minor: Dm Edim F Gm Am Bb C. Bb is a black key, and it plays a pad.
+        setKey (2, (int) engine::ScaleId::Minor);
+        check (padOf (lit (62)) == 0 && padOf (lit (64)) == 1 && padOf (lit (65)) == 2 && padOf (lit (67)) == 3 && padOf (lit (69)) == 4 && padOf (lit (70)) == 5 && padOf (lit (72)) == 6,
+               "D Minor: D E F G A Bb C play pad 1 to 7, with Bb on a black key");
+        check (padOf (lit (58)) == 5 && padOf (lit (82)) == 5 && padOf (lit (46)) == 5, "Bb in every octave");
+        check (lit (61) == 0 && lit (63) == 0 && lit (66) == 0 && lit (68) == 0 && lit (71) == 0, "the keys with no chord play nothing (C#, Eb, F#, Ab, B)");
+
+        // A key with black keys on its pads: Eb Major is Eb Fm Gm Ab Bb Cm Ddim
+        setKey (3, (int) engine::ScaleId::Major);
+        check (padOf (lit (63)) == 0 && padOf (lit (65)) == 1 && padOf (lit (67)) == 2 && padOf (lit (68)) == 3 && padOf (lit (70)) == 4 && padOf (lit (72)) == 5 && padOf (lit (74)) == 6,
+               "Eb Major: Eb F G Ab Bb C D play pad 1 to 7 (three black keys)");
+        check (lit (64) == 0 && lit (69) == 0 && lit (71) == 0 && lit (61) == 0 && lit (66) == 0, "and E, A, B, C#, F# play nothing");
+
+        // A pad variant has the same root, so the same key plays it
+        processor.setPadVariant (4, engine::ChordType::Dom7, engine::kAutoInversion);
+        check (padOf (lit (70)) == 4, "a pad with a variant (Bb7) is still played by its root");
+        processor.clearPadVariant (4);
+
+        // A key that is held while the key changes lets go all the same
+        setKey (0, (int) engine::ScaleId::Major);
+        juce::MidiBuffer hold;
+        hold.addEvent (juce::MidiMessage::noteOn (1, 62, (juce::uint8) 90), 0);
+        runBlock (processor, hold);
+        check (processor.soundingNotes() > 0, "a key is held");
+        setKey (3, (int) engine::ScaleId::Major); // D is not a chord root in Eb Major
+        juce::MidiBuffer letGo;
+        letGo.addEvent (juce::MidiMessage::noteOff (1, 62), 0);
+        runBlock (processor, letGo);
+        runBlock (processor);
+        check (processor.soundingNotes() == 0, "it lets go although the key changed, so nothing hangs");
+
+        // Saved with the project
+        juce::MemoryBlock savedMode;
+        processor.getStateInformation (savedMode);
+        ProgrezzorProcessor loaded;
+        loaded.setStateInformation (savedMode.getData(), (int) savedMode.getSize());
+        check (loaded.keyboardModeParam->getIndex() == 1, "Chord roots is saved with the project");
+        *processor.keyboardModeParam = ProgrezzorProcessor::kKeyboardWhiteKeys;
+        juce::MemoryBlock savedWhite;
+        processor.getStateInformation (savedWhite);
+        loaded.setStateInformation (savedWhite.getData(), (int) savedWhite.getSize());
+        check (loaded.keyboardModeParam->getIndex() == 0, "and so are the white keys");
+
+        // Learn is as it was in both
+        *processor.keyboardModeParam = ProgrezzorProcessor::kKeyboardChordRoots;
+        processor.setLearning (true);
+        {
+            juce::MidiBuffer down, up;
+            down.addEvent (juce::MidiMessage::noteOn (1, 61, (juce::uint8) 90), 0);
+            runBlock (processor, down);
+            check (processor.litPads() == 0 && processor.soundingNotes() == 1, "Learn: a key plays its own note, in Chord roots too");
+            up.addEvent (juce::MidiMessage::noteOff (1, 61), 0);
+            runBlock (processor, up);
+        }
+        processor.setLearning (false);
+
+        *processor.keyboardModeParam = ProgrezzorProcessor::kKeyboardWhiteKeys;
+        setKey (oldKey, oldScale);
+        settle (60);
+    }
+
+    {
         std::printf ("bass note\n");
         check (! processor.bassParam->get(), "the bass note is off as standard");
         *processor.bassParam = true;
