@@ -1836,6 +1836,68 @@ int main (int argc, char** argv)
     }
 
     {
+        std::printf ("chord rhythm panel\n");
+        auto& bar = static_cast<ProgrezzorEditor*> (editor.get())->getBar();
+        auto panel = bar.makeArpPanel();
+        panel->setLookAndFeel (&editor->getLookAndFeel());
+        const auto click = [&] (juce::Point<int> where)
+        {
+            const juce::Point<float> p ((float) where.x, (float) where.y);
+            panel->mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                                0.0f, 0.0f, 0.0f, 0.0f, 0.0f, panel.get(), panel.get(), juce::Time::getCurrentTime(), p, juce::Time::getCurrentTime(), 1, false));
+            panel->mouseUp (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), p, juce::ModifierKeys(),
+                                              0.0f, 0.0f, 0.0f, 0.0f, 0.0f, panel.get(), panel.get(), juce::Time::getCurrentTime(), p, juce::Time::getCurrentTime(), 1, false));
+        };
+        const auto shot = [&] (const char* name) { if (! prefix.empty()) saveSnapshot (*panel, prefix + "_" + name + ".png"); };
+
+        *processor.arpOnParam = false;
+        *processor.rhythmModeParam = false;
+        shot ("rhythm_hold");
+        click ({ 16 + 114 * 2 + 20, 20 }); // Rhythm
+        check (processor.arpOnParam->get() && processor.rhythmModeParam->get() && processor.getRhythmSettings().on && ! processor.getArpSettings().on, "the switch: Rhythm");
+        shot ("rhythm_panel");
+        click ({ 16 + 88 * 2 + 20, 66 + 50 + 20 });   // third tile in the second row: pattern 6, Gallop
+        check (processor.rhythmPatternParam->getIndex() == 6, "a pattern is chosen from the tiles");
+        click ({ 16 + 84 + 20, 245 });                // 1/16
+        check (processor.rhythmSpeedParam->getIndex() == 1, "Speed 1/16");
+        click ({ 190 + 56 * 2 + 20, 245 });           // Long
+        check (processor.rhythmLengthParam->getIndex() == 2, "Length Long");
+        shot ("rhythm_gallop");
+        click ({ 16 + 88 * 3 + 20, 66 + 100 + 20 });  // Euclid
+        check (processor.rhythmPatternParam->getIndex() == 11, "Euclid");
+        click ({ 16 + 150, 280 });                    // Hits +
+        click ({ 190 + 150, 280 });                   // Turn +
+        check (processor.arpHitsParam->get() == 9 && processor.arpRotationParam->get() == 1, "Euclid has Hits and Turn");
+        shot ("rhythm_euclid");
+        click ({ 16 + 114 + 20, 20 });                // Arp
+        check (processor.getArpSettings().on && ! processor.getRhythmSettings().on, "the switch: Arp");
+        shot ("rhythm_arp");
+        click ({ 16 + 20, 20 });                      // Hold
+        check (! processor.arpOnParam->get() && ! processor.getArpSettings().on && ! processor.getRhythmSettings().on, "the switch: Hold");
+
+        // Everything is saved with the project
+        *processor.rhythmModeParam = true;
+        *processor.arpOnParam = true;
+        juce::MemoryBlock savedRhythm;
+        processor.getStateInformation (savedRhythm);
+        ProgrezzorProcessor restored;
+        restored.setStateInformation (savedRhythm.getData(), (int) savedRhythm.getSize());
+        check (restored.getRhythmSettings().on && restored.getRhythmSettings().pattern == 11 && restored.getRhythmSettings().speed == 1
+               && restored.getRhythmSettings().length == 2 && restored.getRhythmSettings().hits == 9 && restored.getRhythmSettings().rotation == 1,
+               "the chord rhythm settings are saved with the project");
+
+        // A pad plays the whole chord in the rhythm: sound only at the strikes (Euclid 9 of 16 here, strike at slot 1 after Turn)
+        panel->setLookAndFeel (nullptr);
+        *processor.arpOnParam = false;
+        *processor.rhythmModeParam = false;
+        *processor.rhythmPatternParam = 0;
+        *processor.rhythmSpeedParam = 0;
+        *processor.rhythmLengthParam = 1;
+        *processor.arpHitsParam = 8;
+        *processor.arpRotationParam = 0;
+    }
+
+    {
         std::printf ("bass note\n");
         check (! processor.bassParam->get(), "the bass note is off as standard");
         *processor.bassParam = true;

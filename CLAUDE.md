@@ -163,6 +163,19 @@ Besluttet af Henrik 2026-11-07. Arp-knappen (nederst til venstre i bjælken, und
 - Rytmen er et Euklid-mønster og koden er tilpasset fra ../seqverse (Music.h), uden arp-delene fra SeqVerses skalaer.
 - Ingen hængende noter: hver arp-node har sin egen note off, og alt stopper ved slip, transport stop, bypass og når Arp skiftes.
 
+## Akkord-rytme
+
+Besluttet af Henrik 2026-11-08. Hele akkorden slås an i et rytmisk mønster. Det bruger arp'ens rytmemotor og det PPQ-låste gitter fra arp-rettelsen.
+
+- Øverst i arp-panelet er der en kontakt Hold | Arp | Rhythm. Hold er som når arp er slået fra. Arp-knappen i bjælken tænder og slukker stadig, og husker sidste valg (Arp eller Rhythm). Parametrene er arpOn (tændt) og arpRhythm (Rhythm i stedet for Arp), så gamle projekter åbner som før.
+- Rhythm har tre valg: Pattern, Speed (1/8, 1/16) og Length (Short, Medium, Long).
+- 12 faste mønstre, håndskrevet for både 1/8 og 1/16: Offbeat, Stab, Double stab, Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse og Euclid (bruger arp'ens Hits og Rotation, vist som Hits og Turn).
+- Et mønster er én takt på 4 slag: 8 pladser ved 1/8, 16 ved 1/16. Det starter forfra på hver blok og følger værtens gitter, så et slag kun hører til en blok, hvis det ligger før blokkens slutning. Ingen tilfældighed. Pads uden loop starter mønstret ved tryk.
+- Let accent på første plads i takten (de andre slag har 82 % af anslagsstyrken). Short er 30 % af en plads, Medium 80 %, Long varer til næste slag (92 %).
+- Bastonen, hvis slået til, ligger som én lang tone under rytmen.
+- Loop og MIDI-fil giver de samme anslag, til samplen (testet ved flere tempi og buffer-størrelser over 64 takter). Filnavnet får "-Rhythm".
+- Indstillingerne gemmes med projektet. I Learn er rytmen slået fra, ligesom arpen.
+
 ## Learn (på branchen feature/learn-mode)
 
 Henrik ønskede en Learn-knap (2026-11-07), og at brugeren skal spille de RIGTIGE TANGENTER på et MIDI-tastatur, ikke bare trykke på pads. Knappen "Learn" nederst til venstre i bjælken tænder og slukker den.

@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <atomic>
 #include <cmath>
@@ -439,6 +440,124 @@ void testBlockMenuEdits()
     // A pause is left as it is
     auto r = withRestAt (p, 0);
     check (withChordType (r, 0, ChordType::Minor)[0].rest && withInversion (r, 0, 1)[0].chord == r[0].chord, "a pause has no type and no inversion");
+}
+
+void testChordRhythm()
+{
+    std::printf ("chord rhythm\n");
+    const Key key { 0, ScaleId::Major };
+    Progression one { { Chord { 0, ChordType::Major, kAutoInversion }, 4.0, false } };
+
+    // The patterns, written out by hand: where the strikes are in one bar, in slots
+    const char* eighths[kNumRhythmPatterns - 1] = { ".x.x.x.x", "x.......", "x.x.....", "..x...x.", "xxxxxxxx", "x...x..x", "x.xx.xx.", "x..x....", "x..x..x.", "x..x.x.x", "x.x.x.x." };
+    bool shapesOk = true;
+    for (int pattern = 0; pattern < kNumRhythmPatterns; ++pattern)
+        shapesOk &= std::strlen (rhythmShapes[pattern].eighths) == 8 && std::strlen (rhythmShapes[pattern].sixteenths) == 16;
+    check (shapesOk, "every pattern is written for 8 and for 16 slots");
+
+    bool allRight = true, perBar = true, accents = true, lengths = true;
+    for (int pattern = 0; pattern < kNumRhythmPatterns; ++pattern)
+        for (int speed = 0; speed < 2; ++speed)
+            for (int length = 0; length < 3; ++length)
+            {
+                RhythmSettings r;
+                r.on = true;
+                r.pattern = pattern;
+                r.speed = speed;
+                r.length = length;
+                r.hits = 5;
+                r.rotation = 2;
+                const auto notes = exportNotes (one, key.tonic, key.scale, false, 0, kCentreNote, {}, false, r);
+
+                // The expected strikes: from the hand-written text, and for Euclid from the arp's own rhythm engine
+                std::vector<int> expectedSlots;
+                const int slots = r.slots();
+                for (int slot = 0; slot < slots; ++slot)
+                {
+                    bool hit;
+                    if (pattern == (int) RhythmPattern::Euclid)
+                        hit = EuclidPattern (slots, 5, 2).isOnset (slot);
+                    else
+                        hit = (speed == 0 ? rhythmShapes[pattern].eighths : rhythmShapes[pattern].sixteenths)[slot] == 'x';
+                    if (hit)
+                        expectedSlots.push_back (slot);
+                }
+                perBar &= notes.size() == 3 * expectedSlots.size() && ! expectedSlots.empty();
+                if (pattern < kNumRhythmPatterns - 1 && speed == 0)
+                {
+                    std::vector<int> fromText;
+                    for (int slot = 0; slot < 8; ++slot)
+                        if (eighths[pattern][slot] == 'x')
+                            fromText.push_back (slot);
+                    allRight &= fromText == expectedSlots;
+                }
+                for (size_t i = 0; i < expectedSlots.size() && 3 * i + 2 < notes.size(); ++i)
+                    for (size_t n = 0; n < 3; ++n)
+                    {
+                        const auto& note = notes[3 * i + n];
+                        allRight &= std::abs (note.start - expectedSlots[i] * r.slotBeats()) < 1.0e-9;
+                        accents &= note.velocity == (expectedSlots[i] == 0 ? kExportVelocity : (int) (kExportVelocity * kRhythmAccentOff + 0.5));
+                        const double next = (i + 1 < expectedSlots.size() ? expectedSlots[i + 1] : expectedSlots[0] + slots) * r.slotBeats();
+                        const double wanted = length == 0 ? 0.3 * r.slotBeats() : length == 1 ? 0.8 * r.slotBeats() : 0.92 * (next - expectedSlots[i] * r.slotBeats());
+                        const double cut = std::min (wanted, 4.0 - expectedSlots[i] * r.slotBeats()); // the block ends after 4 beats
+                        lengths &= std::abs (note.length - cut) < 1.0e-9;
+                    }
+            }
+    check (allRight, "every pattern strikes at the slots it is written with (and Euclid as the arp's rhythm)");
+    check (perBar, "every strike is the whole chord: three notes for a triad");
+    check (accents, "the first slot of the bar is accented, the others a little softer");
+    check (lengths, "Short, Medium and Long give the right lengths");
+
+    // The same again gives the same: no randomness
+    RhythmSettings gallop;
+    gallop.on = true;
+    gallop.pattern = (int) RhythmPattern::Gallop;
+    gallop.speed = 1;
+    check (exportNotes (one, 0, ScaleId::Major, false, 0, kCentreNote, {}, false, gallop).size() == 3 * 12, "Gallop at 1/16 has 12 strikes in a bar");
+    bool same = true;
+    for (int i = 0; i < 5; ++i)
+    {
+        const auto a = exportNotes (one, 0, ScaleId::Major, false, 0, kCentreNote, {}, false, gallop);
+        const auto b = exportNotes (one, 0, ScaleId::Major, false, 0, kCentreNote, {}, false, gallop);
+        for (size_t n = 0; n < a.size(); ++n)
+            same &= a[n].note == b[n].note && a[n].start == b[n].start && a[n].length == b[n].length;
+    }
+    check (same, "no randomness: the same settings give the same strikes");
+
+    // The pattern starts again in every block, and a block that is cut short only has the strikes before its end
+    Progression two { { Chord { 0, ChordType::Major, kAutoInversion }, 2.0, false }, { Chord { 5, ChordType::Major, kAutoInversion }, 4.0, false } };
+    RhythmSettings pulse;
+    pulse.on = true;
+    pulse.pattern = (int) RhythmPattern::Pulse;
+    const auto notes = exportNotes (two, 0, ScaleId::Major, false, 0, kCentreNote, {}, false, pulse);
+    int firstBlock = 0, secondBlock = 0;
+    bool secondStartsOnTheBar = false;
+    for (const auto& n : notes)
+    {
+        firstBlock += n.start < 2.0 - 1.0e-9;
+        secondBlock += n.start >= 2.0 - 1.0e-9;
+        secondStartsOnTheBar |= std::abs (n.start - 2.0) < 1.0e-9 && n.velocity == kExportVelocity;
+    }
+    check (firstBlock == 3 * 2 && secondBlock == 3 * 4 && secondStartsOnTheBar, "a half bar has the strikes before its end, and the next block starts the pattern again with the accent");
+
+    // Euclid: Hits and Rotation
+    RhythmSettings euclid;
+    euclid.on = true;
+    euclid.pattern = (int) RhythmPattern::Euclid;
+    euclid.hits = 3;
+    euclid.rotation = 0;
+    bool euclidOk = euclid.isHit (0) && ! euclid.isHit (1);
+    int count = 0;
+    for (int slot = 0; slot < 8; ++slot)
+        count += euclid.isHit (slot);
+    euclid.rotation = 1;
+    euclidOk &= count == 3 && ! euclid.isHit (0) && euclid.isHit (1);
+    check (euclidOk, "Euclid: Hits gives that many strikes and Rotation moves them");
+
+    // Hold is as it was: the chord as one long note
+    check (exportNotes (one, 0, ScaleId::Major).size() == 3 && std::abs (exportNotes (one, 0, ScaleId::Major)[0].length - 4.0) < 1.0e-9, "Hold gives the chord as one long note");
+    // The file name says Rhythm
+    check (exportFileName (one, key, false, true) == "C-Rhythm.mid" && exportFileName (one, key, true, false) == "C-Arp.mid", "the file name has Rhythm, as it has Arp");
 }
 
 void testChosenInversion()
@@ -1578,6 +1697,7 @@ int main()
     testPadsClimb();
     testBassNote();
     testBlockMenuEdits();
+    testChordRhythm();
     testSuggestInversions();
     testChosenInversion();
     testPredictableVoicing();

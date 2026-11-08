@@ -7,6 +7,7 @@
 #include <clap/clap.h>
 
 #include "../src/engine/ChordEngine.h"
+#include "../src/engine/MidiExport.h"
 
 #include <dlfcn.h>
 #include <unistd.h>
@@ -363,7 +364,7 @@ std::string progressionXml (int key, int scale, const std::vector<BlockSpec>& bl
 {
     std::string xml = "<Progrezzor version=\"2\" key=\"" + std::to_string (key) + "\" scale=\"" + std::to_string (scale) + "\">";
     for (const auto& b : blocks)
-        xml += "<Block root=\"" + std::to_string (b.root) + "\" type=\"" + std::to_string (b.type) + "\" inversion=\"-1\" beats=\""
+        xml += "<Block root=\"" + std::to_string (b.root) + "\" type=\"" + std::to_string (b.type) + "\" inversion=\"" + std::to_string (b.inversion) + "\" beats=\""
                + std::to_string (b.beats) + "\" locked=\"0\"/>";
     return xml + "</Progrezzor>";
 }
@@ -464,6 +465,130 @@ const std::vector<BlockSpec> amFCG = { { 0, 1, 4 }, { 8, 0, 4 }, { 3, 0, 4 }, { 
 void waitForSilence (Session& s)
 {
     s.blocks (120); // the Pad sound has a release of about half a second (47 blocks)
+}
+
+
+// ---- Chord rhythm ---------------------------------------------------------------------------------------------------
+
+struct RhythmCase
+{
+    int pattern = 0;   // RhythmPattern
+    int speed = 0;     // 0: 1/8, 1: 1/16
+    int length = 1;    // 0 Short, 1 Medium, 2 Long
+    int hits = 5;      // Euclid
+    int rotation = 2;
+    bool bass = false;
+    bool arpButtonOnly = false;
+};
+
+struct RhythmResult
+{
+    int expected = 0, heard = 0, missing = 0, extra = 0, wrongVelocity = 0;
+    double worstSlip = 0.0; // samples
+    bool clean = true;
+    bool silentAtEnd = true;
+};
+
+// Runs the walking progression C, G/B, F/A, G in C Major with chord rhythm for `bars` bars and compares every strike with what
+// the MIDI export gives for the same settings: same notes, same velocity, at the same time (to the sample, give or take one)
+RhythmResult runRhythm (const RhythmCase& rc, double bpm, uint32_t size, int bars)
+{
+    const std::vector<BlockSpec> walking = { { 0, 0, 4 }, { 7, 0, 4, 1 }, { 5, 0, 4, 1 }, { 7, 0, 4 } };
+    received.clear();
+    blockSize = size;
+    RhythmResult result;
+    {
+        Session s;
+        loadState (s.instance, makeState (progressionXml (0, (int) ScaleId::Major, walking)));
+        InEvent arp, mode, pattern, speed, length, hits, rotation, bass;
+        paramEvent (s.instance, "Arp", "On", arp);
+        paramEvent (s.instance, "Chord Rhythm", "On", mode);
+        paramEvent (s.instance, "Rhythm Pattern", rhythmPatternNames[rc.pattern], pattern);
+        paramEvent (s.instance, "Rhythm Speed", rhythmSpeedNames[rc.speed], speed);
+        paramEvent (s.instance, "Rhythm Length", rhythmLengthNames[rc.length], length);
+        paramEvent (s.instance, "Arp Hits", std::to_string (rc.hits).c_str(), hits);
+        paramEvent (s.instance, "Arp Rotation", std::to_string (rc.rotation).c_str(), rotation);
+        std::vector<InEvent> events { arp, mode, pattern, speed, length, hits, rotation };
+        if (rc.bass)
+        {
+            paramEvent (s.instance, "Bass Note", "On", bass);
+            events.push_back (bass);
+        }
+        s.block (events);
+
+        double beat = 0.0;
+        const double beatsPerBlock = size * bpm / 60.0 / sampleRate;
+        const size_t before = received.size();
+        const double totalBeats = 4.0 * bars;
+        const int numBlocks = (int) std::ceil (totalBeats / beatsPerBlock);
+        const uint32_t startTime = s.time;
+        for (int b = 0; b < numBlocks; ++b)
+        {
+            const auto t = transportAt (true, beat, bpm);
+            s.block ({}, &t);
+            beat += beatsPerBlock;
+        }
+        result.clean = s.out.clean();
+
+        // What was heard: note, velocity, sample (counted from the first block of the run)
+        struct Heard { double time; int note; int velocity; bool used; };
+        std::vector<Heard> heard;
+        for (size_t i = before; i < received.size(); ++i)
+            if ((received[i].data[0] & 0xf0) == 0x90 && received[i].data[2] > 0)
+                heard.push_back ({ (double) received[i].header.time - (double) startTime, received[i].data[1], received[i].data[2], false });
+
+        // What the file has, for the same progression, repeated over the bars
+        Progression progression;
+        for (const auto& b : walking)
+            progression.push_back ({ Chord { b.root, (ChordType) b.type, b.inversion }, b.beats, false });
+        RhythmSettings rhythm;
+        rhythm.on = true;
+        rhythm.pattern = rc.pattern;
+        rhythm.speed = rc.speed;
+        rhythm.length = rc.length;
+        rhythm.hits = rc.hits;
+        rhythm.rotation = rc.rotation;
+        const auto file = exportNotes (progression, 0, ScaleId::Major, false, 0, kCentreNote, {}, rc.bass, rhythm);
+        const double samplesPerBeat = sampleRate * 60.0 / bpm;
+        const double endOfRun = (double) numBlocks * size - 3.0 * size; // the last blocks may not have played everything yet
+        for (int cycle = 0; cycle < bars / 4 + 1; ++cycle)
+            for (const auto& n : file)
+            {
+                const double at = (n.start + 16.0 * cycle) * samplesPerBeat;
+                if (at >= endOfRun)
+                    continue;
+                ++result.expected;
+                const bool bassNote = n.note < 54; // the bass note is a long note under the strikes: velocity is the base
+                bool found = false;
+                for (auto& h : heard)
+                    if (! h.used && h.note == n.note && std::abs (h.time - at) <= 2.0)
+                    {
+                        h.used = true;
+                        found = true;
+                        result.worstSlip = std::max (result.worstSlip, std::abs (h.time - at));
+                        result.wrongVelocity += (h.velocity != n.velocity) && ! bassNote;
+                        break;
+                    }
+                result.missing += ! found;
+                if (! found && std::getenv ("RHYTHM_DEBUG") && result.missing < 12)
+                    std::printf ("    missing: note %d at %.1f (beat %.3f)\n", n.note, at, n.start + 16.0 * cycle);
+            }
+        for (const auto& h : heard)
+            if (h.time < endOfRun)
+            {
+                ++result.heard;
+                result.extra += ! h.used;
+                if (! h.used && std::getenv ("RHYTHM_DEBUG") && result.extra < 12)
+                    std::printf ("    extra: note %d at %.1f (beat %.3f)\n", h.note, h.time, h.time / samplesPerBeat);
+            }
+
+        // Stop the transport: nothing hangs
+        double stopBeat = beat;
+        playBlocks (s, stopBeat, 2, bpm, false);
+        result.silentAtEnd = s.out.sounding() == 0 && s.out.totalOns == s.out.totalOffs;
+    }
+    blockSize = 512;
+    return result;
 }
 
 } // namespace
@@ -1142,6 +1267,74 @@ int main (int argc, char** argv)
             playBlocks (s, stopBeat, 2, 120.0, false);
             check (s.out.sounding() == 0 && s.out.totalOns == s.out.totalOffs, "nothing hangs after the transport stops");
         }
+    }
+
+    {
+        std::printf ("chord rhythm: every pattern, at several tempi and buffer sizes, over 64 bars\n");
+        // Every pattern at both speeds: the loop strikes what the MIDI file has, to the sample, and nothing slides over 64 bars
+        const double tempi[] = { 120.0, 135.0 };
+        const uint32_t sizes[] = { 64, 441, 1024 };
+        int problems = 0, runs = 0;
+        double worst = 0.0;
+        for (int pattern = 0; pattern < kNumRhythmPatterns; ++pattern)
+            for (int speed = 0; speed < 2; ++speed)
+                for (int tempo = 0; tempo < 2; ++tempo)
+                    for (int size : sizes)
+                    {
+                        RhythmCase rc;
+                        rc.pattern = pattern;
+                        rc.speed = speed;
+                        rc.length = (pattern + speed) % 3;
+                        // 64 bars for one buffer size per tempo, a shorter run for the others (the grid is the same)
+                        const int bars = size == 441 ? 64 : 16;
+                        const auto r = runRhythm (rc, tempi[tempo], (uint32_t) size, bars);
+                        ++runs;
+                        worst = std::max (worst, r.worstSlip);
+                        const bool ok = r.missing == 0 && r.extra == 0 && r.wrongVelocity == 0 && r.expected > 0 && r.clean && r.silentAtEnd;
+                        if (! ok)
+                        {
+                            ++problems;
+                            std::printf ("  info: %s %s, %.0f BPM, buffer %d: expected %d, missing %d, extra %d, wrong velocity %d, clean %d, silent at end %d\n",
+                                         rhythmPatternNames[pattern], rhythmSpeedNames[speed], tempi[tempo], size, r.expected, r.missing, r.extra, r.wrongVelocity,
+                                         (int) r.clean, (int) r.silentAtEnd);
+                        }
+                    }
+        std::printf ("  info: %d runs, the biggest difference from the file is %.0f samples\n", runs, worst);
+        check (problems == 0, "every pattern strikes exactly what the MIDI file has: same notes, velocity and time, no drift, nothing hangs");
+
+        // With the bass note: the bass lies under the rhythm as one long note per block
+        RhythmCase withBass;
+        withBass.pattern = (int) RhythmPattern::Offbeat;
+        withBass.bass = true;
+        const auto r = runRhythm (withBass, 128.0, 256, 16);
+        check (r.missing == 0 && r.extra == 0 && r.clean && r.silentAtEnd && r.expected > 0, "with the bass note it is still the same as the file");
+    }
+
+    {
+        std::printf ("chord rhythm: a pad without the loop starts the pattern at the press\n");
+        received.clear();
+        blockSize = 512;
+        Session s;
+        InEvent arp, mode, pattern;
+        paramEvent (s.instance, "Arp", "On", arp);
+        paramEvent (s.instance, "Chord Rhythm", "On", mode);
+        paramEvent (s.instance, "Rhythm Pattern", "Pulse", pattern);
+        s.block ({ arp, mode, pattern });
+        s.blocks (3);
+        const size_t before = received.size();
+        const uint32_t pressedAt = s.time;
+        s.keyOn (keyOfPad (2), 100, 100); // pad 3 (C), 100 samples into its block
+        s.blocks (200);                    // about 2 seconds: the host is stopped, so 120 BPM, a beat is 24000 samples
+        const auto ons = noteOnsFrom (before);
+        // Pulse is a strike on every beat: 3 notes at the press, again 24000 samples later, and so on
+        bool right = ons.size() >= 3 * 4;
+        for (size_t i = 0; right && i < 12; ++i)
+            right &= std::abs ((double) ons[i].time - ((double) pressedAt + 100.0 + 24000.0 * (double) (i / 3))) <= 2.0;
+        check (right, "the first strike is at the press, the next ones a beat apart");
+        check (s.out.sounding() == 3, "the chord rings while the key is held");
+        s.keyOff (keyOfPad (2));
+        s.blocks (2);
+        check (s.out.sounding() == 0 && s.out.clean(), "and it stops when the key is let go: nothing hangs");
     }
 
     entry->deinit();

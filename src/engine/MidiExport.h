@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "Arp.h"
+#include "ChordRhythm.h"
 #include "ChordEngine.h"
 #include "Progression.h"
 
@@ -31,7 +32,7 @@ struct ExportNote
 // `octaveShift` (the Oct buttons): the file has the notes that are heard. With `bass` on every block has its bass note too.
 inline std::vector<ExportNote> exportNotes (const Progression& progression, int tonic, ScaleId scale = ScaleId::Minor,
                                             bool lockToScale = false, int octaveShift = 0, int centreNote = kCentreNote,
-                                            ArpSettings arp = {}, bool bass = false)
+                                            ArpSettings arp = {}, bool bass = false, RhythmSettings rhythm = {})
 {
     std::vector<ExportNote> notes;
     double start = 0.0;
@@ -47,7 +48,20 @@ inline std::vector<ExportNote> exportNotes (const Progression& progression, int 
         const auto heard = shiftedByOctaves (voicing, octaveShift);
         if (bass) // the bass note lies under the whole block, also when the chord is an arp
             notes.push_back ({ start, block.beats, bassNote (block.chord, tonic, octaveShift, centreNote), kExportVelocity });
-        if (arp.on)
+        if (rhythm.on)
+        {
+            // Chord rhythm: the whole chord at every strike of the pattern, counted in slots from the start of the block
+            for (std::int64_t step = 0; (double) step * rhythm.slotBeats() < block.beats - 1.0e-9; ++step)
+            {
+                if (! rhythm.isHit (step))
+                    continue;
+                const double at = (double) step * rhythm.slotBeats();
+                const double length = std::min (rhythm.noteBeats (step), block.beats - at);
+                for (int i = 0; i < heard.count; ++i)
+                    notes.push_back ({ start + at, length, heard.notes[(size_t) i], rhythm.velocityFor (kExportVelocity, step) });
+            }
+        }
+        else if (arp.on)
         {
             // The arp: the same steps as when it plays, counted from the start of the block
             const auto pattern = arp.pattern();
@@ -72,7 +86,7 @@ inline std::vector<ExportNote> exportNotes (const Progression& progression, int 
 
 // "Am-F-C-G.mid". Only a-z, A-Z, 0-9, hyphen and underscore are used: # is written "sharp" (Csharp), and a slash (an
 // inversion: Am/C) would be a folder in a file name, so it is written as an underscore (Am_C).
-inline std::string exportFileName (const Progression& progression, const Key& key, bool arp = false)
+inline std::string exportFileName (const Progression& progression, const Key& key, bool arp = false, bool rhythm = false)
 {
     std::string name;
     int count = 0;
@@ -92,6 +106,6 @@ inline std::string exportFileName (const Progression& progression, const Key& ke
         }
         name += (name.empty() ? "" : "-") + chord;
     }
-    return (name.empty() ? "Progression" : name) + (arp ? "-Arp" : "") + ".mid";
+    return (name.empty() ? "Progression" : name) + (arp ? "-Arp" : "") + (rhythm ? "-Rhythm" : "") + ".mid";
 }
 }

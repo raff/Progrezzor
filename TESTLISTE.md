@@ -97,6 +97,16 @@ Kræver et MIDI-tastatur.
 - [ ] I Play kan intet ændres, og der er ingen menu.
 - [ ] Træk MIDI ud: filen har blokkens type, omvending, oktav og længde.
 
+## 2i. Akkord-rytme (branch feature/chord-rhythm)
+- [ ] Åbn arp-panelet (de tre prikker ved Arp). Øverst er en kontakt Hold | Arp | Rhythm. Hold: akkorden som én lang tone. Arp: som før.
+- [ ] Vælg Rhythm: tolv mønstre vises som små rækker af prikker. Klik på dem og lyt: hele akkorden slås an i mønstret.
+- [ ] Prøv Speed 1/8 og 1/16, og Length Short, Medium og Long.
+- [ ] Euclid: Hits og Turn dukker op. Mønstret i bunden af panelet viser, hvad der spiller.
+- [ ] Spil en rundgang med Rhythm: mønstret starter forfra i hver blok og holder takten, også ved andre tempi og når du hopper i tid. Første slag i takten er lidt kraftigere.
+- [ ] Slå Bass note til: bastonen ligger som én lang tone under rytmen.
+- [ ] Hold en pad uden loop: mønstret starter ved tryk. Slip: intet hænger.
+- [ ] Træk MIDI ud: slagene er de samme som lyden (filnavn med -Rhythm). Gem og åbn projektet: valgene er der stadig.
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?
