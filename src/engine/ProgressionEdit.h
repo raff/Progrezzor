@@ -40,6 +40,28 @@ inline Progression withReplaced (Progression p, int index, const Chord& chord)
     return p;
 }
 
+// The block's own chord type (from the block menu): root position, the same octave. A pad is not touched, and a chord that
+// the user picks is no longer silent.
+inline Progression withChordType (Progression p, int index, ChordType type)
+{
+    if (index >= 0 && index < (int) p.size() && ! p[(size_t) index].rest)
+    {
+        auto& block = p[(size_t) index];
+        block.chord.type = type;
+        block.chord.inversion = kAutoInversion;
+        block.disabled = false;
+    }
+    return p;
+}
+
+// The block's inversion (0 or kAutoInversion: root position). A number past the last note wraps round, as in voiceChord.
+inline Progression withInversion (Progression p, int index, int inversion)
+{
+    if (index >= 0 && index < (int) p.size() && ! p[(size_t) index].rest)
+        p[(size_t) index].chord.inversion = inversion <= 0 ? kAutoInversion : inversion;
+    return p;
+}
+
 // The block becomes a pause (it keeps its length and its lock)
 inline Progression withRestAt (Progression p, int index)
 {

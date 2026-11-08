@@ -343,7 +343,7 @@ int main (int argc, char** argv)
         processor.setProgression ({ mk (0, 4), mk (2, 4), mk (4, 4), mk (7, 4) });
         settle();
         bar.getBlock (1)->onDelete();
-        check (roots() == "0 4 7 ", "right-click deletes the block");
+        check (roots() == "0 4 7 ", "Delete removes the block");
         processor.undo();
         check (roots() == "0 2 4 7 ", "undo brings it back");
         processor.redo();
@@ -1641,6 +1641,96 @@ int main (int argc, char** argv)
         sameProgression = other.getProgression()[i].chord == processor.getProgression()[i].chord
                           && std::abs (other.getProgression()[i].beats - processor.getProgression()[i].beats) < 1.0e-9;
     check (sameProgression, "the progression comes back from a saved project");
+
+    {
+        std::printf ("block menu\n");
+        auto& bar = static_cast<ProgrezzorEditor*> (editor.get())->getBar();
+        bar.setEditing (true);
+        const auto mk = [] (int root, engine::ChordType type, double beats) { engine::Block b; b.chord = { root, type, engine::kAutoInversion }; b.beats = beats; return b; };
+        const int oldKey = processor.keyParam->getIndex(), oldScale = processor.scaleParam->getIndex();
+        *processor.keyParam = 0;
+        *processor.scaleParam = (int) engine::ScaleId::Major;
+        const auto padBefore = processor.getPadChord (4); // the G pad
+        processor.setProgression ({ mk (0, engine::ChordType::Major, 4), mk (7, engine::ChordType::Major, 4), mk (9, engine::ChordType::Minor, 4) });
+        settle (60);
+        const auto original = processor.getProgression();
+
+        // Right-click does not delete any more: it opens the menu (a mouse-down with the right button changes nothing by itself)
+        const auto rightClick = [&] (juce::Component& c)
+        {
+            return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), { 40.0f, 30.0f }, juce::ModifierKeys (juce::ModifierKeys::rightButtonModifier),
+                                     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, juce::Time::getCurrentTime(), { 40.0f, 30.0f }, juce::Time::getCurrentTime(), 1, false);
+        };
+        bool menuAsked = false;
+        bar.getBlock (1)->onMenu = [&] { menuAsked = true; };
+        bar.getBlock (1)->mouseDown (rightClick (*bar.getBlock (1)));
+        bar.getBlock (1)->mouseUp (rightClick (*bar.getBlock (1)));
+        check (menuAsked && processor.getProgression() == original, "right-click asks for the menu and deletes nothing");
+        bar.refresh();
+        settle (60);
+
+        bar.getBlock (1)->setForceHover (true);
+        settle (60);
+        snapshot ("block_gear");
+        bar.getBlock (1)->setForceHover (false);
+
+        // Type: G becomes G7, in this block only
+        bar.applyBlockMenuChoice (1, 100 + (int) engine::ChordType::Dom7);
+        check (processor.getProgression()[1].chord.type == engine::ChordType::Dom7 && processor.getProgression()[0] == original[0], "the type changes in the block only");
+        check (processor.getPadChord (4) == padBefore, "the pad does not change");
+        // Inversion
+        bar.applyBlockMenuChoice (1, 201);
+        check (processor.getProgression()[1].chord.inversion == 1, "the inversion changes in the block");
+        // Octave
+        bar.applyBlockMenuChoice (1, 301);
+        check (processor.getProgression()[1].chord.octave == 1, "octave up");
+        bar.applyBlockMenuChoice (1, 302);
+        bar.applyBlockMenuChoice (1, 302);
+        check (processor.getProgression()[1].chord.octave == -1, "octave down");
+        // Length: 1/2 bar, 2 bars
+        bar.applyBlockMenuChoice (1, 310);
+        check (std::abs (processor.getProgression()[1].beats - 0.5 * processor.getHostBarBeats()) < 1.0e-9, "the length can be half a bar");
+        bar.applyBlockMenuChoice (1, 312);
+        check (std::abs (processor.getProgression()[1].beats - 2.0 * processor.getHostBarBeats()) < 1.0e-9, "and 2 bars");
+
+        // What the block has is what the MIDI file has
+        const auto edited = processor.getProgression();
+        const auto notes = engine::exportNotes (edited, 0, engine::ScaleId::Major);
+        const auto voiced = engine::shiftedByOctaves (engine::voiceChord (edited[1].chord, 0), 0);
+        bool inFile = false;
+        for (const auto& n : notes)
+            inFile |= std::abs (n.start - edited[0].beats) < 1.0e-9 && std::abs (n.length - edited[1].beats) < 1.0e-9 && n.note == voiced.notes[0];
+        check (inFile && voiced.count == 4 && edited[1].chord.type == engine::ChordType::Dom7, "the MIDI file has the block's chord: type, inversion, octave and length");
+
+        // Lock, Duplicate, Delete
+        bar.applyBlockMenuChoice (1, 320);
+        check (processor.getProgression()[1].locked, "Lock locks the block");
+        bar.applyBlockMenuChoice (1, 321);
+        check (processor.getProgression().size() == 4 && processor.getProgression()[2].chord == processor.getProgression()[1].chord && ! processor.getProgression()[2].locked,
+               "Duplicate puts a copy after the block");
+        bar.applyBlockMenuChoice (2, 330);
+        check (processor.getProgression().size() == 3, "Delete removes the block");
+
+        // Undo takes every change back, one at a time
+        for (int i = 0; i < 10; ++i) // the ten changes above
+            processor.undo();
+        check (processor.getProgression() == original, "Undo takes all of it back");
+        check (processor.getPadChord (4) == padBefore, "the pad is the same at the end");
+
+        // A pause: only a length, Duplicate and Delete (the menu does not offer the rest; a type choice does nothing)
+        processor.setProgression ({ mk (0, engine::ChordType::Major, 4) });
+        bar.applyBlockMenuChoice (0, 100 + (int) engine::ChordType::Minor);
+        processor.setProgression (engine::withRestAt (processor.getProgression(), 0));
+        bar.applyBlockMenuChoice (0, 100 + (int) engine::ChordType::Minor);
+        bar.applyBlockMenuChoice (0, 301);
+        check (processor.getProgression()[0].rest, "a pause stays a pause");
+        bar.applyBlockMenuChoice (0, 311);
+        check (processor.getProgression()[0].rest && std::abs (processor.getProgression()[0].beats - processor.getHostBarBeats()) < 1.0e-9, "a pause can change its length");
+
+        *processor.keyParam = oldKey;
+        *processor.scaleParam = oldScale;
+        settle (60);
+    }
 
     {
         std::printf ("chord wheel\n");
