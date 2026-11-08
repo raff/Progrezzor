@@ -4,7 +4,6 @@ Ideas outside the current milestone go here.
 
 - Test on Windows (incl. Ableton Live) once CI release builds exist. Ableton does not run on Linux, so milepæl 0's Ableton check and the "confirmed in Ableton" MIDI export check wait for that.
 - Copy CI/release setup from SubForge (.github/workflows) when it is time for Windows builds.
-- Preview sound on/off (or volume), so it can be muted when the DAW's own synth plays the MIDI. Today the Pad sound always plays.
 - Pad click velocity from where on the pad you click (now fixed at 100).
 - Chord names are spelled with only flats or only sharps (Cb is written B). Proper spelling per key if it ever matters.
 - Suggest with locked blocks: locked blocks keep their place, the rest comes from a fresh suggestion. Later: prefer library progressions that fit the locked chords.
@@ -25,7 +24,6 @@ Ideas outside the current milestone go here.
 - Flere skalaer (nu kun Minor, Major, Dorian, Phrygian). SeqVerse har omkring 40, men Progrezzor skal kunne bygge 7 pads med pæne treklange, så kun skalaer med 7 toner kommer i betragtning. Forslag i prioriteret rækkefølge: Mixolydian, Lydian (let), Harmonic Minor, Melodic Minor, senere Locrian, Phrygian Dominant, Harmonic Major. Hver ny skala skal have: pad-akkorder, stavning af toner (b eller #), og nok rundgange i alle 8 stemninger (mindst 5 der kan foreslås, ellers bruger Suggest kun pads). Pentatoniske skalaer, blues og hel-tone passer ikke til de 7 pads.
 - Arp: BYGGET 2026-11-07 (se CLAUDE.md, afsnittet Arp). Ikke med endnu: chance for huller i rytmen, flere retninger fra SeqVerse (Converge, Thumb, Pinky, osv.), swing, notelængde, og et lys i ringen der viser hvilket trin der spiller nu.
 
-- Slogan: "Jam. Capture. Drag. Done." står i README.md og CLAUDE.md, men knappen hedder nu Rec (2026-11-07). Henrik er ikke sikker på et nyt slogan og lod det stå. Når han vælger, skal begge steder rettes (og det må ikke indeholde varemærker). Eksempler at tage stilling til: "Jam. Rec. Drag. Done." eller "Jam. Build. Drag. Done."
 - Rec, på prøve på branchen feature/capture-toggle: skal den slukke sig selv, fx efter 8 akkorder eller når man trykker Suggest? Ikke besluttet. Den gamle historiestribe ligger på feature/capture-history.
 
 ## Senere, kun hvis brugere efterspørger det

@@ -1,6 +1,6 @@
 # Progrezzor
 
-Jam. Capture. Drag. Done.
+Jam. Build. Drag. Done.
 
 Et meget nemt MIDI-akkordværktøj til alle genrer: jam, find en rundgang, træk MIDI ud, færdig.
 Brugeren skal ikke kunne musikteori.
