@@ -23,6 +23,7 @@ enum { noteOnMessage, noteOffMessage, allNotesOffMessage };
 
 constexpr int kLoopVelocity = 100;
 constexpr double kFallbackBpm = 120.0;
+constexpr int kStuckBlocks = 4;       // a playing host that gives the same position this many blocks in a row is not moving
 }
 
 ProgrezzorProcessor::ProgrezzorProcessor()
@@ -557,13 +558,27 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         {
             hostPlaying = position->getIsPlaying();
             bpm = position->getBpm().orFallback (kFallbackBpm);
-            startBeat = position->getPpqPosition().orFallback (internalPpq);
+            if (const auto ppq = position->getPpqPosition())
+                startBeat = *ppq;
+            else if (const auto seconds = position->getTimeInSeconds()) // a host without a musical position: work it out from the time
+                startBeat = *seconds * bpm / 60.0;
+            // else the plug-in's own count
             if (const auto signature = position->getTimeSignature())
                 if (signature->numerator > 0 && signature->denominator > 0)
                     hostBarBeats.store (4.0 * signature->numerator / signature->denominator);
         }
     if (bpm <= 0.0)
         bpm = kFallbackBpm;
+
+    // Some hosts say they play but keep giving the same position. A playing host never stands still, so after a few blocks
+    // the plug-in counts on its own from where it was, and takes the host's position again if that starts to move.
+    if (hostPlaying && wasHostPlaying && std::abs (startBeat - lastHostBeat) < 1.0e-9)
+        stuckBlocks = std::min (stuckBlocks + 1, 1000);
+    else
+        stuckBlocks = 0;
+    lastHostBeat = startBeat;
+    if (stuckBlocks >= kStuckBlocks)
+        startBeat = internalPpq;
 
     // Two clocks: the host's when it plays (the loop follows its position), otherwise the plug-in's own, which the Play
     // button starts from the beginning of the progression. When the host starts, it takes over.

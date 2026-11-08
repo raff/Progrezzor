@@ -39,7 +39,7 @@ Alt ligger på én skærm uden faner.
 
 - Topbjælke: Toneart og skala, Lock to scale (🔒), Mood, stemme og en tydelig 🎲 Suggest-knap.
 - Midten: 7 store pads og yderst til højre en smallere blank pad (Rest, en pause), der sammen fylder hele bredden. Padsene fylder cirka 49 % af højden mellem topbjælken og bjælken. De skal kunne hamres på med mus eller MIDI.
-- Bund: Rundgangsbjælken, et kort for sig med en mørk bakke til blokkene: Play, blokke (ombrydes i flere rækker), Rec (til/fra), Fortryd, Gendan, ✏️ Quick-text (fast plads i højre side) og Drag.
+- Bund: Rundgangsbjælken, et kort for sig med en mørk bakke til blokkene: Play, blokke (ombrydes i flere rækker), Rec (til/fra), Fortryd, Gendan, ✏️ Quick-text (fast plads i højre side, gråtonet mens Play er tændt) og Drag.
 
 Regler:
 

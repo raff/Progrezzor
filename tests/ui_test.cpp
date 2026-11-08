@@ -236,6 +236,17 @@ int main (int argc, char** argv)
     transport.playing = false;
     runBlock (processor);
     check (! processor.isPlayOn() && processor.soundingNotes() == 0, "and when it stops, everything is quiet");
+
+    // A host that says it plays but never moves its position (seen in FL Studio): the loop must still go on to the next chord
+    transport.playing = true;
+    transport.quarters = 0.0;
+    runBlock (processor);
+    check (processor.getPlayingBlock() == 0, "a host that stands still starts with the first chord");
+    for (int i = 0; i < 200; ++i) // about four beats at 120 bpm, the host's position never changes
+        runBlock (processor);
+    check (processor.getPlayingBlock() == 1, "and the loop still goes on to the next chord");
+    transport.playing = false;
+    runBlock (processor);
     processor.setPlayHead (nullptr);
 
     std::printf ("same chord twice\n");
@@ -827,9 +838,9 @@ int main (int argc, char** argv)
         bar.setEditing (false);
         settle (100);
 
-        check (! bar.getQuickTextButton().isVisible(), "the pencil is hidden in Play");
+        check (bar.getQuickTextButton().isVisible() && ! bar.getQuickTextButton().isEnabled(), "the pencil is greyed in Play");
         bar.setEditing (true);
-        check (bar.getQuickTextButton().isVisible(), "the pencil shows in Edit");
+        check (bar.getQuickTextButton().isVisible() && bar.getQuickTextButton().isEnabled(), "the pencil is enabled in Edit");
         click(bar.getQuickTextButton());
         check (bar.isInTextMode() && bar.getTextEditor().isVisible() && bar.getTextEditor().getText().isEmpty(), "the bar becomes an empty text line");
         snapshot ("quicktext_empty");

@@ -270,7 +270,9 @@ private:
     int loopTonic = -1;
     int userHolds = 0;           // pads, keys and blocks held by the user; while there are any, the loop is silent
     double sampleRate = 44100.0;
-    double internalPpq = 0.0;    // only used when the host does not tell its position
+    double internalPpq = 0.0;    // only used when the host does not tell its position, or its position stands still while it plays
+    double lastHostBeat = -1.0e300; // the host's position at the last block, to see if it is stuck
+    int stuckBlocks = 0;         // blocks in a row where a playing host gave the same position
     std::atomic<int> playingBlock { -1 };
     std::atomic<bool> editing { false };
     std::atomic<bool> internalRun { false }; // the plug-in's own clock runs (not saved: a project opens stopped)

@@ -2176,7 +2176,8 @@ void ProgressionBar::updateVisibility()
 {
     for (auto* block : blocks)
         block->setVisible (! textMode);
-    quickTextButton.setVisible (editing && ! textMode);
+    quickTextButton.setVisible (! textMode); // always there; greyed while Play is on (nothing can be changed then)
+    quickTextButton.setEnabled (editing);
     textEditor.setVisible (textMode);
     textMarks->setVisible (textMode);
     allowButton.setVisible (! textMode && noticeHasAllow);
