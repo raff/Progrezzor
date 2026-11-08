@@ -177,6 +177,8 @@ public:
         labelFace = juce::Typeface::createSystemTypefaceFor (BinaryData::ChakraPetchSemiBold_ttf, BinaryData::ChakraPetchSemiBold_ttfSize);
         titleFace = juce::Typeface::createSystemTypefaceFor (BinaryData::ChakraPetchBold_ttf, BinaryData::ChakraPetchBold_ttfSize);
 
+        smallFace = juce::Typeface::createSystemTypefaceFor (BinaryData::InterSemiBold_otf, BinaryData::InterSemiBold_otfSize);
+
         refreshColours();
     }
 
@@ -194,8 +196,14 @@ public:
         setColour (juce::TooltipWindow::outlineColourId, outline);
     }
 
-    juce::Font labelFont (float height) const { return juce::Font (juce::FontOptions (labelFace).withHeight (height)); }
-    juce::Font titleFont (float height) const { return juce::Font (juce::FontOptions (titleFace).withHeight (height)); }
+    // Chakra Petch is a display face, with cut corners that go jagged on the screen when the text is small. So it is only used for
+    // the big names (the logo, the chords, Suggest, from 17 px). Everything smaller is Inter SemiBold, made for small text on screens.
+    static constexpr float kDisplayFrom = 17.0f;
+    juce::Font labelFont (float height) const { return juce::Font (juce::FontOptions (smallFace).withHeight (height)); }
+    juce::Font titleFont (float height) const
+    {
+        return juce::Font (juce::FontOptions (height >= kDisplayFrom ? titleFace : smallFace).withHeight (height));
+    }
 
     juce::Font getLabelFont (juce::Label& label) override { return label.getFont(); }
     // Tooltips: narrow, so the text takes several lines, and well away from the mouse so that it is plain that it is a tooltip
@@ -339,6 +347,6 @@ public:
     }
 
 private:
-    juce::Typeface::Ptr labelFace, titleFace;
+    juce::Typeface::Ptr labelFace, titleFace, smallFace;
 };
 }
