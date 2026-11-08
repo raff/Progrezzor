@@ -176,6 +176,8 @@ public:
     void setLearning (bool nowLearning);
     bool getLearnHints() const { return learnHints.load(); } // hints (the keys to hold) from the start
     void setLearnHints (bool nowOn); // message thread: kept in the settings file
+    bool getSuggestInversions() const { return suggestInversions.load(); } // Suggest may use inversions (G/B), on as standard
+    void setSuggestInversions (bool nowOn); // message thread: kept in the settings file
     bool isKeyHeld (int note) const { return note >= 0 && note < 128 && ((heldKeys[(size_t) (note / 64)].load() >> (note % 64)) & 1u) != 0; } // a key of the MIDI keyboard
     engine::Mood getMood() const { return (engine::Mood) moodParam->getIndex(); }
 
@@ -265,6 +267,7 @@ private:
     std::atomic<int> homeOctave { 0 };
     std::atomic<bool> learnOn { false };
     std::atomic<bool> learnHints { false };
+    std::atomic<bool> suggestInversions { true };
     std::array<std::atomic<std::uint64_t>, 2> heldKeys {}; // the keys of the MIDI keyboard that are down
     std::uint64_t heldKeysLocal[2] = { 0, 0 };              // audio thread
     void writeSettings() const;

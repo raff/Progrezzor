@@ -13,6 +13,7 @@ struct Step
     int root;       // semitones from the tonic
     ChordType type;
     double beats;   // 4 is one bar
+    int inversion = kAutoInversion; // 1: the third in the bass (G/B), 2: the fifth in the bass (C/G)
 };
 
 struct Entry
@@ -33,6 +34,8 @@ constexpr ChordType S2 = ChordType::Sus2;
 constexpr ChordType S4 = ChordType::Sus4;
 constexpr ChordType P5 = ChordType::Power5;
 constexpr ChordType Di = ChordType::Dim;
+
+// Inversions in the lists below: the last number of a step. 1 = first inversion (G/B), 2 = second (C/G).
 
 // ---- Melancholic, minor ------------------------------------------------------------------------------------------
 // The list for Minor, Dorian and Phrygian. Each progression is used in the scales whose notes it fits, see entryFits.
@@ -82,6 +85,11 @@ constexpr Entry melancholicMinor[] = {
     { 4, { { 0, Mi, 4 }, { 8, Ma, 4 }, { 1, Ma, 4 }, { 0, Mi, 4 } } },
     { 4, { { 0, Mi, 4 }, { 1, Ma, 4 }, { 3, Ma, 4 }, { 10, Mi, 4 } } },
     { 4, { { 0, Mi, 4 }, { 5, Mi, 4 }, { 1, Ma, 4 }, { 0, Mi, 4 } } },
+
+    // With a bass line that walks (an inversion in the bass)
+    { 4, { { 0, Mi, 4 }, { 7, Mi, 4, 1 }, { 8, Ma, 4 }, { 10, Ma, 4 } } },
+    { 4, { { 0, Mi, 4 }, { 7, Mi, 4, 1 }, { 8, Ma, 4 }, { 5, Mi, 4 } } },
+    { 4, { { 5, Mi, 4 }, { 0, Mi, 4, 1 }, { 8, Ma, 4 }, { 10, Ma, 4 } } },
 };
 
 // ---- Melancholic, major ------------------------------------------------------------------------------------------
@@ -108,6 +116,10 @@ constexpr Entry melancholicMajor[] = {
     { 4, { { 4, Mi, 4 }, { 5, Ma, 4 }, { 9, Mi, 4 }, { 7, Ma, 4 } } },
     { 4, { { 0, Ma, 4 }, { 9, Mi, 4 }, { 5, Ma, 4 }, { 4, Mi, 4 } } },
     { 3, { { 5, Ma, 4 }, { 4, Mi, 4 }, { 9, Mi, 8 } } },
+
+    // With a bass line that walks (an inversion in the bass)
+    { 4, { { 9, Mi, 4 }, { 4, Mi, 4, 1 }, { 5, Ma, 4 }, { 7, Ma, 4 } } },
+    { 4, { { 5, Ma, 4 }, { 0, Ma, 4, 1 }, { 2, Mi, 4 }, { 7, Ma, 4, 1 } } },
 };
 
 struct List
@@ -149,6 +161,10 @@ constexpr Entry brightMinor[] = {
     { 4, { { 8, Ma, 4 }, { 3, Ma, 4 }, { 0, Mi, 4 }, { 1, Ma, 4 } } },
     { 4, { { 3, Ma, 4 }, { 8, Ma, 4 }, { 1, Ma, 4 }, { 0, Mi, 4 } } },
     { 4, { { 3, Ma, 4 }, { 0, Mi, 4 }, { 5, Mi, 4 }, { 8, Ma, 4 } } },
+
+    // With a bass line that walks (an inversion in the bass): C G/B Am F and so on
+    { 4, { { 3, Ma, 4 }, { 10, Ma, 4, 1 }, { 0, Mi, 4 }, { 8, Ma, 4 } } },
+    { 4, { { 0, Mi, 4 }, { 10, Ma, 4, 1 }, { 3, Ma, 4 }, { 10, Ma, 4 } } },
 };
 
 constexpr Entry brightMajor[] = {
@@ -172,6 +188,11 @@ constexpr Entry brightMajor[] = {
     { 3, { { 0, Ma, 4 }, { 5, Ma, 4 }, { 7, Ma, 8 } } },
     { 4, { { 0, Ma, 4 }, { 9, Mi, 4 }, { 2, Mi, 4 }, { 7, Ma, 4 } } },
     { 4, { { 5, Ma, 4 }, { 2, Mi, 4 }, { 7, Ma, 4 }, { 0, Ma, 4 } } },
+
+    // With a bass line that walks (an inversion in the bass)
+    { 4, { { 0, Ma, 4 }, { 7, Ma, 4, 1 }, { 9, Mi, 4 }, { 5, Ma, 4 } } },
+    { 4, { { 0, Ma, 4 }, { 0, Ma, 4, 1 }, { 5, Ma, 4 }, { 7, Ma, 4 } } },
+    { 4, { { 0, Ma, 4 }, { 7, Ma, 4, 1 }, { 5, Ma, 4, 1 }, { 7, Ma, 4 } } },
 };
 
 // ---- Warm: safe and soft, triads, add9, major sevenths -----------------------------------------------------------
@@ -197,6 +218,10 @@ constexpr Entry warmMinor[] = {
     { 4, { { 8, Ma, 4 }, { 3, Ma, 4 }, { 1, Ma, 4 }, { 0, Mi, 4 } } },
     { 4, { { 0, Mi, 4 }, { 8, Ma, 4 }, { 5, Mi, 4 }, { 10, Mi, 4 } } },
     { 4, { { 3, A9, 4 }, { 8, X7, 4 }, { 10, Ma, 4 }, { 0, M7, 4 } } },
+
+    // With a bass line that walks (an inversion in the bass)
+    { 4, { { 3, Ma, 4 }, { 10, Ma, 4, 1 }, { 0, Mi, 4 }, { 8, Ma, 4 } } },
+    { 4, { { 8, Ma, 4 }, { 3, Ma, 4, 1 }, { 5, Mi, 4 }, { 0, Mi, 4 } } },
 };
 
 constexpr Entry warmMajor[] = {
@@ -220,6 +245,10 @@ constexpr Entry warmMajor[] = {
     { 4, { { 0, X7, 4 }, { 5, X7, 4 }, { 9, M7, 4 }, { 7, Ma, 4 } } },
     { 4, { { 0, A9, 4 }, { 5, X7, 4 }, { 2, M7, 4 }, { 7, D7, 4 } } },
     { 4, { { 5, X7, 4 }, { 0, A9, 4 }, { 4, M7, 4 }, { 9, M7, 4 } } },
+
+    // With a bass line that walks (an inversion in the bass)
+    { 4, { { 0, Ma, 4 }, { 7, Ma, 4, 1 }, { 9, Mi, 4 }, { 4, Mi, 4, 1 } } },
+    { 4, { { 5, Ma, 4 }, { 0, Ma, 4, 1 }, { 2, Mi, 4 }, { 7, Ma, 4 } } },
 };
 
 // ---- Dreamy: floating, long chords; maj7, 9 and sus2 where the rule allows ---------------------------------------
@@ -244,6 +273,9 @@ constexpr Entry dreamyMinor[] = {
     { 3, { { 8, Ma, 8 }, { 1, Ma, 8 }, { 0, Mi, 8 } } },
     { 4, { { 0, M7, 8 }, { 8, X7, 8 }, { 3, A9, 8 }, { 10, N9, 8 } } },
     { 4, { { 0, S2, 8 }, { 3, S2, 8 }, { 8, X7, 8 }, { 10, S2, 8 } } },
+
+    // With a bass line that walks (an inversion in the bass)
+    { 3, { { 0, Mi, 8 }, { 7, Mi, 8, 1 }, { 8, Ma, 8 } } },
 };
 
 constexpr Entry dreamyMajor[] = {
@@ -267,6 +299,10 @@ constexpr Entry dreamyMajor[] = {
     { 4, { { 0, X7, 8 }, { 5, X7, 8 }, { 4, M7, 8 }, { 9, M7, 8 } } },
     { 4, { { 0, S2, 8 }, { 5, A9, 8 }, { 9, M9, 8 }, { 7, S4, 8 } } },
     { 3, { { 5, X7, 8 }, { 0, A9, 8 }, { 2, M9, 8 } } },
+
+    // With a bass line that walks (an inversion in the bass)
+    { 3, { { 0, Ma, 8 }, { 7, Ma, 8, 1 }, { 9, Mi, 8 } } },
+    { 3, { { 5, Ma, 8 }, { 0, Ma, 8, 1 }, { 2, Mi, 8 } } },
 };
 
 // ---- Dark: heavy and threatening, minor, few notes, close to the tonic -------------------------------------------
@@ -446,6 +482,10 @@ constexpr Entry soulfulMinor[] = {
     { 4, { { 5, Ma, 4 }, { 3, Ma, 4 }, { 0, Mi, 4 }, { 7, Mi, 4 } } },
     { 4, { { 0, Mi, 4 }, { 1, Ma, 4 }, { 3, Ma, 4 }, { 0, Mi, 4 } } },
     { 4, { { 8, Ma, 4 }, { 1, Ma, 4 }, { 3, Ma, 4 }, { 0, Mi, 4 } } },
+
+    // With a bass line that walks (an inversion in the bass)
+    { 4, { { 8, Ma, 4 }, { 3, Ma, 4, 1 }, { 5, Mi, 4 }, { 0, Mi, 4 } } },
+    { 4, { { 0, Mi, 4 }, { 7, Mi, 4, 1 }, { 8, Ma, 4 }, { 5, Mi, 4 } } },
 };
 
 constexpr Entry soulfulMajor[] = {
@@ -469,6 +509,10 @@ constexpr Entry soulfulMajor[] = {
     { 4, { { 0, X7, 4 }, { 9, M7, 4 }, { 2, M7, 4 }, { 7, D7, 4 } } },
     { 4, { { 2, M7, 4 }, { 7, D7, 4 }, { 0, X7, 4 }, { 9, M7, 4 } } },
     { 4, { { 0, A9, 4 }, { 4, M7, 4 }, { 5, X7, 4 }, { 7, N9, 4 } } },
+
+    // With a bass line that walks (an inversion in the bass)
+    { 4, { { 2, Mi, 4 }, { 0, Ma, 4, 1 }, { 5, Ma, 4 }, { 7, Ma, 4 } } },
+    { 4, { { 5, Ma, 4 }, { 4, Mi, 4 }, { 2, Mi, 4 }, { 0, Ma, 4, 1 } } },
 };
 
 List listFor (Mood mood, bool major)
@@ -487,12 +531,20 @@ List listFor (Mood mood, bool major)
     return { nullptr, 0 };
 }
 
-Progression toProgression (const Entry& entry)
+Progression toProgression (const Entry& entry, bool withInversions = true)
 {
     Progression result;
     for (int i = 0; i < entry.count; ++i)
-        result.push_back ({ { entry.steps[i].root, entry.steps[i].type, kAutoInversion }, entry.steps[i].beats, false });
+        result.push_back ({ { entry.steps[i].root, entry.steps[i].type, withInversions ? entry.steps[i].inversion : kAutoInversion }, entry.steps[i].beats, false });
     return result;
+}
+
+bool hasInversion (const Entry& entry)
+{
+    for (int i = 0; i < entry.count; ++i)
+        if (entry.steps[i].inversion != kAutoInversion)
+            return true;
+    return false;
 }
 
 bool entryFits (const Entry& entry, ScaleId scale)
@@ -549,7 +601,13 @@ bool libraryEntryOnPads (Mood mood, bool major, int index, ScaleId scale)
     return index >= 0 && index < list.count && entryFits (list.entries[index], scale) && entryOnPads (list.entries[index], scale);
 }
 
-Suggestion suggest (const Key& key, Mood mood, unsigned randomValue, int avoid)
+bool libraryEntryHasInversion (Mood mood, bool major, int index)
+{
+    const auto list = listFor (mood, major);
+    return index >= 0 && index < list.count && hasInversion (list.entries[index]);
+}
+
+Suggestion suggest (const Key& key, Mood mood, unsigned randomValue, int avoid, bool allowInversions)
 {
     const bool major = key.scale == ScaleId::Major;
     const auto list = listFor (mood, major);
@@ -557,7 +615,7 @@ Suggestion suggest (const Key& key, Mood mood, unsigned randomValue, int avoid)
     int candidates[64];
     int numCandidates = 0;
     for (int i = 0; i < list.count && numCandidates < 64; ++i)
-        if (entryFits (list.entries[i], key.scale) && entryOnPads (list.entries[i], key.scale))
+        if (entryFits (list.entries[i], key.scale) && entryOnPads (list.entries[i], key.scale) && (allowInversions || ! hasInversion (list.entries[i])))
             candidates[numCandidates++] = i;
 
     if (numCandidates == 0)
@@ -567,6 +625,6 @@ Suggestion suggest (const Key& key, Mood mood, unsigned randomValue, int avoid)
     if (numCandidates > 1 && candidates[pick] == avoid)
         pick = (pick + 1) % numCandidates;
 
-    return { toProgression (list.entries[candidates[pick]]), candidates[pick] };
+    return { toProgression (list.entries[candidates[pick]], allowInversions), candidates[pick] };
 }
 }

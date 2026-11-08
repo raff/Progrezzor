@@ -62,6 +62,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     {
         homeOctave.store (juce::jlimit (-engine::kMaxHomeOctave, engine::kMaxHomeOctave, settings->getIntAttribute ("homeOctave", 0)));
         learnHints.store (settings->getIntAttribute ("learnHints", 0) != 0);
+        suggestInversions.store (settings->getIntAttribute ("suggestInversions", 1) != 0);
     }
 
     for (auto& variant : padVariant)
@@ -694,7 +695,7 @@ void ProgrezzorProcessor::allowOutsideScale()
 void ProgrezzorProcessor::suggestProgression()
 {
     // The chords of a suggestion are stored as distances from the tonic, so they follow the key by themselves
-    auto suggestion = engine::suggest (getKey(), getMood(), (unsigned) random.nextInt(), lastSuggestion);
+    auto suggestion = engine::suggest (getKey(), getMood(), (unsigned) random.nextInt(), lastSuggestion, suggestInversions.load());
     lastSuggestion = suggestion.index;
 
     // The library counts a bar as 4 beats; in the host's time signature a bar is what it is (3 beats in 3/4)
@@ -801,6 +802,7 @@ void ProgrezzorProcessor::writeSettings() const
     juce::XmlElement xml ("ProgrezzorSettings");
     xml.setAttribute ("homeOctave", homeOctave.load());
     xml.setAttribute ("learnHints", learnHints.load() ? 1 : 0);
+    xml.setAttribute ("suggestInversions", suggestInversions.load() ? 1 : 0);
     const auto file = getSettingsFile();
     if (file.getParentDirectory().createDirectory().wasOk())
         xml.writeTo (file);
@@ -815,6 +817,12 @@ void ProgrezzorProcessor::setHomeOctave (int octaves)
 void ProgrezzorProcessor::setLearnHints (bool nowOn)
 {
     learnHints.store (nowOn);
+    writeSettings();
+}
+
+void ProgrezzorProcessor::setSuggestInversions (bool nowOn)
+{
+    suggestInversions.store (nowOn);
     writeSettings();
 }
 

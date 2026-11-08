@@ -229,6 +229,83 @@ void testPadsClimb()
     check (voiceChord (padChord (ScaleId::Major, 6), 0).notes[0] == 71, "B in C major is B4");
 }
 
+std::string namesOf (const Progression& p, const Key& key)
+{
+    std::string s;
+    for (const auto& b : p)
+        s += (s.empty() ? "" : " ") + chordName (b.chord, key);
+    return s;
+}
+
+void testSuggestInversions()
+{
+    std::printf ("Suggest and inversions\n");
+    const Key key { 0, ScaleId::Major };
+
+    // Written out by hand: the first walking-bass entry of Bright major is C G/B Am F
+    bool foundNamed = false;
+    for (int i = 0; i < libraryCount (Mood::Bright, true); ++i)
+        if (namesOf (libraryProgression (Mood::Bright, true, i, key), key) == "C G/B Am F")
+            foundNamed = libraryEntryHasInversion (Mood::Bright, true, i);
+    check (foundNamed, "the library has C G/B Am F, and it is marked as having an inversion");
+
+    // On: some suggestions have an inversion, and it stays in the block
+    int withInversion = 0;
+    for (int m = 0; m < kNumMoods; ++m)
+        for (int scale = 0; scale < kNumScales; ++scale)
+            for (unsigned r = 1; r <= 300; ++r)
+            {
+                const auto s = suggest ({ 0, (ScaleId) scale }, (Mood) m, r * 2654435761u, -1, true);
+                bool any = false;
+                for (const auto& b : s.blocks)
+                    any |= b.chord.inversion > 0;
+                withInversion += any;
+                if (any)
+                    check (s.index >= 0 && libraryEntryHasInversion ((Mood) m, scale == (int) ScaleId::Major, s.index), "an inversion comes from the library");
+            }
+    check (withInversion > 0, "with inversions on, Suggest gives some of them");
+
+    // Off: only root position, in every mood, key and scale
+    bool allRoot = true;
+    for (int m = 0; m < kNumMoods; ++m)
+        for (int tonic = 0; tonic < 12; ++tonic)
+            for (int scale = 0; scale < kNumScales; ++scale)
+                for (unsigned r = 1; r <= 60; ++r)
+                    for (const auto& b : suggest ({ tonic, (ScaleId) scale }, (Mood) m, r * 2654435761u, -1, false).blocks)
+                        allRoot &= b.chord.inversion == kAutoInversion;
+    check (allRoot, "with inversions off, Suggest gives only root positions");
+
+    // The inverted chord has the bass note of its name, and the right notes
+    const Chord gb { 7, ChordType::Major, 1 };
+    const auto v = voiceChord (gb, 0);
+    checkEqual (pitchClasses (v), "B D G", "G/B has B in the bass");
+    check (chordName (gb, key) == "G/B", "the name has a slash: G/B");
+
+    // A pad variant the user chose wins over the suggestion
+    Progression suggestion { { gb, 4.0, false }, { Chord { 9, ChordType::Minor, kAutoInversion }, 4.0, false } };
+    std::array<Chord, 7> pads;
+    for (int pad = 0; pad < 7; ++pad)
+        pads[(size_t) pad] = padChord (ScaleId::Major, pad);
+    check (withPadVariants (suggestion, ScaleId::Major, pads)[0].chord.inversion == 1, "without a pad variant the inversion stays");
+    pads[4] = Chord { 7, ChordType::Dom7, kAutoInversion }; // G changed to G7 on its pad
+    const auto chosen = withPadVariants (suggestion, ScaleId::Major, pads);
+    check (chosen[0].chord.type == ChordType::Dom7 && chosen[0].chord.inversion == kAutoInversion, "the pad's own G7 wins over G/B");
+
+    // The loop and the MIDI file play the same notes as the pad would
+    Progression bar { { gb, 4.0, false }, { Chord { 0, ChordType::Major, 2 }, 4.0, false } };
+    const auto snapshot = makeSnapshot (bar);
+    const auto notes = exportNotes (bar, key.tonic, key.scale);
+    bool same = true;
+    size_t at = 0;
+    for (int i = 0; i < snapshot.count; ++i)
+    {
+        const auto heard = voiceChord (snapshot.blocks[(size_t) i].chord, key.tonic);
+        for (int n = 0; n < heard.count; ++n, ++at)
+            same &= at < notes.size() && notes[at].note == heard.notes[(size_t) n];
+    }
+    check (same && at == notes.size(), "the loop and the MIDI file have the same notes, with the inversions");
+}
+
 void testChosenInversion()
 {
     std::printf ("chosen inversion\n");
@@ -393,14 +470,6 @@ void testNoteTracker()
     check (events.empty(), "notes outside 0 to 127 are not sent");
 }
 
-std::string namesOf (const Progression& p, const Key& key)
-{
-    std::string s;
-    for (const auto& b : p)
-        s += (s.empty() ? "" : " ") + chordName (b.chord, key);
-    return s;
-}
-
 void testLibraryMood (Mood mood)
 {
     std::printf ("library and Suggest: %s\n", moodNames[(int) mood]);
@@ -428,7 +497,7 @@ void testLibraryMood (Mood mood)
 
             std::string key;
             for (const auto& b : p)
-                key += std::to_string (b.chord.root) + ":" + std::to_string ((int) b.chord.type) + ":" + std::to_string ((int) b.beats) + " ";
+                key += std::to_string (b.chord.root) + ":" + std::to_string ((int) b.chord.type) + ":" + std::to_string (b.chord.inversion) + ":" + std::to_string ((int) b.beats) + " ";
             check (std::find (seen.begin(), seen.end(), key) == seen.end(), "progression " + std::to_string (i) + " is not a copy of an earlier one");
             seen.push_back (key);
         }
@@ -1372,6 +1441,7 @@ int main()
     testScaleFit();
     testVoicingBasics();
     testPadsClimb();
+    testSuggestInversions();
     testChosenInversion();
     testPredictableVoicing();
 
