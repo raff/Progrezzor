@@ -609,9 +609,10 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         }
     internalPpq = playing ? startBeat + buffer.getNumSamples() * beatsPerSample : 0.0;
 
-    // The loop plays while the host plays and Play is on, or on its own clock when Play was pressed with the host stopped
+    // The loop plays whenever the host plays, whatever Play says (Play only chooses between editing and playing the blocks by hand),
+    // or on its own clock when Play was pressed with the host stopped
     loopBuffer.update();
-    loopActive = playing && (ownClock || loopParam->get()) && loopBuffer.read().count > 0 && ! learnOn.load();
+    loopActive = playing && loopBuffer.read().count > 0 && ! learnOn.load();
     loopPlan = loopActive ? engine::planLoop (loopBuffer.read(), startBeat, beatsPerSample, buffer.getNumSamples()) : engine::LoopPlan();
     if (! loopActive)
         loopIndex = -1;

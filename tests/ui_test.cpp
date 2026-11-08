@@ -207,7 +207,7 @@ int main (int argc, char** argv)
     snapshot ("loop_playing");
     *processor.loopParam = false;
     runBlock (processor);
-    check (processor.getPlayingBlock() == -1 && processor.soundingNotes() == 0, "Play off: nothing plays");
+    check (processor.getPlayingBlock() == 1 && processor.soundingNotes() == 3, "Play off: the DAW still starts the loop");
     snapshot ("loop_off");
     *processor.loopParam = true;
     transport.playing = false;
@@ -643,7 +643,7 @@ int main (int argc, char** argv)
         }
         processor.undo();
 
-        // With Play off (editing) the loop is silent, and Play brings it back
+        // With Play off (editing) the DAW still plays the loop
         FakeTransport t3;
         processor.setPlayHead (&t3);
         *processor.loopParam = false;
@@ -651,10 +651,10 @@ int main (int argc, char** argv)
         t3.playing = true;
         t3.quarters = 1.0;
         runBlock (processor);
-        check (processor.getPlayingBlock() == -1 && processor.soundingNotes() == 0, "in Edit the loop is silent");
+        check (processor.getPlayingBlock() == 0 && processor.soundingNotes() == 3, "in Edit the DAW still plays the loop");
         *processor.loopParam = true;
         runBlock (processor);
-        check (processor.getPlayingBlock() == 0 && processor.soundingNotes() == 3, "back in Play the loop plays again");
+        check (processor.getPlayingBlock() == 0 && processor.soundingNotes() == 3, "and it goes on in Play");
         t3.playing = false;
         runBlock (processor);
         processor.setPlayHead (nullptr);

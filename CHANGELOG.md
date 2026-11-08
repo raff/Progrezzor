@@ -12,6 +12,9 @@ tag the commit (`vX.Y.Z`).
 
 ## [Unreleased]
 
+### Changed
+- **The DAW's play always starts the progression.** Before, the loop was silent while the DAW played if Play in the plug-in was off. Now Play only chooses between editing and playing the blocks by hand.
+
 ### Added
 - **Voicing: Nearest inversion.** Settings has a Voicing choice, "Root position" (as before) or "Nearest inversion". With Nearest inversion every chord is played in the way that lies nearest the home chord, so the notes hardly jump between chords (G7 in C Major is B3 D4 F4 G4). The name stays G7. A chord you gave a turn yourself is played as you chose. The pads, the loop and the MIDI file have the same notes. Saved with the project.
 - **Copy as text and Save ChordPro.** Settings has "Copy as text" (the progression as a chord chart in bar notation, like `| C | Am | F G | G |`, which Quick-text reads back) and "Save ChordPro..." (a .cho file with the title, the key and the chords as a grid, so the lengths are kept). ChordPro import now reads grids too, so an exported file gives the same progression when it is imported again.
