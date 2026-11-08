@@ -165,6 +165,7 @@ public:
     void clearPadVariant (int pad);
     int getVariantVersion() const { return variantVersion.load(); }
     bool isLockedToScale() const { return lockParam->get(); }
+    void turnLockOff(); // "More chords outside the key..." in the chord menus: Lock to scale off, so every chord is offered
     // The arp as the parameters have it now. Safe to call from any thread.
     engine::ArpSettings getArpSettings() const;   // .on: the arp (one note at a time) is the mode
     engine::RhythmSettings getRhythmSettings() const; // .on: chord rhythm is the mode

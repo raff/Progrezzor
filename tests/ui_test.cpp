@@ -1702,6 +1702,16 @@ int main (int argc, char** argv)
             inFile |= std::abs (n.start - edited[0].beats) < 1.0e-9 && std::abs (n.length - edited[1].beats) < 1.0e-9 && n.note == voiced.notes[0];
         check (inFile && voiced.count == 4 && edited[1].chord.type == engine::ChordType::Dom7, "the MIDI file has the block's chord: type, inversion, octave and length");
 
+        // "More chords outside the key...": the lock goes off, and then the menus offer every chord
+        {
+            ProgrezzorProcessor fresh;
+            check (fresh.isLockedToScale(), "the lock is on as standard");
+        }
+        *processor.lockParam = true;
+        processor.turnLockOff();
+        check (! processor.isLockedToScale(), "More chords outside the key... turns the lock off");
+        *processor.lockParam = true;
+
         // Lock, Duplicate, Delete
         bar.applyBlockMenuChoice (1, 320);
         check (processor.getProgression()[1].locked, "Lock locks the block");

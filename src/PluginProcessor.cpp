@@ -934,6 +934,13 @@ void ProgrezzorProcessor::togglePreviewSound()
     voiceParam->endChangeGesture();
 }
 
+void ProgrezzorProcessor::turnLockOff()
+{
+    lockParam->beginChangeGesture();
+    lockParam->setValueNotifyingHost (0.0f);
+    lockParam->endChangeGesture();
+}
+
 void ProgrezzorProcessor::setLearning (bool nowLearning)
 {
     learnOn.store (nowLearning);
