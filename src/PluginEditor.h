@@ -58,6 +58,14 @@ public:
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 };
 
+// The wheel button beside the key: opens and closes the chord wheel. A small wheel with spokes.
+class WheelToggle : public juce::Button
+{
+public:
+    WheelToggle() : juce::Button ("Chord wheel") {}
+    void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
+};
+
 // The Lock to scale button: a padlock that is lit while the lock is on
 class LockToggle : public juce::Button
 {
@@ -389,6 +397,8 @@ public:
     void saveMidi(); // the Save MIDI button
     BarButton& getSaveButton() { return saveButton; }
     LockToggle& getLockButton() { return lockButton; }
+    juce::Button& getWheelButton() { return wheelButton; }
+    bool isWheelOpen() const { return wheelPopup != nullptr; }
 
 private:
     class DragGhost;
@@ -399,6 +409,7 @@ private:
     void updateLearning();         // Learn mode: follows the keys that are held, and marks what is next
     void startLearnSession();
     void padPressed (int pad);
+    void toggleWheel(); // the chord wheel beside the key
 
     ProgrezzorProcessor& processor;
     theme::LookAndFeel look;
@@ -407,6 +418,9 @@ private:
     juce::ComboBox keyBox, scaleBox, moodBox, voiceBox;
     std::unique_ptr<juce::ComboBoxParameterAttachment> keyAttachment, scaleAttachment, moodAttachment, voiceAttachment;
 
+    WheelToggle wheelButton;
+    juce::Component::SafePointer<juce::Component> wheelPopup;
+    juce::uint32 wheelClosedAt = 0;
     LockToggle lockButton;
     std::unique_ptr<juce::ButtonParameterAttachment> lockAttachment;
     juce::TooltipWindow tooltipWindow { this, 600 };
