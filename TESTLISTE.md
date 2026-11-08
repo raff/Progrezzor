@@ -112,6 +112,15 @@ Kræver et MIDI-tastatur.
 - [ ] Hold musen over en knap: tooltip'en er smal, har flere linier og står tydeligt forskudt fra musen.
 - [ ] Settings (tandhjulet) > Help > Show tooltips: slå fra, og ingen tooltips vises. Slå til igen. Valget huskes i alle projekter.
 
+## 2l. ChordPro-import (branch feature/chordpro-import)
+- [ ] Settings (tandhjulet) > Import ChordPro...: en filvælger åbner (ikke i Play). Vælg en .cho-fil: akkorderne står som tekst i Quick-text-feltet, og rundgangen er uændret.
+- [ ] Enter anvender (en takt pr. akkord), Esc fortryder. Fortryd (Ctrl+Z) tager det tilbage.
+- [ ] En fil med afsnit (verse, chorus, bridge): en liste over afsnit, og kun det valgte kommer i feltet.
+- [ ] En fil med {key: G}: beskeden "The song says it is in G major. Switch the key?" og en knap. Toneart skiftes kun, når du trykker på knappen.
+- [ ] Træk en .cho-fil ind på rundgangen: det samme som via Settings.
+- [ ] Ukendte akkorder (fx N.C.) er røde, og resten virker. En fil uden akkorder giver beskeden "No chords found in that file."
+- [ ] En lang fil: de første 32 akkorder, og en besked om det.
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

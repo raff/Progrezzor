@@ -1,0 +1,5 @@
+{title: Test tune one}
+# a comment with a [C] chord in it that must be ignored
+{comment: Played slowly [G]}
+La [C]la la, [Am]test the [F]line and [G]go
+Second [C]line has [Am]nothing [F]in it [G]

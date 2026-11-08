@@ -11,6 +11,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Added
+- **ChordPro import.** Settings has "Import ChordPro..." (or drag a .cho, .chopro, .crd or .pro file onto the bar). The chords in square brackets become Quick-text, one bar each, to look at and change before you press Enter. A file with parts (verse, chorus, bridge) asks which part you want. If the song says its key, it asks whether to switch; it never switches by itself.
 - **Chord rhythm.** A Hold | Arp | Rhythm switch at the top of the arp panel. Rhythm strikes the whole chord in one of 12 patterns (Offbeat, Stab, Double stab, Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse, Euclid), at 1/8 or 1/16, with Short, Medium or Long notes. It starts again in every block, follows the host's grid, and the MIDI file has the same strikes.
 - **Chord wheel.** A small wheel beside the key opens the circle of fifths in a panel that stays open until you close it. The chords of the seven pads have the pad colours, the others are dim. Click a chord to hear it, double-click to use it as the key.
 - **Block menu.** Right-click a block, or use the small gear on mouseover, to change its chord type, inversion, octave and length, or to lock, duplicate or delete it. Right-click no longer deletes at once; the Delete key still deletes the selected block. A pause has only length, Duplicate and Delete.

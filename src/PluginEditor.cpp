@@ -2057,6 +2057,28 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     quickTextButton.setComponentID ("quicktext");
     addChildComponent (quickTextButton);
 
+    switchKeyButton.setTooltip ("Change the key to the one the song says");
+    switchKeyButton.setVisible (false);
+    switchKeyButton.setAccented (true);
+    switchKeyButton.setComponentID ("switch-key");
+    switchKeyButton.onClick = [this]
+    {
+        const int tonic = chordPro.keyTonic;
+        const bool minor = chordPro.keyMinor;
+        const auto scale = processor.getKey().scale;
+        const int scaleIndex = minor ? (scale == engine::ScaleId::Major ? (int) engine::ScaleId::Minor : (int) scale) : (int) engine::ScaleId::Major;
+        for (auto [parameter, index] : { std::pair<juce::RangedAudioParameter*, int> { processor.keyParam, tonic },
+                                         std::pair<juce::RangedAudioParameter*, int> { processor.scaleParam, scaleIndex } })
+        {
+            parameter->beginChangeGesture();
+            parameter->setValueNotifyingHost (parameter->convertTo0to1 ((float) index));
+            parameter->endChangeGesture();
+        }
+        importAsksKey = false; // the chords in the text are named, so they stay the same chords in the new key
+        updateTextFeedback();
+    };
+    addChildComponent (switchKeyButton);
+
     allowButton.setTooltip ("Turn Lock to scale off, so these chords play");
     allowButton.setVisible (false);
     allowButton.onClick = [this] { processor.allowOutsideScale(); };
@@ -2142,6 +2164,7 @@ void ProgressionBar::updateVisibility()
     textEditor.setVisible (textMode);
     textMarks->setVisible (textMode);
     allowButton.setVisible (! textMode && noticeHasAllow);
+    switchKeyButton.setVisible (textMode && noticeHasSwitchKey);
 }
 
 void ProgressionBar::startQuickText()
@@ -2168,6 +2191,10 @@ void ProgressionBar::leaveTextMode()
 
     textMode = false;
     problemRanges.clear();
+    importedText = {};
+    importNote = {};
+    importAsksKey = false;
+    noticeHasSwitchKey = false;
     updateNotice();
     updateVisibility();
     resized();
@@ -2227,8 +2254,40 @@ void ProgressionBar::updateTextFeedback()
         noticeText = read.outsideScale > 0 ? "Not in the scale, so silent: press Enter, then Allow to play" : "Enter uses it, Esc cancels";
         noticeIsWarning = false;
     }
+
+    // What was imported from a ChordPro file says its piece while the text is still the imported text
+    noticeHasSwitchKey = false;
+    if (importedText.isNotEmpty() || importNote.isNotEmpty())
+    {
+        if (textEditor.getText() != importedText)
+        {
+            importNote = {};
+            importAsksKey = false; // the text was changed: no more about the file
+        }
+        else if (read.problems.empty())
+        {
+            juce::String say = importNote;
+            if (importAsksKey && engine::chordProKeyDiffers (chordPro, processor.getKey()))
+            {
+                // "G major", "F# minor": the root as the file writes it, then the kind
+                std::string root = chordPro.keyName.substr (0, 1);
+                if (chordPro.keyName.size() > 1 && (chordPro.keyName[1] == '#' || chordPro.keyName[1] == 'b'))
+                    root += chordPro.keyName[1];
+                say += juce::String (say.isEmpty() ? "" : " ") + "The song says it is in " + juce::String (root) + (chordPro.keyMinor ? " minor" : " major")
+                       + ". Switch the key?";
+                noticeHasSwitchKey = true;
+            }
+            if (say.isNotEmpty())
+            {
+                noticeText = say;
+                noticeIsWarning = importNote.startsWith ("No chords");
+            }
+        }
+    }
     noticeHasAllow = false;
     allowButton.setVisible (false);
+    switchKeyButton.setVisible (textMode && noticeHasSwitchKey);
+    resized();
     repaint();
 }
 
@@ -2442,6 +2501,112 @@ void ProgressionBar::applyBlockMenuChoice (int index, int result)
         processor.editProgression (engine::withChordType (now, index, (engine::ChordType) (result - 100)));
 }
 
+// ---- ChordPro import -------------------------------------------------------------------------------------------------
+
+void ProgressionBar::chooseChordProFile()
+{
+    if (! editing)
+        return;
+    fileChooser = std::make_unique<juce::FileChooser> ("Import ChordPro", juce::File(), "*.cho;*.chopro;*.crd;*.pro");
+    juce::Component::SafePointer<ProgressionBar> safe (this);
+    fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                              [safe] (const juce::FileChooser& chooser)
+                              {
+                                  if (safe != nullptr && chooser.getResult().existsAsFile())
+                                      safe->importChordProFile (chooser.getResult());
+                              });
+}
+
+bool ProgressionBar::importChordProFile (const juce::File& file)
+{
+    if (! editing || ! file.existsAsFile() || file.getSize() > 2 * 1024 * 1024)
+        return false;
+    importChordProText (file.loadFileAsString());
+    return true;
+}
+
+int ProgressionBar::readChordProText (const juce::String& text)
+{
+    chordPro = engine::readChordPro (text.toStdString());
+    return (int) chordPro.sections.size();
+}
+
+// The chords of the file, or the parts to pick from. Nothing in the bar changes yet.
+void ProgressionBar::importChordProText (const juce::String& text)
+{
+    if (! editing)
+        return;
+
+    if (readChordProText (text) == 0)
+    {
+        useChordProPart (-1);
+        return;
+    }
+
+    // A file with parts: a list to pick one from, each with its first chords
+    juce::PopupMenu menu;
+    menu.addSectionHeader ("Which part?");
+    for (int i = 0; i < (int) chordPro.sections.size(); ++i)
+    {
+        const auto& section = chordPro.sections[(size_t) i];
+        std::string first;
+        for (size_t c = 0; c < section.chords.size() && c < 5; ++c)
+            first += (first.empty() ? "" : " ") + section.chords[c];
+        menu.addItem (i + 1, juce::String (section.name) + "   " + juce::String (first) + (section.chords.size() > 5 ? " ..." : ""));
+    }
+
+    juce::Component::SafePointer<ProgressionBar> safe (this);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMinimumWidth (240),
+                        [safe] (int result)
+                        {
+                            if (safe != nullptr && result > 0)
+                                safe->useChordProPart (result - 1);
+                        });
+}
+
+void ProgressionBar::useChordProPart (int index)
+{
+    if (! editing)
+        return;
+    if (index >= 0 && index < (int) chordPro.sections.size())
+        showChordProText (chordPro.sections[(size_t) index].chords);
+    else
+        showChordProText (chordPro.chords);
+}
+
+// The chords become Quick-text in the field (one bar each), with a message about what was done
+void ProgressionBar::showChordProText (const std::vector<std::string>& chords)
+{
+    bool tooMany = false;
+    const juce::String text (engine::chordsAsQuickText (chords, engine::kMaxBlocks, &tooMany));
+
+    if (! textMode)
+        startQuickText();
+    if (! textMode)
+        return;
+
+    importedText = text;
+    importTooMany = tooMany;
+    importAsksKey = engine::chordProKeyDiffers (chordPro, processor.getKey());
+    importNote = chords.empty() ? "No chords found in that file." : (tooMany ? "Only the first " + juce::String (engine::kMaxBlocks) + " chords fit." : juce::String());
+    if (chords.empty())
+        importAsksKey = false;
+    textEditor.setText (text, false);
+    updateTextFeedback();
+    textEditor.moveCaretToEnd();
+}
+
+bool ProgressionBar::isInterestedInFileDrag (const juce::StringArray& files)
+{
+    return editing && files.size() == 1 && engine::isChordProFileName (files[0].toStdString());
+}
+
+void ProgressionBar::filesDropped (const juce::StringArray& files, int, int)
+{
+    if (files.size() == 1)
+        importChordProFile (juce::File (files[0]));
+}
+
 void ProgressionBar::showSettingsMenu()
 {
     juce::PopupMenu menu;
@@ -2452,6 +2617,9 @@ void ProgressionBar::showSettingsMenu()
         menu.addItem (i + 1, names[i], true, i - 2 == processor.getHomeOctave());
     menu.addSeparator();
     menu.addItem (100, "Kept for every project. The keyboard shows where.", false, false);
+    menu.addSeparator();
+    menu.addSectionHeader ("Import");
+    menu.addItem (25, "Import ChordPro...", editing);
     menu.addSeparator();
     menu.addSectionHeader ("Learn");
     menu.addItem (20, "Show hints from the start", true, processor.getLearnHints());
@@ -2472,6 +2640,8 @@ void ProgressionBar::showSettingsMenu()
                         {
                             if (safe != nullptr && result >= 1 && result <= 5)
                                 safe->chooseHomeOctave (result - 3);
+                            else if (safe != nullptr && result == 25)
+                                safe->chooseChordProFile();
                             else if (safe != nullptr && result == 20)
                                 safe->processor.setLearnHints (! safe->processor.getLearnHints());
                             else if (safe != nullptr && result == 21)
@@ -3086,14 +3256,14 @@ void ProgressionBar::resized()
         auto row = area.removeFromBottom (22);
         area.removeFromBottom (2);
         noticeBounds = row;
-        if (noticeHasAllow || askingReplace) // the button follows the message
+        if (noticeHasAllow || noticeHasSwitchKey || askingReplace) // the button follows the message
         {
             float textWidth = 200.0f;
             if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
                 textWidth = (float) juce::GlyphArrangement::getStringWidthInt (l->labelFont (14.0f), noticeText);
             const int taken = std::min (row.getWidth() - 70, (int) textWidth + 12);
             noticeBounds = row.withWidth (std::max (0, taken));
-            (askingReplace ? replaceButton : allowButton).setBounds (row.withTrimmedLeft (std::max (0, taken + 4)).withWidth (askingReplace ? 80 : 66));
+            (askingReplace ? replaceButton : (noticeHasSwitchKey ? switchKeyButton : allowButton)).setBounds (row.withTrimmedLeft (std::max (0, taken + 4)).withWidth (askingReplace ? 80 : (noticeHasSwitchKey ? 96 : 66)));
         }
     }
 
