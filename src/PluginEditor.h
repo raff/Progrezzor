@@ -58,6 +58,14 @@ public:
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 };
 
+// The wheel button beside the key: opens and closes the chord wheel. A small wheel with spokes.
+class WheelToggle : public juce::Button
+{
+public:
+    WheelToggle() : juce::Button ("Chord wheel") {}
+    void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
+};
+
 // The Lock to scale button: a padlock that is lit while the lock is on
 class LockToggle : public juce::Button
 {
@@ -380,6 +388,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     bool keyPressed (const juce::KeyPress&) override;
+    void mouseDown (const juce::MouseEvent&) override; // a click outside the wheel closes it
 
     ProgressionBar& getBar() { return bar; }
     PadButton& getPad (int i) { return pads[(size_t) i]; }
@@ -389,6 +398,9 @@ public:
     void saveMidi(); // the Save MIDI button
     BarButton& getSaveButton() { return saveButton; }
     LockToggle& getLockButton() { return lockButton; }
+    juce::Button& getWheelButton() { return wheelButton; }
+    bool isWheelOpen() const { return wheelPanel != nullptr; }
+    juce::Component* getWheelPanel() { return wheelPanel.get(); }
 
 private:
     class DragGhost;
@@ -399,6 +411,9 @@ private:
     void updateLearning();         // Learn mode: follows the keys that are held, and marks what is next
     void startLearnSession();
     void padPressed (int pad);
+    void toggleWheel(); // the chord wheel beside the key
+    void closeWheel();
+    void placeWheel();
 
     ProgrezzorProcessor& processor;
     theme::LookAndFeel look;
@@ -407,6 +422,8 @@ private:
     juce::ComboBox keyBox, scaleBox, moodBox, voiceBox;
     std::unique_ptr<juce::ComboBoxParameterAttachment> keyAttachment, scaleAttachment, moodAttachment, voiceAttachment;
 
+    WheelToggle wheelButton;
+    std::unique_ptr<juce::Component> wheelPanel; // the chord wheel, a panel inside the window (open or not is kept while the window lives)
     LockToggle lockButton;
     std::unique_ptr<juce::ButtonParameterAttachment> lockAttachment;
     juce::TooltipWindow tooltipWindow { this, 600 };

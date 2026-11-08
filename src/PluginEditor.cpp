@@ -318,6 +318,25 @@ void LockToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButton
               isMouseOver ? theme::text : theme::dimText.brighter (0.2f), on);
 }
 
+// ---- WheelToggle ---------------------------------------------------------------------------------------------------
+
+void WheelToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonDown)
+{
+    const bool open = getToggleState();
+    const auto face = theme::drawKey (g, getLocalBounds().toFloat(), open ? theme::accent : theme::pad, 10.0f, 4.0f, isButtonDown, isMouseOver);
+    const auto colour = open ? theme::onAccent : (isMouseOver ? theme::text : theme::dimText.brighter (0.2f));
+    const auto c = face.getCentre();
+    const float r = std::min (face.getWidth(), face.getHeight()) * 0.33f;
+    g.setColour (colour);
+    g.drawEllipse (c.x - r, c.y - r, 2.0f * r, 2.0f * r, 1.6f);
+    g.drawEllipse (c.x - r * 0.45f, c.y - r * 0.45f, r * 0.9f, r * 0.9f, 1.3f);
+    for (int i = 0; i < 6; ++i)
+    {
+        const float a = (float) i * juce::MathConstants<float>::pi / 3.0f + juce::MathConstants<float>::pi / 6.0f;
+        g.drawLine (c.x + std::cos (a) * r * 0.45f, c.y + std::sin (a) * r * 0.45f, c.x + std::cos (a) * r, c.y + std::sin (a) * r, 1.2f);
+    }
+}
+
 // ---- PlayToggle ----------------------------------------------------------------------------------------------------
 
 void PlayToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonDown)
@@ -1046,6 +1065,282 @@ public:
 
 private:
     juce::TextEditor& editor;
+};
+
+// ---- ChordWheel ----------------------------------------------------------------------------------------------------
+// The popup of the wheel button: the twelve major chords in a ring, the minor chords in a ring inside it, and the chord that
+// does not fit anywhere else on its own in the middle. The chords of the seven pads have the colours of the pads, the others
+// are dim. Click: hear the chord. Double-click: use it as the key.
+
+class ChordWheel : public juce::Component, private juce::Timer
+{
+public:
+    ChordWheel (ProgrezzorProcessor& p, std::function<void()> closed) : processor (p), onClosed (std::move (closed))
+    {
+        setSize (380, 380);
+        startTimerHz (15);
+    }
+
+    ~ChordWheel() override
+    {
+        releasePreview();
+        if (onClosed)
+            onClosed();
+    }
+
+    struct Segment
+    {
+        engine::Chord chord;     // relative to the tonic
+        int pitchClass = 0;      // absolute root
+        int ring = 0;            // 0 outer (major), 1 inner (minor), 2 middle (the odd one out)
+        int slot = 0;            // 0 to 11 round the wheel
+        int pad = -1;            // the pad that plays it, -1 if none
+        bool inScale = false;
+        bool selected = false;
+    };
+
+    void paint (juce::Graphics& g) override
+    {
+        auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel());
+        const auto key = processor.getKey();
+        const auto segments = makeSegments (key);
+
+        // Rings first, the selected segment last so that it lies over its neighbours
+        for (int pass = 0; pass < 2; ++pass)
+            for (size_t i = 0; i < segments.size(); ++i)
+            {
+                const auto& s = segments[i];
+                if (s.selected != (pass == 1))
+                    continue;
+                drawSegment (g, l, s, key, (int) i == hovered, (int) i == pressed);
+            }
+    }
+
+    void mouseMove (const juce::MouseEvent& e) override { setHovered (hit (e.position)); }
+    void mouseExit (const juce::MouseEvent&) override { setHovered (-1); }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        const int index = hit (e.position);
+        if (index < 0)
+            return;
+        pressed = index;
+        const auto key = processor.getKey();
+        processor.pressBlock (kPreviewBlock, makeSegments (key)[(size_t) index].chord);
+        previewing = true;
+        repaint();
+    }
+
+    void mouseUp (const juce::MouseEvent&) override
+    {
+        releasePreview();
+        pressed = -1;
+        repaint();
+    }
+
+    void mouseDoubleClick (const juce::MouseEvent& e) override
+    {
+        const int index = hit (e.position);
+        if (index < 0)
+            return;
+        const auto key = processor.getKey();
+        const auto segment = makeSegments (key)[(size_t) index];
+        if (segment.ring == 2)
+            return; // the odd one out is not a key
+        setParameter (*processor.keyParam, segment.pitchClass);
+        // A major chord is a major key. A minor chord is a minor key, in the minor scale that was chosen if there is one.
+        if (segment.ring == 0 && key.scale != engine::ScaleId::Major)
+            setParameter (*processor.scaleParam, (int) engine::ScaleId::Major);
+        else if (segment.ring == 1 && key.scale == engine::ScaleId::Major)
+            setParameter (*processor.scaleParam, (int) engine::ScaleId::Minor);
+        repaint();
+    }
+
+    // For the tests: where the middle of a segment is
+    juce::Point<float> centreOf (int ring, int slot) const
+    {
+        return pointAt (ring, slot, ringMiddle (ring));
+    }
+
+    static constexpr int kPreviewBlock = engine::kMaxBlocks - 1;
+
+private:
+    static constexpr float kOuterRing[2] = { 124.0f, 178.0f };
+    static constexpr float kInnerRing[2] = { 74.0f, 120.0f };
+    static constexpr float kMiddleRadius = 66.0f;
+
+    static void setParameter (juce::RangedAudioParameter& parameter, int index)
+    {
+        parameter.beginChangeGesture();
+        parameter.setValueNotifyingHost (parameter.convertTo0to1 ((float) index));
+        parameter.endChangeGesture();
+    }
+
+    void timerCallback() override
+    {
+        const auto key = processor.getKey();
+        if (key.tonic != shownTonic || (int) key.scale != shownScale)
+        {
+            shownTonic = key.tonic;
+            shownScale = (int) key.scale;
+            repaint();
+        }
+    }
+
+    void releasePreview()
+    {
+        if (previewing)
+            processor.releaseBlock (kPreviewBlock);
+        previewing = false;
+    }
+
+    void setHovered (int index)
+    {
+        if (index != hovered)
+        {
+            hovered = index;
+            repaint();
+        }
+    }
+
+    juce::Point<float> middle() const { return getLocalBounds().toFloat().getCentre(); }
+
+    static float ringMiddle (int ring)
+    {
+        return ring == 0 ? (kOuterRing[0] + kOuterRing[1]) * 0.5f : ring == 1 ? (kInnerRing[0] + kInnerRing[1]) * 0.5f : 0.0f;
+    }
+
+    // Slot 0 is straight up, then clockwise
+    juce::Point<float> pointAt (int ring, int slot, float radius) const
+    {
+        if (ring == 2)
+            return middle();
+        const float angle = (float) slot * juce::MathConstants<float>::twoPi / 12.0f;
+        return middle() + juce::Point<float> (std::sin (angle), -std::cos (angle)) * radius;
+    }
+
+    std::vector<Segment> makeSegments (const engine::Key& key) const
+    {
+        std::vector<Segment> list;
+        for (int slot = 0; slot < 12; ++slot)
+            for (int ring = 0; ring < 2; ++ring)
+            {
+                Segment s;
+                s.slot = slot;
+                s.ring = ring;
+                const int major = (slot * 7) % 12; // C, G, D, A ...
+                s.pitchClass = ring == 0 ? major : (major + 9) % 12;
+                s.chord = { engine::wrap12 (s.pitchClass - key.tonic), ring == 0 ? engine::ChordType::Major : engine::ChordType::Minor, engine::kAutoInversion };
+                s.inScale = engine::chordFitsScale (s.chord, key.scale);
+                for (int pad = 0; pad < 7; ++pad)
+                {
+                    const auto plain = engine::padChord (key.scale, pad);
+                    if (plain.root == s.chord.root && plain.type == s.chord.type)
+                        s.pad = pad;
+                }
+                s.selected = s.chord.root == 0 && (ring == 0) == (key.scale == engine::ScaleId::Major);
+                list.push_back (s);
+            }
+
+        // The chord that is neither major nor minor (the diminished one) stands in the middle
+        for (int pad = 0; pad < 7; ++pad)
+        {
+            const auto plain = engine::padChord (key.scale, pad);
+            if (plain.type == engine::ChordType::Major || plain.type == engine::ChordType::Minor)
+                continue;
+            Segment s;
+            s.ring = 2;
+            s.chord = plain;
+            s.pitchClass = engine::wrap12 (key.tonic + plain.root);
+            s.pad = pad;
+            s.inScale = true;
+            list.push_back (s);
+        }
+        return list;
+    }
+
+    int hit (juce::Point<float> p) const
+    {
+        const auto key = processor.getKey();
+        const auto segments = makeSegments (key);
+        const auto d = p - middle();
+        const float radius = std::sqrt (d.x * d.x + d.y * d.y);
+        float angle = std::atan2 (d.x, -d.y); // 0 straight up, clockwise
+        if (angle < 0.0f)
+            angle += juce::MathConstants<float>::twoPi;
+        const int slot = (int) std::floor (angle / (juce::MathConstants<float>::twoPi / 12.0f) + 0.5f) % 12;
+
+        int ring = -1;
+        if (radius >= kOuterRing[0] - 2.0f && radius <= kOuterRing[1] + 3.0f)
+            ring = 0;
+        else if (radius >= kInnerRing[0] - 2.0f && radius <= kInnerRing[1] + 2.0f)
+            ring = 1;
+        else if (radius <= kMiddleRadius)
+            ring = 2;
+        if (ring < 0)
+            return -1;
+
+        for (size_t i = 0; i < segments.size(); ++i)
+            if (segments[i].ring == ring && (ring == 2 || segments[i].slot == slot))
+                return (int) i;
+        return -1;
+    }
+
+    void drawSegment (juce::Graphics& g, theme::LookAndFeel* l, const Segment& s, const engine::Key& key, bool isHover, bool isPressed)
+    {
+        const auto c = middle();
+        const bool coloured = s.pad >= 0;
+        const auto base = coloured ? theme::chordColour (s.pitchClass) : theme::field;
+        auto face = base;
+        if (isHover && ! isPressed)
+            face = face.brighter (coloured ? 0.18f : 0.35f);
+        if (isPressed)
+            face = face.brighter (coloured ? 0.35f : 0.5f);
+
+        juce::Path shape;
+        if (s.ring == 2)
+            shape.addEllipse (c.x - kMiddleRadius + 6.0f, c.y - kMiddleRadius + 6.0f, (kMiddleRadius - 6.0f) * 2.0f, (kMiddleRadius - 6.0f) * 2.0f);
+        else
+        {
+            const float inner = (s.ring == 0 ? kOuterRing[0] : kInnerRing[0]) + (s.selected ? -3.0f : 0.0f);
+            const float outer = (s.ring == 0 ? kOuterRing[1] : kInnerRing[1]) + (s.selected ? 3.0f : 0.0f);
+            const float half = juce::MathConstants<float>::twoPi / 24.0f - 0.012f;
+            const float a0 = (float) s.slot * juce::MathConstants<float>::twoPi / 12.0f - half;
+            const float a1 = (float) s.slot * juce::MathConstants<float>::twoPi / 12.0f + half;
+            shape.addCentredArc (c.x, c.y, outer, outer, 0.0f, a0, a1, true);
+            shape.addCentredArc (c.x, c.y, inner, inner, 0.0f, a1, a0, false);
+            shape.closeSubPath();
+            shape = shape.createPathWithRoundedCorners (5.0f);
+        }
+
+        if (s.selected)
+            theme::drawGlow (g, shape.getBounds(), theme::accent, 7.0f, 14.0f, 0.35f);
+        g.setGradientFill (juce::ColourGradient (face.brighter (coloured ? 0.12f : 0.0f), c.x, c.y - 180.0f, face.darker (coloured ? 0.12f : 0.0f), c.x, c.y + 180.0f, false));
+        g.fillPath (shape);
+        g.setColour (juce::Colours::white.withAlpha (coloured ? 0.18f : 0.05f));
+        g.strokePath (shape, juce::PathStrokeType (1.0f));
+        if (s.selected)
+        {
+            g.setColour (theme::text);
+            g.strokePath (shape, juce::PathStrokeType (2.6f));
+        }
+
+        // The names round the wheel are always the same, whatever the key. Only the chord in the middle is spelled after the key.
+        static const char* const majorNames[12] = { "C", "G", "D", "A", "E", "B", "F#/Gb", "Db", "Ab", "Eb", "Bb", "F" };
+        static const char* const minorNames[12] = { "Am", "Em", "Bm", "F#m", "C#m", "G#m", "Ebm", "Bbm", "Fm", "Cm", "Gm", "Dm" };
+        const juce::String name = s.ring == 0 ? majorNames[s.slot] : s.ring == 1 ? minorNames[s.slot] : juce::String (engine::chordName (s.chord, key));
+        const auto at = s.ring == 2 ? c : pointAt (s.ring, s.slot, ringMiddle (s.ring));
+        if (l != nullptr)
+            g.setFont (s.ring == 2 ? l->titleFont (22.0f) : l->titleFont (s.ring == 0 ? 22.0f : 18.0f));
+        g.setColour (coloured ? theme::textOn (base) : theme::dimText.withAlpha (0.55f));
+        g.drawFittedText (name, juce::Rectangle<float> (64.0f, 28.0f).withCentre (at).toNearestInt(), juce::Justification::centred, 1, 0.7f);
+    }
+
+    ProgrezzorProcessor& processor;
+    std::function<void()> onClosed;
+    int hovered = -1, pressed = -1;
+    bool previewing = false;
+    int shownTonic = -1, shownScale = -1;
 };
 
 // ---- ArpPanel ------------------------------------------------------------------------------------------------------
@@ -2681,6 +2976,12 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     addAndMakeVisible (keyBox);
     addAndMakeVisible (scaleBox);
 
+    wheelButton.setTooltip ("Chord wheel: click a chord to hear it, double-click to use it as the key");
+    wheelButton.setComponentID ("wheel");
+    wheelButton.onClick = [this] { toggleWheel(); };
+    addAndMakeVisible (wheelButton);
+    addMouseListener (this, true); // to see clicks anywhere in the window: a click outside the wheel closes it
+
     moodBox.addItemList (processor.moodParam->choices, 1);
     voiceBox.addItemList (processor.voiceParam->choices, 1);
     moodAttachment = std::make_unique<juce::ComboBoxParameterAttachment> (*processor.moodParam, moodBox);
@@ -2814,6 +3115,76 @@ ProgrezzorEditor::~ProgrezzorEditor()
     for (int i = 0; i < ProgrezzorProcessor::kNumPads; ++i)
         if (pads[(size_t) i].isHeldByMouse())
             processor.releasePad (i);
+}
+
+// The wheel is a panel inside the window, under its button. It stays until the wheel button is pressed again, Esc is pressed
+// or something else in the window is clicked. Leaving the window for another app does not close it.
+class WheelPanel : public juce::Component
+{
+public:
+    explicit WheelPanel (std::unique_ptr<ChordWheel> w) : wheel (std::move (w))
+    {
+        addAndMakeVisible (*wheel);
+        setSize (wheel->getWidth() + 16, wheel->getHeight() + 16);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto r = getLocalBounds().toFloat().reduced (1.5f);
+        g.setColour (juce::Colours::black.withAlpha (0.35f));
+        g.fillRoundedRectangle (r.translated (0.0f, 3.0f), 14.0f);
+        g.setColour (theme::popup);
+        g.fillRoundedRectangle (r, 14.0f);
+        g.setColour (theme::accent.withAlpha (0.8f));
+        g.drawRoundedRectangle (r, 14.0f, 1.5f);
+    }
+
+    void resized() override { wheel->setBounds (8, 8, wheel->getWidth(), wheel->getHeight()); }
+
+    ChordWheel& getWheel() { return *wheel; }
+
+private:
+    std::unique_ptr<ChordWheel> wheel;
+};
+
+void ProgrezzorEditor::placeWheel()
+{
+    if (wheelPanel == nullptr)
+        return;
+    const int x = juce::jlimit (4, std::max (4, getWidth() - wheelPanel->getWidth() - 4), wheelButton.getBounds().getCentreX() - wheelPanel->getWidth() / 2);
+    wheelPanel->setTopLeftPosition (x, wheelButton.getBottom() + 6);
+}
+
+void ProgrezzorEditor::closeWheel()
+{
+    wheelPanel.reset();
+    wheelButton.setToggleState (false, juce::dontSendNotification);
+    grabKeyboardFocus();
+}
+
+void ProgrezzorEditor::toggleWheel()
+{
+    if (wheelPanel != nullptr)
+    {
+        closeWheel();
+        return;
+    }
+    wheelPanel = std::make_unique<WheelPanel> (std::make_unique<ChordWheel> (processor, nullptr));
+    addAndMakeVisible (*wheelPanel);
+    wheelPanel->toFront (false);
+    placeWheel();
+    wheelButton.setToggleState (true, juce::dontSendNotification);
+    grabKeyboardFocus();
+}
+
+void ProgrezzorEditor::mouseDown (const juce::MouseEvent& e)
+{
+    if (wheelPanel == nullptr)
+        return;
+    const auto* hit = e.originalComponent;
+    if (hit == &wheelButton || hit == wheelPanel.get() || wheelPanel->isParentOf (hit))
+        return; // the wheel itself, or its button (which closes it)
+    closeWheel();
 }
 
 void ProgrezzorEditor::updateNames()
@@ -3024,6 +3395,12 @@ bool ProgrezzorEditor::keyPressed (const juce::KeyPress& key)
     const auto mods = key.getModifiers();
     const int code = key.getKeyCode();
 
+    if (wheelPanel != nullptr && code == juce::KeyPress::escapeKey)
+    {
+        closeWheel();
+        return true;
+    }
+
     if (bar.isInTextMode()) // the text field does not have the focus after a pad was clicked: Enter and Esc still work
     {
         if (code == juce::KeyPress::returnKey)
@@ -3127,7 +3504,7 @@ void ProgrezzorEditor::resized()
     saveButton.setBounds (top.removeFromRight (80));
     top.removeFromRight (8);
 
-    const int leftOfTitle = 8 + 76 + 6 + 96 + 6 + 38 + 6 + 104 + 6 + 80;
+    const int leftOfTitle = 8 + 76 + 6 + 28 + 6 + 96 + 6 + 38 + 6 + 104 + 6 + 80;
     const int titleWidth = top.getWidth() - leftOfTitle;
     title.setVisible (titleWidth >= 40);
     if (titleWidth >= 40)
@@ -3136,6 +3513,8 @@ void ProgrezzorEditor::resized()
         top.removeFromLeft (8);
     }
     keyBox.setBounds (top.removeFromLeft (76));
+    top.removeFromLeft (6);
+    wheelButton.setBounds (top.removeFromLeft (28));
     top.removeFromLeft (6);
     scaleBox.setBounds (top.removeFromLeft (96));
     top.removeFromLeft (6);
@@ -3170,4 +3549,5 @@ void ProgrezzorEditor::resized()
         auto& pad = isRest ? restPad : pads[(size_t) i];
         pad.setBounds (left - 5, area.getY(), right - left + 10, area.getHeight());
     }
+    placeWheel();
 }

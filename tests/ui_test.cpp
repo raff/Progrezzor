@@ -1642,6 +1642,109 @@ int main (int argc, char** argv)
                           && std::abs (other.getProgression()[i].beats - processor.getProgression()[i].beats) < 1.0e-9;
     check (sameProgression, "the progression comes back from a saved project");
 
+    {
+        std::printf ("chord wheel\n");
+        auto& ui = *static_cast<ProgrezzorEditor*> (editor.get());
+        const int oldKey = processor.keyParam->getIndex(), oldScale = processor.scaleParam->getIndex();
+        *processor.keyParam = 0;
+        *processor.scaleParam = (int) engine::ScaleId::Major;
+        settle (60);
+
+        auto& wheelButton = ui.getWheelButton();
+        check (! ui.isWheelOpen(), "the wheel is closed at the start");
+        wheelButton.triggerClick();
+        settle (60);
+        check (ui.isWheelOpen(), "the wheel button opens the wheel");
+        snapshot ("wheel_c_major");
+
+        juce::Component* wheel = nullptr;
+        if (auto* panel = ui.getWheelPanel())
+            wheel = panel->getChildComponent (0);
+        check (wheel != nullptr && wheel->getWidth() == 380, "the wheel is a popup of its own");
+
+        if (wheel != nullptr)
+        {
+            const auto mouse = [&] (juce::Point<float> where, int clicks)
+            {
+                return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), where, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, wheel, wheel, juce::Time::getCurrentTime(), where, juce::Time::getCurrentTime(), clicks, false);
+            };
+            const auto at = [] (float degrees, float radius)
+            {
+                const float a = juce::degreesToRadians (degrees);
+                return juce::Point<float> (190.0f + std::sin (a) * radius, 190.0f - std::cos (a) * radius);
+            };
+
+            juce::MidiBuffer allOff;
+            allOff.addEvent (juce::MidiMessage::allNotesOff (1), 0);
+            runBlock (processor, allOff);
+            runBlock (processor);
+            check (processor.soundingNotes() == 0, "quiet before the wheel is tried");
+
+            // Straight up on the outer ring is C: a click plays C major (C E G)
+            wheel->mouseDown (mouse (at (0.0f, 150.0f), 1));
+            runBlock (processor);
+            check (processor.soundingNotes() == 3, "a click on a chord plays it");
+            wheel->mouseUp (mouse (at (0.0f, 150.0f), 1));
+            runBlock (processor);
+            check (processor.soundingNotes() == 0, "and it stops when the mouse is let go");
+            check (processor.keyParam->getIndex() == 0, "one click does not change the key");
+
+            // Inner ring, 90 degrees round (three steps on the circle of fifths): Em, which is a pad in C major
+            wheel->mouseDown (mouse (at (90.0f, 96.0f), 1));
+            runBlock (processor);
+            check (processor.soundingNotes() == 3, "an inner chord plays too");
+            wheel->mouseUp (mouse (at (90.0f, 96.0f), 1));
+            runBlock (processor);
+
+            // Outer ring, 90 degrees round: A major, not in C major. It still plays when it is clicked.
+            wheel->mouseDown (mouse (at (90.0f, 150.0f), 1));
+            runBlock (processor);
+            check (processor.soundingNotes() == 3, "a chord outside the scale plays when it is clicked");
+            wheel->mouseUp (mouse (at (90.0f, 150.0f), 1));
+            runBlock (processor);
+
+            // The middle: Bdim, the chord of its own
+            wheel->mouseDown (mouse (at (0.0f, 0.0f), 1));
+            runBlock (processor);
+            check (processor.soundingNotes() == 3, "the chord in the middle plays");
+            wheel->mouseUp (mouse (at (0.0f, 0.0f), 1));
+            runBlock (processor);
+
+            // A double-click on A major makes the key A, and it is still major
+            wheel->mouseDoubleClick (mouse (at (90.0f, 150.0f), 2));
+            settle (60);
+            check (processor.keyParam->getIndex() == 9 && processor.getKey().scale == engine::ScaleId::Major, "a double-click on A major makes the key A major");
+            snapshot ("wheel_a_major");
+
+            // And on an inner chord of a major key: the minor key with that chord (F#m: 60 degrees round, inner)
+            wheel->mouseDoubleClick (mouse (at (120.0f, 96.0f), 2));
+            settle (60);
+            check (processor.getKey().scale == engine::ScaleId::Minor, "a double-click on a minor chord in a major key makes the key minor");
+            snapshot ("wheel_minor");
+        }
+
+        // It stays open when the window loses the focus, and Esc, a click outside, or the button closes it
+        check (ui.isWheelOpen(), "the wheel is still open after everything above");
+        ui.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+        check (! ui.isWheelOpen(), "Esc closes the wheel");
+        wheelButton.triggerClick();
+        settle (60);
+        check (ui.isWheelOpen(), "the button opens it again");
+        wheelButton.triggerClick();
+        settle (60);
+        check (! ui.isWheelOpen(), "the wheel button closes it again");
+        wheelButton.triggerClick();
+        settle (60);
+        ui.mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), { 5.0f, 5.0f }, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &ui.getPad (0), &ui.getPad (0), juce::Time::getCurrentTime(), { 5.0f, 5.0f }, juce::Time::getCurrentTime(), 1, false));
+        check (! ui.isWheelOpen(), "a click on something else in the window closes it");
+
+        *processor.keyParam = oldKey;
+        *processor.scaleParam = oldScale;
+        settle (60);
+    }
+
     editor.reset();
     std::printf (failures == 0 ? "ALL OK\n" : "%d FAILED\n", failures);
     return failures == 0 ? 0 : 1;
