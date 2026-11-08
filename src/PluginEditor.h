@@ -388,6 +388,7 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     bool keyPressed (const juce::KeyPress&) override;
+    void mouseDown (const juce::MouseEvent&) override; // a click outside the wheel closes it
 
     ProgressionBar& getBar() { return bar; }
     PadButton& getPad (int i) { return pads[(size_t) i]; }
@@ -398,7 +399,8 @@ public:
     BarButton& getSaveButton() { return saveButton; }
     LockToggle& getLockButton() { return lockButton; }
     juce::Button& getWheelButton() { return wheelButton; }
-    bool isWheelOpen() const { return wheelPopup != nullptr; }
+    bool isWheelOpen() const { return wheelPanel != nullptr; }
+    juce::Component* getWheelPanel() { return wheelPanel.get(); }
 
 private:
     class DragGhost;
@@ -410,6 +412,8 @@ private:
     void startLearnSession();
     void padPressed (int pad);
     void toggleWheel(); // the chord wheel beside the key
+    void closeWheel();
+    void placeWheel();
 
     ProgrezzorProcessor& processor;
     theme::LookAndFeel look;
@@ -419,8 +423,7 @@ private:
     std::unique_ptr<juce::ComboBoxParameterAttachment> keyAttachment, scaleAttachment, moodAttachment, voiceAttachment;
 
     WheelToggle wheelButton;
-    juce::Component::SafePointer<juce::Component> wheelPopup;
-    juce::uint32 wheelClosedAt = 0;
+    std::unique_ptr<juce::Component> wheelPanel; // the chord wheel, a panel inside the window (open or not is kept while the window lives)
     LockToggle lockButton;
     std::unique_ptr<juce::ButtonParameterAttachment> lockAttachment;
     juce::TooltipWindow tooltipWindow { this, 600 };

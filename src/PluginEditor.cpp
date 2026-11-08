@@ -2980,6 +2980,7 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     wheelButton.setComponentID ("wheel");
     wheelButton.onClick = [this] { toggleWheel(); };
     addAndMakeVisible (wheelButton);
+    addMouseListener (this, true); // to see clicks anywhere in the window: a click outside the wheel closes it
 
     moodBox.addItemList (processor.moodParam->choices, 1);
     voiceBox.addItemList (processor.voiceParam->choices, 1);
@@ -3116,31 +3117,74 @@ ProgrezzorEditor::~ProgrezzorEditor()
             processor.releasePad (i);
 }
 
-// The wheel opens under its button and closes when the button is pressed again, or when anything else is clicked
+// The wheel is a panel inside the window, under its button. It stays until the wheel button is pressed again, Esc is pressed
+// or something else in the window is clicked. Leaving the window for another app does not close it.
+class WheelPanel : public juce::Component
+{
+public:
+    explicit WheelPanel (std::unique_ptr<ChordWheel> w) : wheel (std::move (w))
+    {
+        addAndMakeVisible (*wheel);
+        setSize (wheel->getWidth() + 16, wheel->getHeight() + 16);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto r = getLocalBounds().toFloat().reduced (1.5f);
+        g.setColour (juce::Colours::black.withAlpha (0.35f));
+        g.fillRoundedRectangle (r.translated (0.0f, 3.0f), 14.0f);
+        g.setColour (theme::popup);
+        g.fillRoundedRectangle (r, 14.0f);
+        g.setColour (theme::accent.withAlpha (0.8f));
+        g.drawRoundedRectangle (r, 14.0f, 1.5f);
+    }
+
+    void resized() override { wheel->setBounds (8, 8, wheel->getWidth(), wheel->getHeight()); }
+
+    ChordWheel& getWheel() { return *wheel; }
+
+private:
+    std::unique_ptr<ChordWheel> wheel;
+};
+
+void ProgrezzorEditor::placeWheel()
+{
+    if (wheelPanel == nullptr)
+        return;
+    const int x = juce::jlimit (4, std::max (4, getWidth() - wheelPanel->getWidth() - 4), wheelButton.getBounds().getCentreX() - wheelPanel->getWidth() / 2);
+    wheelPanel->setTopLeftPosition (x, wheelButton.getBottom() + 6);
+}
+
+void ProgrezzorEditor::closeWheel()
+{
+    wheelPanel.reset();
+    wheelButton.setToggleState (false, juce::dontSendNotification);
+    grabKeyboardFocus();
+}
+
 void ProgrezzorEditor::toggleWheel()
 {
-    if (wheelPopup != nullptr)
+    if (wheelPanel != nullptr)
     {
-        if (auto* box = wheelPopup->findParentComponentOfClass<juce::CallOutBox>())
-            box->dismiss();
+        closeWheel();
         return;
     }
-    // The click that closed the wheel (anywhere outside it, also on the button) must not open it again
-    if (juce::Time::getMillisecondCounter() - wheelClosedAt < 300)
-        return;
-
-    auto wheel = std::make_unique<ChordWheel> (processor, [safe = juce::Component::SafePointer<ProgrezzorEditor> (this)]
-    {
-        if (safe != nullptr)
-        {
-            safe->wheelClosedAt = juce::Time::getMillisecondCounter();
-            safe->wheelButton.setToggleState (false, juce::dontSendNotification);
-        }
-    });
-    wheelPopup = wheel.get();
+    wheelPanel = std::make_unique<WheelPanel> (std::make_unique<ChordWheel> (processor, nullptr));
+    addAndMakeVisible (*wheelPanel);
+    wheelPanel->toFront (false);
+    placeWheel();
     wheelButton.setToggleState (true, juce::dontSendNotification);
-    auto& box = juce::CallOutBox::launchAsynchronously (std::move (wheel), getLocalArea (&wheelButton, wheelButton.getLocalBounds()), this);
-    box.setDismissalMouseClicksAreAlwaysConsumed (true);
+    grabKeyboardFocus();
+}
+
+void ProgrezzorEditor::mouseDown (const juce::MouseEvent& e)
+{
+    if (wheelPanel == nullptr)
+        return;
+    const auto* hit = e.originalComponent;
+    if (hit == &wheelButton || hit == wheelPanel.get() || wheelPanel->isParentOf (hit))
+        return; // the wheel itself, or its button (which closes it)
+    closeWheel();
 }
 
 void ProgrezzorEditor::updateNames()
@@ -3351,6 +3395,12 @@ bool ProgrezzorEditor::keyPressed (const juce::KeyPress& key)
     const auto mods = key.getModifiers();
     const int code = key.getKeyCode();
 
+    if (wheelPanel != nullptr && code == juce::KeyPress::escapeKey)
+    {
+        closeWheel();
+        return true;
+    }
+
     if (bar.isInTextMode()) // the text field does not have the focus after a pad was clicked: Enter and Esc still work
     {
         if (code == juce::KeyPress::returnKey)
@@ -3499,4 +3549,5 @@ void ProgrezzorEditor::resized()
         auto& pad = isRest ? restPad : pads[(size_t) i];
         pad.setBounds (left - 5, area.getY(), right - left + 10, area.getHeight());
     }
+    placeWheel();
 }

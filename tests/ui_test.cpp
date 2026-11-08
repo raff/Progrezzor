@@ -1658,9 +1658,8 @@ int main (int argc, char** argv)
         snapshot ("wheel_c_major");
 
         juce::Component* wheel = nullptr;
-        for (auto* child : ui.getChildren())
-            if (auto* box = dynamic_cast<juce::CallOutBox*> (child))
-                wheel = box->getChildComponent (0);
+        if (auto* panel = ui.getWheelPanel())
+            wheel = panel->getChildComponent (0);
         check (wheel != nullptr && wheel->getWidth() == 380, "the wheel is a popup of its own");
 
         if (wheel != nullptr)
@@ -1725,9 +1724,21 @@ int main (int argc, char** argv)
             snapshot ("wheel_minor");
         }
 
+        // It stays open when the window loses the focus, and Esc, a click outside, or the button closes it
+        check (ui.isWheelOpen(), "the wheel is still open after everything above");
+        ui.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+        check (! ui.isWheelOpen(), "Esc closes the wheel");
+        wheelButton.triggerClick();
+        settle (60);
+        check (ui.isWheelOpen(), "the button opens it again");
         wheelButton.triggerClick();
         settle (60);
         check (! ui.isWheelOpen(), "the wheel button closes it again");
+        wheelButton.triggerClick();
+        settle (60);
+        ui.mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), { 5.0f, 5.0f }, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &ui.getPad (0), &ui.getPad (0), juce::Time::getCurrentTime(), { 5.0f, 5.0f }, juce::Time::getCurrentTime(), 1, false));
+        check (! ui.isWheelOpen(), "a click on something else in the window closes it");
 
         *processor.keyParam = oldKey;
         *processor.scaleParam = oldScale;
