@@ -74,7 +74,7 @@ public:
     juce::AudioParameterChoice* keyboardModeParam = nullptr; // White keys (as standard) or Chord roots: which pad a MIDI key plays
     juce::AudioParameterChoice* voicingParam = nullptr; // Settings > Voicing: Root position (as standard) or Nearest inversion
     juce::AudioParameterBool* bassParam = nullptr;    // an extra bass note under every chord (Settings: Bass note), off as standard
-    juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
+    juce::AudioParameterBool* loopParam = nullptr; // no longer used for anything (the DAW always plays the loop); kept so that old projects open as before. Was: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)
 
     engine::Key getKey() const
@@ -106,7 +106,8 @@ public:
     // The Play button. With the host playing it turns the loop on or off (the loop follows the host's position). With the host
     // stopped it starts or stops the plug-in's own clock, so the progression plays without the DAW running. For the editor.
     void togglePlay();
-    bool isPlayOn() const { return hostIsPlaying.load() ? loopParam->get() : internalRun.load(); }
+    // Play lights when the progression plays: with the DAW while it plays, otherwise on the plug-in's own clock
+    bool isPlayOn() const { return hostIsPlaying.load() || internalRun.load(); }
     bool isHostPlaying() const { return hostIsPlaying.load(); }
 
     // The length of a bar in the host's time signature, in beats (4 until the host has told)

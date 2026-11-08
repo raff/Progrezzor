@@ -13,7 +13,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Changed
-- **The DAW's play always starts the progression.** Before, the loop was silent while the DAW played if Play in the plug-in was off. Now Play only chooses between editing and playing the blocks by hand.
+- **The DAW's play always starts the progression.** Before, the loop was silent while the DAW played if Play in the plug-in was off. Play now lights by itself while the DAW plays (and cannot be switched off), and goes out when the DAW stops.
 
 ### Added
 - **Voicing: Nearest inversion.** Settings has a Voicing choice, "Root position" (as before) or "Nearest inversion". With Nearest inversion every chord is played in the way that lies nearest the home chord, so the notes hardly jump between chords (G7 in C Major is B3 D4 F4 G4). The name stays G7. A chord you gave a turn yourself is played as you chose. The pads, the loop and the MIDI file have the same notes. Saved with the project.

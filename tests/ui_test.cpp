@@ -205,11 +205,10 @@ int main (int argc, char** argv)
     check (processor.getPlayingBlock() == 1, "the second block plays at beat 5");
     check (processor.soundingNotes() == 3, "and its chord sounds");
     snapshot ("loop_playing");
-    *processor.loopParam = false;
+    check (processor.isPlayOn(), "Play lights by itself while the DAW plays");
+    processor.togglePlay(); // pressing it does nothing: the DAW is the one that stops
     runBlock (processor);
-    check (processor.getPlayingBlock() == 1 && processor.soundingNotes() == 3, "Play off: the DAW still starts the loop");
-    snapshot ("loop_off");
-    *processor.loopParam = true;
+    check (processor.isPlayOn() && processor.getPlayingBlock() == 1 && processor.soundingNotes() == 3, "and it cannot be switched off");
     transport.playing = false;
     runBlock (processor);
 
@@ -654,20 +653,17 @@ int main (int argc, char** argv)
         }
         processor.undo();
 
-        // With Play off (editing) the DAW still plays the loop
+        // The DAW plays the loop, and Play follows it
         FakeTransport t3;
         processor.setPlayHead (&t3);
-        *processor.loopParam = false;
         processor.setProgression ({ mk (0, 4), mk (2, 4) });
         t3.playing = true;
         t3.quarters = 1.0;
         runBlock (processor);
-        check (processor.getPlayingBlock() == 0 && processor.soundingNotes() == 3, "in Edit the DAW still plays the loop");
-        *processor.loopParam = true;
-        runBlock (processor);
-        check (processor.getPlayingBlock() == 0 && processor.soundingNotes() == 3, "and it goes on in Play");
+        check (processor.getPlayingBlock() == 0 && processor.soundingNotes() == 3 && processor.isPlayOn(), "the DAW plays the loop and Play is lit");
         t3.playing = false;
         runBlock (processor);
+        check (! processor.isPlayOn(), "and when the DAW stops, Play is off again (the bar can be edited)");
         processor.setPlayHead (nullptr);
         processor.setProgression ({});
         bar.setEditing (false);

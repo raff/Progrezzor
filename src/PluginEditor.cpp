@@ -2452,6 +2452,8 @@ void ProgressionBar::updateButtons()
     // starting and stopping.
     const bool playOn = processor.isPlayOn();
     playButton.setToggleState (playOn, juce::dontSendNotification);
+    playButton.setTooltip (processor.isHostPlaying() ? "Playing with the DAW. Stop the DAW to change the chords"
+                                                     : "Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
     playButton.setEnabled (playOn || ! processor.getProgression().empty()); // an empty bar cannot be played
     arpButton.setToggleState (processor.arpOnParam->get(), juce::dontSendNotification);
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);

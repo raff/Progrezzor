@@ -731,9 +731,8 @@ void ProgrezzorProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer
 
 void ProgrezzorProcessor::togglePlay()
 {
-    if (hostIsPlaying.load())
-        loopParam->setValueNotifyingHost (loopParam->get() ? 0.0f : 1.0f);
-    else
+    // While the DAW plays, it is the DAW that stops the progression: Play follows it
+    if (! hostIsPlaying.load())
         internalRun.store (! internalRun.load());
 }
 
