@@ -189,6 +189,46 @@ void testVoicingBasics()
     checkEqual (pitchClasses (inB), "B D F#", "same chord in B");
 }
 
+void testPadsClimb()
+{
+    std::printf ("pads climb\n");
+    bool climb = true, rootLowest = true, window = true;
+    for (int scaleIndex = 0; scaleIndex < kNumScales; ++scaleIndex)
+        for (int tonic = 0; tonic < 12; ++tonic)
+        {
+            int previous = -1;
+            for (int pad = 0; pad < 7; ++pad)
+            {
+                const Chord c = padChord ((ScaleId) scaleIndex, pad);
+                const auto v = voiceChord (c, tonic);
+                const int root = v.notes[0];
+                climb &= root > previous;
+                previous = root;
+                rootLowest &= wrap12 (root - tonic - c.root) == 0;
+                if (pad == 0)
+                    window &= root >= 54 && root <= 65;
+                window &= root >= 54 && root <= 65 + 11;
+            }
+        }
+    check (climb, "pads 1 to 7 have rising roots in all 12 keys and all scales");
+    check (rootLowest, "without an inversion the root is the lowest note");
+    check (window, "the tonic sits in F#3 to F4, the others at most 11 above");
+
+    // Chords outside the scale follow the same rule
+    bool outside = true;
+    for (int tonic = 0; tonic < 12; ++tonic)
+        for (int root = 0; root < 12; ++root)
+        {
+            const auto v = voiceChord ({ root, ChordType::Major, kAutoInversion }, tonic);
+            const int tonicRoot = voiceChord ({ 0, ChordType::Major, kAutoInversion }, tonic).notes[0];
+            outside &= v.notes[0] == tonicRoot + root;
+        }
+    check (outside, "any chord's root is 0 to 11 above the tonic's, in or out of the scale");
+
+    checkEqual (pitchClasses (voiceChord (padChord (ScaleId::Major, 0), 0)), "C E G", "C major");
+    check (voiceChord (padChord (ScaleId::Major, 6), 0).notes[0] == 71, "B in C major is B4");
+}
+
 void testChosenInversion()
 {
     std::printf ("chosen inversion\n");
@@ -221,9 +261,9 @@ void testPredictableVoicing()
         return text;
     };
     checkEqual (notesOf (0), std::string ("57 60 64 "), "Am is A3 C4 E4 (57 60 64)");
-    checkEqual (notesOf (5), std::string ("53 57 60 "), "F is F3 A3 C4 (53 57 60)");
+    checkEqual (notesOf (5), std::string ("65 69 72 "), "F is F4 A4 C5 (65 69 72)");
     checkEqual (notesOf (2), std::string ("60 64 67 "), "C is C4 E4 G4 (60 64 67)");
-    checkEqual (notesOf (6), std::string ("55 59 62 "), "G is G3 B3 D4 (55 59 62)");
+    checkEqual (notesOf (6), std::string ("67 71 74 "), "G is G4 B4 D5 (67 71 74)");
 
     // Nothing played before has any say: a long run of random clicks, and every pad is the same notes every time
     unsigned seed = 4242;
@@ -238,14 +278,9 @@ void testPredictableVoicing()
                 const int pad = (int) (next() % 7);
                 const auto v = voiceChord (padChord ((ScaleId) scaleIndex, pad), tonic);
                 std::string text;
-                double mean = 0.0;
                 for (int i = 0; i < v.count; ++i)
-                {
                     text += std::to_string (v.notes[(size_t) i]) + " ";
-                    mean += v.notes[(size_t) i];
-                }
-                mean /= v.count;
-                inBand &= mean >= kCentreNote - 6.0 && mean <= kCentreNote + 6.0;
+                inBand &= v.notes[0] >= 54 && v.notes[0] <= 65 + 11;
                 if (first[(size_t) pad].empty())
                     first[(size_t) pad] = text;
                 else
@@ -1237,7 +1272,7 @@ void testArp()
     twoBlocks.push_back ({ Chord { 0, ChordType::Minor, kAutoInversion }, 2.0 });
     twoBlocks.push_back ({ Chord { 8, ChordType::Major, kAutoInversion }, 2.0 });
     const auto two = exportNotes (twoBlocks, 9, ScaleId::Minor, true, 0, kCentreNote, fast);
-    check (two.size() == 8 && two[4].start == 2.0 && two[4].note == 53, "every block starts its arp from the beginning (the second block starts on the F)");
+    check (two.size() == 8 && two[4].start == 2.0 && two[4].note == 65, "every block starts its arp from the beginning (the second block starts on the F)");
     checkEqual (exportFileName (twoBlocks, aMinor, true), std::string ("Am-F-Arp.mid"), "the file name says Arp");
     checkEqual (exportFileName (twoBlocks, aMinor, false), std::string ("Am-F.mid"), "and does not when it is off");
 }
@@ -1336,6 +1371,7 @@ int main()
     testNames3();
     testScaleFit();
     testVoicingBasics();
+    testPadsClimb();
     testChosenInversion();
     testPredictableVoicing();
 
