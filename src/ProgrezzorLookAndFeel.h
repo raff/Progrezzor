@@ -190,6 +190,36 @@ public:
     juce::Font titleFont (float height) const { return juce::Font (juce::FontOptions (titleFace).withHeight (height)); }
 
     juce::Font getLabelFont (juce::Label& label) override { return label.getFont(); }
+    // A small loudspeaker: with sound waves when it is on, crossed out when it is off
+    static void drawSpeaker (juce::Graphics& g, juce::Rectangle<float> r, juce::Colour colour, bool sound)
+    {
+        const float h = r.getHeight(), x = r.getX(), cy = r.getCentreY();
+        juce::Path body;
+        body.addRectangle (x, cy - h * 0.17f, h * 0.22f, h * 0.34f);
+        body.startNewSubPath (x + h * 0.22f, cy - h * 0.17f);
+        body.lineTo (x + h * 0.55f, cy - h * 0.42f);
+        body.lineTo (x + h * 0.55f, cy + h * 0.42f);
+        body.lineTo (x + h * 0.22f, cy + h * 0.17f);
+        body.closeSubPath();
+        g.setColour (colour);
+        g.fillPath (body);
+        if (sound)
+        {
+            for (int i = 0; i < 2; ++i)
+            {
+                const float radius = h * (0.3f + 0.22f * (float) i);
+                juce::Path wave; // an arc on the right of the cone (angles go clockwise from straight up)
+                wave.addCentredArc (x + h * 0.55f, cy, radius, radius, 0.0f, juce::MathConstants<float>::halfPi - 0.75f, juce::MathConstants<float>::halfPi + 0.75f, true);
+                g.strokePath (wave, juce::PathStrokeType (1.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
+        }
+        else
+        {
+            g.setColour (warn);
+            g.drawLine (x - h * 0.05f, cy + h * 0.46f, x + h * 0.78f, cy - h * 0.46f, 1.8f);
+        }
+    }
+
     juce::Font getComboBoxFont (juce::ComboBox&) override { return labelFont (15.0f); }
     juce::Font getPopupMenuFont() override { return labelFont (15.0f); }
 
@@ -207,6 +237,12 @@ public:
         chevron.lineTo (cx + 4.5f, cy - 2.0f);
         g.setColour (isHot ? accent : dimText);
         g.strokePath (chevron, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+        if (box.getComponentID() == "voice") // the sound chooser: a loudspeaker, crossed out when the sound is Off
+        {
+            const bool off = box.getSelectedItemIndex() == box.getNumItems() - 1;
+            drawSpeaker (g, { 9.0f, (float) (height - 4) * 0.5f - 8.0f, 18.0f, 16.0f }, off ? dimText.withAlpha (0.7f) : text, ! off);
+        }
     }
 
     // The panel that opens from the Arp button: the same dark card as the rest, with a warm edge
@@ -220,7 +256,8 @@ public:
 
     void positionComboBoxText (juce::ComboBox& box, juce::Label& label) override
     {
-        label.setBounds (11, 1, box.getWidth() - 32, box.getHeight() - 6);
+        const int left = box.getComponentID() == "voice" ? 32 : 11; // room for the loudspeaker
+        label.setBounds (left, 1, box.getWidth() - left - 21, box.getHeight() - 6);
         label.setFont (getComboBoxFont (box));
     }
 

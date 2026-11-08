@@ -2440,6 +2440,7 @@ void ProgressionBar::showSettingsMenu()
     menu.addSeparator();
     menu.addSectionHeader ("Sound");
     menu.addItem (22, "Bass note", true, processor.bassParam->get());
+    menu.addItem (23, "Preview sound", true, processor.voiceParam->getIndex() != PadSynth::Off);
 
     juce::Component::SafePointer<ProgressionBar> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (260),
@@ -2451,6 +2452,10 @@ void ProgressionBar::showSettingsMenu()
                                 safe->processor.setLearnHints (! safe->processor.getLearnHints());
                             else if (safe != nullptr && result == 21)
                                 safe->processor.setSuggestInversions (! safe->processor.getSuggestInversions());
+                            else if (safe != nullptr && result == 23)
+                            {
+                                safe->processor.togglePreviewSound();
+                            }
                             else if (safe != nullptr && result == 22)
                             {
                                 auto& bass = *safe->processor.bassParam; // saved with the project
@@ -3190,11 +3195,16 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     addMouseListener (this, true); // to see clicks anywhere in the window: a click outside the wheel closes it
 
     moodBox.addItemList (processor.moodParam->choices, 1);
-    voiceBox.addItemList (processor.voiceParam->choices, 1);
+    for (int i = 0; i < processor.voiceParam->choices.size(); ++i) // a line over Off, which is not a sound
+    {
+        if (i == processor.voiceParam->choices.size() - 1)
+            voiceBox.addSeparator();
+        voiceBox.addItem (processor.voiceParam->choices[i], i + 1);
+    }
     moodAttachment = std::make_unique<juce::ComboBoxParameterAttachment> (*processor.moodParam, moodBox);
     voiceAttachment = std::make_unique<juce::ComboBoxParameterAttachment> (*processor.voiceParam, voiceBox);
     moodBox.setTooltip ("Mood: the feeling of the progressions Suggest gives");
-    voiceBox.setTooltip ("Sound: what you hear when you play. Off: only the MIDI (the MIDI is the same)");
+    voiceBox.setTooltip ("Preview sound. Choose Off when Progrezzor plays another instrument.");
     moodBox.setComponentID ("mood");
     voiceBox.setComponentID ("voice");
     addAndMakeVisible (moodBox);
@@ -3422,6 +3432,15 @@ void ProgrezzorEditor::timerCallback()
         updateNames();
 
     bar.updateButtons();
+
+    // The sound chooser: the text is dim while the sound is Off
+    const bool previewOff = processor.voiceParam->getIndex() == PadSynth::Off;
+    if (previewOff != voiceShownOff)
+    {
+        voiceShownOff = previewOff;
+        voiceBox.setColour (juce::ComboBox::textColourId, previewOff ? theme::dimText.withAlpha (0.7f) : theme::text);
+        voiceBox.repaint();
+    }
 
     bar.setPlayingBlock (processor.getPlayingBlock());
 
@@ -3711,7 +3730,7 @@ void ProgrezzorEditor::resized()
     saveButton.setBounds (top.removeFromRight (80));
     top.removeFromRight (8);
 
-    const int leftOfTitle = 8 + 76 + 6 + 28 + 6 + 96 + 6 + 38 + 6 + 104 + 6 + 80;
+    const int leftOfTitle = 8 + 76 + 6 + 28 + 6 + 96 + 6 + 38 + 6 + 104 + 6 + 118;
     const int titleWidth = top.getWidth() - leftOfTitle;
     title.setVisible (titleWidth >= 40);
     if (titleWidth >= 40)
@@ -3729,7 +3748,7 @@ void ProgrezzorEditor::resized()
     top.removeFromLeft (6);
     moodBox.setBounds (top.removeFromLeft (104));
     top.removeFromLeft (6);
-    voiceBox.setBounds (top.removeFromLeft (80));
+    voiceBox.setBounds (top.removeFromLeft (118));
 
     area.removeFromTop (8);
     padLabel = area.removeFromTop (18);

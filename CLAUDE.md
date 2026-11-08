@@ -203,7 +203,7 @@ Reglen er: * betyder antal, og : betyder længde. Tekstfeltet viser altid blokke
 ## Stemmer
 
 - Preview-lyde bygges som små indbyggede synths uden samples. MIDI-filen indeholder kun noter.
-- Pad er standard og kommer først.
+- Soft Pad er standard og kommer først (hed før Pad; omdøbt 2026-11-08, så den ikke forveksles med akkord-knapperne; gemte projekter bruger tallet og er upåvirkede). Lyd-vælgeren i topbjælken har et højttaler-ikon, og med Off er ikonet streget over og teksten dæmpet. Off står under en skillelinje. Tooltip: "Preview sound. Choose Off when Progrezzor plays another instrument." Settings har under Sound "Preview sound" med flueben, der slår lyden fra og til (til vælger den sidst valgte lyd). Preview er til som standard.
 - Derefter Strings, Keys (FM), Organ, Stab og Pluck.
 - Klaver er droppet for nu.
 
@@ -219,7 +219,7 @@ Reglen er: * betyder antal, og : betyder længde. Tekstfeltet viser altid blokke
 
 0. Tomt plugin bygget som mulighed A. Knap sender en testakkord, og en simpel testtone viser, om preview-lyd slipper igennem. Test i Bitwig, REAPER og Ableton Live: Kan det indsættes, når MIDI frem til en synth, og kan man høre lyden? Prøv kun mulighed B, hvis A fejler. Skriv valget i denne fil, og vent på Henriks OK.
 1. ChordEngine (akkordernes toner) og enhedstest, uden GUI.
-2. 7 store pads, toneart, skala, Pad-stemmen, MIDI ud og keyboard-input. Ingen hængende noter.
+2. 7 store pads, toneart, skala, Soft Pad-stemmen, MIDI ud og keyboard-input. Ingen hængende noter.
 3. Rundgangsbjælken med blokke, 🎲 Suggest og et lille bibliotek til Melancholic. Her testes kvaliteten af forslag tidligt.
 4. Loop synkroniseret med DAW'en.
 5. Redigering: længder, træk, duplikér, tilføj, slet, 🔒, fortryd og gendan og variant-menu. (Capture indgik, men er fjernet, se Rundgangen.)

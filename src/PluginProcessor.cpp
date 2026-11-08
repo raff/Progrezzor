@@ -45,7 +45,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     juce::StringArray moods, voices;
     for (const char* name : engine::moodNames)
         moods.add (name);
-    for (const char* name : { "Pad", "Strings", "Keys", "Organ", "Stab", "Pluck", "Off" }) // Off: no preview sound (the MIDI is the same)
+    for (const char* name : { "Soft Pad", "Strings", "Keys", "Organ", "Stab", "Pluck", "Off" }) // Off: no preview sound (the MIDI is the same)
         voices.add (name);
     addParameter (moodParam = new juce::AudioParameterChoice ({ "mood", 1 }, "Mood", moods, (int) engine::Mood::Bright));
     addParameter (voiceParam = new juce::AudioParameterChoice ({ "voice", 1 }, "Voice", voices, 0));
@@ -536,6 +536,8 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     AudioWork work (*this, buffer, midi);
     synth.setVoice (voiceParam->getIndex());
+    if (voiceParam->getIndex() != PadSynth::Off)
+        lastPreviewVoice.store (voiceParam->getIndex()); // what "Preview sound" in Settings turns back on
 
     if (flushNeeded)
     {
@@ -914,6 +916,14 @@ void ProgrezzorProcessor::setSuggestInversions (bool nowOn)
 {
     suggestInversions.store (nowOn);
     writeSettings();
+}
+
+void ProgrezzorProcessor::togglePreviewSound()
+{
+    const int wanted = voiceParam->getIndex() != PadSynth::Off ? (int) PadSynth::Off : lastPreviewVoice.load();
+    voiceParam->beginChangeGesture();
+    voiceParam->setValueNotifyingHost (voiceParam->convertTo0to1 ((float) wanted));
+    voiceParam->endChangeGesture();
 }
 
 void ProgrezzorProcessor::setLearning (bool nowLearning)

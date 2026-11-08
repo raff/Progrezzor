@@ -444,4 +444,5 @@ private:
     engine::LearnSession learn;
     int learnVersion = -1;
     bool wasLearning = false;
+    bool voiceShownOff = false;
 };
