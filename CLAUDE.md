@@ -56,8 +56,7 @@ Regler:
 - Formater: VST3 og CLAP. Linux og Windows først, macOS som eksperimentel build. AU er ikke med i første version.
 - Plugin'ets hovedopgave er at generere MIDI, ligesom Seqverse. Preview-lyden er en hjælp.
 - Faste flag: NEEDS_MIDI_INPUT TRUE, NEEDS_MIDI_OUTPUT TRUE, IS_MIDI_EFFECT FALSE. Stereo-output findes fra dag ét, så preview-lyden har en vej ud.
-- Plugin-type afgøres i milepæl 0. Mulighed A, som Seqverse: IS_SYNTH FALSE og CLAP-feature note-effect. Mulighed B: IS_SYNTH TRUE og CLAP-feature instrument.
-- Byg A først. Skift kun til B, hvis Ableton Live eller preview-lyden driller. Vælg den mulighed, der virker bedst i de fleste DAW'er, og skriv routingen til resten i guiden.
+- Plugin-type (besluttet af Henrik 2026-11-08): VST3 er et Instrument (IS_SYNTH TRUE), og CLAP er en MIDI-effekt (CLAP-feature note-effect). Det er altså to forskellige typer, og det er med vilje. Skift dem ikke uden Henriks OK. Routingen i DAW'erne skrives i guiden, når den er testet.
 - Al MIDI-output ligger på kanal 1.
 
 ## Genbrug fra Seqverse
@@ -216,7 +215,9 @@ Reglen er: * betyder antal, og : betyder længde. Tekstfeltet viser altid blokke
 
 ## Beslutning fra milepæl 0
 
-Mulighed A er valgt: IS_SYNTH FALSE og CLAP-feature note-effect. Testet på Linux i Bitwig og REAPER: Plugin'et kan indsættes på et MIDI-spor, MIDI kommer ud til en synth efter det, og testtonen kan høres. Ableton Live og Windows er ikke testet endnu (Ableton findes ikke på Linux) og testes, når CI kan bygge en Windows-release. Se BACKLOG.md. Indtil da udvikles og testes kun på Linux.
+Mulighed A blev valgt først: IS_SYNTH FALSE og CLAP-feature note-effect. Testet på Linux i Bitwig og REAPER: Plugin'et kan indsættes på et MIDI-spor, MIDI kommer ud til en synth efter det, og testtonen kan høres. Ableton Live og Windows er ikke testet endnu (Ableton findes ikke på Linux) og testes, når CI kan bygge en Windows-release. Se BACKLOG.md. Indtil da udvikles og testes kun på Linux.
+
+Ændret 2026-11-08 efter Henriks ønske: VST3 er nu Instrument (IS_SYNTH TRUE), mens CLAP stadig er en MIDI-effekt (note-effect). Se Teknisk fundament.
 
 ## Beslutning fra milepæl 3
 
