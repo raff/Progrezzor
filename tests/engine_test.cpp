@@ -560,6 +560,82 @@ void testChordRhythm()
     check (exportFileName (one, key, false, true) == "C-Rhythm.mid" && exportFileName (one, key, true, false) == "C-Arp.mid", "the file name has Rhythm, as it has Arp");
 }
 
+void testQuickTextBars()
+{
+    std::printf ("quick-text: bars\n");
+    const Key aMinor { 9, ScaleId::Minor };
+    const auto read = [&] (const std::string& text, bool lock = true) { return parseQuickText (text, aMinor, 4.0, lock); };
+    const auto names = [&] (const QuickTextResult& r)
+    {
+        std::string out;
+        for (const auto& b : r.blocks)
+            out += (out.empty() ? "" : " ") + (b.rest ? std::string ("R") : chordName (b.chord, aMinor)) + ":" + std::to_string ((int) (b.beats * 2.0 / 4.0));
+        return out;
+    }; // name:length in half bars
+
+    // A bar is one block of one bar
+    auto r = read ("| Am | F | C | G |");
+    check (r.problems.empty() && r.blocks.size() == 4 && names (r) == "Am:2 F:2 C:2 G:2", "| Am | F | C | G |: four blocks of one bar");
+    check (read ("|Am|F|C|G|").blocks.size() == 4 && read ("Am | F | C | G").blocks.size() == 4, "the bar lines can be written close or without the first and last");
+
+    // Two chords in a bar share it
+    r = read ("| Am F | C G |");
+    check (r.problems.empty() && names (r) == "Am:1 F:1 C:1 G:1", "two chords in a bar: two blocks of half a bar each");
+    r = read ("| Am | C G | F |");
+    check (names (r) == "Am:2 C:1 G:1 F:2", "a bar with one chord and a bar with two");
+    r = read ("| Am*2 |");
+    check (r.problems.empty() && names (r) == "Am:1 Am:1", "Am*2 in a bar is two half bars");
+
+    // % and / repeat the chord before
+    r = read ("| Am | % | F | / |");
+    check (r.problems.empty() && names (r) == "Am:2 Am:2 F:2 F:2", "% and / repeat the chord before, one bar each");
+    r = read ("| Am F | % G |");
+    check (r.problems.empty() && names (r) == "Am:1 F:1 F:1 G:1", "a repeat can share a bar too");
+    r = read ("| % | Am |");
+    check (r.problems.size() == 1 && names (r) == "Am:2", "a repeat with nothing before it is marked, the rest is read");
+    r = read ("| R | Am | % |");
+    check (names (r) == "R:2 Am:2 Am:2", "a pause is a bar too");
+    r = read ("| Am/C | % |");
+    check (r.problems.empty() && r.blocks.size() == 2 && r.blocks[1].chord.inversion == 1 && r.blocks[1].chord == r.blocks[0].chord, "an inversion (Am/C) is kept in the repeat, and a / alone is a repeat");
+
+    // Line breaks and extra spaces do not matter
+    r = read ("|  Am   |\n F\t|\n\n   C | G\n|");
+    check (r.problems.empty() && names (r) == "Am:2 F:2 C:2 G:2", "line breaks and extra spaces are ignored");
+    check (names (read ("||Am||F|")) == "Am:2 F:2", "empty bars are ignored");
+
+    // The notation as it was still works, also inside the bars
+    r = read ("| Am:2 | G |");
+    check (r.problems.empty() && names (r) == "Am:4 G:2", "a word with its own length keeps it (Am:2)");
+    check (names (read ("Am F:2 | C")) == "Am:2 F:4 C:2", "text before the first bar line is a bar too, a word with its own length keeps it");
+    check (names (read ("Am*2 F:2 C")) == "Am:2 Am:2 F:4 C:2", "without bar lines it is read exactly as before");
+
+    // Unknown words are marked, the rest works
+    r = read ("| Am | Xyz | F |");
+    check (r.problems.size() == 1 && r.problems[0].start == 7 && r.problems[0].end == 10 && names (r) == "Am:2 F:2", "an unknown word is marked in red where it is, the other bars work");
+    r = read ("| Am Xyz | F |");
+    check (r.problems.size() == 1 && names (r) == "Am:2 F:2", "an unknown word in a bar leaves the other chord the whole bar");
+
+    // More than two chords in a bar: the third is marked
+    r = read ("| Am F C | G |");
+    check (r.problems.size() == 1 && names (r) == "Am:1 F:1 G:2", "a bar holds two chords: the third is marked");
+
+    // The lock: a chord outside the scale is a disabled block, in bars too
+    r = read ("| Am | E | F |");
+    check (r.problems.empty() && r.outsideScale == 1 && r.blocks[1].disabled, "a chord outside the scale is marked with the lock on");
+    check (read ("| Am | E | F |", false).outsideScale == 0, "and not with the lock off");
+
+    // The length of a bar is what the host says (3/4: 3 beats)
+    r = parseQuickText ("| Am | F G |", aMinor, 3.0, true);
+    check (r.blocks.size() == 3 && r.blocks[0].beats == 3.0 && r.blocks[1].beats == 1.5 + 0.5, "a bar is what the host says");
+
+    // Past 32 blocks the rest is marked
+    std::string many = "|";
+    for (int i = 0; i < 34; ++i)
+        many += " Am |";
+    r = read (many);
+    check ((int) r.blocks.size() == kMaxBlocks && r.problems.size() == 2, "there is room for 32 blocks; the rest is marked");
+}
+
 void testChosenInversion()
 {
     std::printf ("chosen inversion\n");
@@ -1682,6 +1758,7 @@ int main()
     testArp();
     testOctaves();
     testQuickText();
+    testQuickTextBars();
     testLoopPlan();
     testEditing();
     testExport();

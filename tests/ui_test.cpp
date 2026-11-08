@@ -867,6 +867,18 @@ int main (int argc, char** argv)
         bar.cancelQuickText();
         check (! bar.isInTextMode() && processor.getProgression().size() == 5, "Esc brings back the bar as it was");
 
+        // A chord chart with bar lines, pasted over several lines
+        click (bar.getQuickTextButton());
+        bar.getTextEditor().selectAll();
+        bar.getTextEditor().insertTextAtCaret ("| Am | F |\n| C G | %\n|");
+        bar.applyQuickText();
+        settle (50);
+        {
+            const auto& q = processor.getProgression();
+            check (! bar.isInTextMode() && q.size() == 5 && near (q[0].beats, 4.0) && near (q[2].beats, 2.0) && near (q[3].beats, 2.0) && near (q[4].beats, 4.0) && q[4].chord == q[3].chord,
+                   "a chord chart with bars and % is read, over several lines");
+        }
+
         click(bar.getQuickTextButton());
         bar.getTextEditor().setText ("Xq", false);
         bar.applyQuickText();

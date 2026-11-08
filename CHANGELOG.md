@@ -11,6 +11,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Added
+- **Chord charts in Quick-text.** Type or paste a chart with bar lines, like `| C | Am | F | G |`. Every bar is one block of a bar; two chords in a bar share it (`| C G |`); `%` or `/` repeats the chord before. Line breaks and extra spaces are ignored, the old notation (`Am*2`, `Am:2`) still works, and an unknown word is marked in red while the rest is used.
 - **Chord rhythm.** A Hold | Arp | Rhythm switch at the top of the arp panel. Rhythm strikes the whole chord in one of 12 patterns (Offbeat, Stab, Double stab, Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse, Euclid), at 1/8 or 1/16, with Short, Medium or Long notes. It starts again in every block, follows the host's grid, and the MIDI file has the same strikes.
 - **Chord wheel.** A small wheel beside the key opens the circle of fifths in a panel that stays open until you close it. The chords of the seven pads have the pad colours, the others are dim. Click a chord to hear it, double-click to use it as the key.
 - **Block menu.** Right-click a block, or use the small gear on mouseover, to change its chord type, inversion, octave and length, or to lock, duplicate or delete it. Right-click no longer deletes at once; the Delete key still deletes the selected block. A pause has only length, Duplicate and Delete.

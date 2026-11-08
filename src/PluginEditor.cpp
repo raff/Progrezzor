@@ -2051,7 +2051,7 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     };
     addChildComponent (replaceButton);
 
-    quickTextButton.setTooltip ("Type the chords, like Am F C G:2. Enter uses it, Esc cancels");
+    quickTextButton.setTooltip ("Type the chords, like Am F C G:2, or a chart like | Am | F | C G | %. Enter uses it, Esc cancels");
     quickTextButton.setVisible (false);
     quickTextButton.onClick = [this] { startQuickText(); };
     quickTextButton.setComponentID ("quicktext");
