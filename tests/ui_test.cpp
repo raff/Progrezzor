@@ -218,6 +218,18 @@ int main (int argc, char** argv)
     processor.togglePlay();
     runBlock (processor);
     check (processor.isPlayOn() && processor.getPlayingBlock() == 0 && processor.soundingNotes() == 3, "Play plays the first chord on its own");
+    {
+        // A pad or a block pressed while Play is lit gives no sound and does not silence the loop
+        processor.pressPad (3);
+        processor.pressBlock (5, { 7, engine::ChordType::Major, engine::kAutoInversion });
+        juce::AudioBuffer<float> audio (2, 512);
+        juce::MidiBuffer out;
+        processor.processBlock (audio, out);
+        check (out.getNumEvents() == 0 && processor.soundingNotes() == 3, "pads and blocks are silent while Play is lit, the loop goes on");
+        processor.releasePad (3);
+        processor.releaseBlock (5);
+        runBlock (processor);
+    }
     for (int i = 0; i < 200; ++i) // about four beats at 120 bpm
         runBlock (processor);
     check (processor.getPlayingBlock() == 1, "and goes on to the next chord on its own clock");

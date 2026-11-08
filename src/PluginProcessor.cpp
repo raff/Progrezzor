@@ -126,8 +126,12 @@ bool ProgrezzorProcessor::isBusesLayoutSupported (const BusesLayout& layouts) co
         && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
 }
 
+// While the progression plays (Play lights) a click on a pad, a block or the chord wheel gives no sound: it would silence the
+// loop for as long as it was held. A release always goes through, so that nothing hangs if Play started under a held pad.
 void ProgrezzorProcessor::pressPad (int pad)
 {
+    if (isPlayOn())
+        return;
     sendGuiEvent ({ engine::NoteTracker::padSource (pad), true, pad, {} });
 }
 
@@ -138,6 +142,8 @@ void ProgrezzorProcessor::releasePad (int pad)
 
 void ProgrezzorProcessor::pressBlock (int block, const engine::Chord& chord)
 {
+    if (isPlayOn())
+        return;
     sendGuiEvent ({ engine::NoteTracker::blockSource (block), true, -1, chord });
 }
 
