@@ -87,12 +87,12 @@ void drawGear (juce::Graphics& g, juce::Rectangle<float> r, juce::Colour colour)
     const auto centre = r.getCentre();
     const float size = std::min (r.getWidth(), r.getHeight());
     g.setColour (colour);
-    g.drawEllipse (juce::Rectangle<float> (size * 0.52f, size * 0.52f).withCentre (centre), 2.0f);
+    g.drawEllipse (juce::Rectangle<float> (size * 0.52f, size * 0.52f).withCentre (centre), std::max (2.0f, size * 0.09f));
     for (int tooth = 0; tooth < 8; ++tooth)
     {
         const float angle = (float) tooth * juce::MathConstants<float>::twoPi / 8.0f;
         const juce::Point<float> direction (std::sin (angle), -std::cos (angle));
-        g.drawLine (juce::Line<float> (centre + direction * (size * 0.3f), centre + direction * (size * 0.43f)), 2.6f);
+        g.drawLine (juce::Line<float> (centre + direction * (size * 0.3f), centre + direction * (size * 0.47f)), std::max (2.6f, size * 0.12f));
     }
 }
 }
@@ -452,7 +452,7 @@ void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
             break;
 
         case Icon::Gear:
-            drawGear (g, bounds.reduced (bounds.getWidth() * 0.12f), colour);
+            drawGear (g, bounds.reduced (2.0f), colour); // as big as the button is high
             break;
 
         case Icon::Minus:
