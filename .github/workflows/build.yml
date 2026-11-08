@@ -77,7 +77,7 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a ctest --test-dir build -C Release --output-on-failure
 
-      - name: Tests (Windows: the engine tests)
+      - name: Tests (Windows, the engine tests)
         if: runner.os == 'Windows'
         run: ctest --test-dir build -C Release --output-on-failure
 
