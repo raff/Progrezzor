@@ -1409,6 +1409,15 @@ int main (int argc, char** argv)
         *processor.scaleParam = 1;
         *processor.arpOnParam = false;
         processor.setLearnHints (false);
+
+        // "Inversions in suggestions": on as standard, and kept for every project
+        check (processor.getSuggestInversions(), "inversions in suggestions are on as standard");
+        processor.setSuggestInversions (false);
+        {
+            ProgrezzorProcessor another;
+            check (! another.getSuggestInversions(), "the choice about inversions in suggestions is kept for every project");
+        }
+        processor.setSuggestInversions (true);
         processor.setProgression ({ { { 0, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },   // C
                                     { { 5, engine::ChordType::Major, engine::kAutoInversion }, 4.0, false },   // F
                                     { { 9, engine::ChordType::Minor, engine::kAutoInversion }, 4.0, false } }); // Am

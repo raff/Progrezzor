@@ -125,6 +125,7 @@ Mood bestemmer bibliotekets rundgange, akkordfarven og eventuelt registeret. Moo
 - Mål: cirka 20 rundgange pr. stemning, både til dur og mol.
 - Dorian og Phrygian bruger de rundgange fra mol, der passer ind i skalaen.
 - Pads, der passer godt efter den sidste akkord, lyser op. Reglerne ligger i en håndskrevet tabel. Højst 3 pads lyser ad gangen, og alle pads virker altid.
+- Omvendinger (Henrik, 2026-11-08): Biblioteket kan angive en omvending på en akkord (C G/B Am F, gående bas), kun hvor den giver en hørbar forbedring, og kun i de stemninger, hvor den passer. Blokken viser navnet med skråstreg (G/B). Padsene ændres ikke, og en variant, brugeren har valgt på en pad, vinder over forslaget. Settings har "Inversions in suggestions" (til som standard, gemt for alle projekter); fra giver Suggest kun rundgange i grundstilling. Loop og MIDI-fil bruger samme toner som det, man hører.
 - Kvalitetsmål: Af 10 klik på 🎲 skal mindst 8 give noget, Henrik faktisk gider bruge.
 
 ## Regler for MIDI
@@ -221,7 +222,7 @@ Mulighed A blev valgt først: IS_SYNTH FALSE og CLAP-feature note-effect. Testet
 
 ## Beslutning fra milepæl 3
 
-Suggest bruger kun akkorder, der også findes som pads (de 7 treklange). Alt i bjælken kan dermed spilles direkte på en pad. Biblioteket har stadig m7-, maj7- og add9-rundgange, men Suggest vælger dem ikke. De kan bruges, når variant-menuen kommer i milepæl 5. Besluttet af Henrik efter test af milepæl 3.
+Suggest bruger kun akkorder, der også findes som pads (de 7 treklange), men må give dem som omvending (se Forslag). Alt i bjælken kan dermed spilles direkte på en pad, bortset fra selve omvendingen. Biblioteket har stadig m7-, maj7- og add9-rundgange, men Suggest vælger dem ikke. De kan bruges, når variant-menuen kommer i milepæl 5. Besluttet af Henrik efter test af milepæl 3.
 
 ## Versioner
 

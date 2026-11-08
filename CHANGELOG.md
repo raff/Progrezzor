@@ -10,6 +10,8 @@ tag the commit (`vX.Y.Z`).
 
 ## [Unreleased]
 
+- Suggest can now use inversions where they give a smoother bass line (C, G/B, Am, F). The block shows the name with a slash. Settings has "Inversions in suggestions" (on as standard); off gives only plain chords.
+
 ### Added
 - **Learn.** A Learn button in the bar: hold the keys of each chord of the progression on a MIDI keyboard, one chord after the other, in any octave. The next chord is marked in the bar, a right chord ticks it off, and a wrong one flashes red. After two wrong tries, or from the start if you switch on hints in Settings, a piece of a keyboard shows which keys to hold.
 

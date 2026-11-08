@@ -72,6 +72,13 @@ Kræver et MIDI-tastatur.
 - [ ] Når alle er spillet: "All done!". Tryk Learn igen for at starte forfra. Slå Learn fra: tangenterne er pads igen.
 - [ ] Er klaviaturudsnittet stort og tydeligt nok? Skal det kunne spilles med musen, hvis man ikke har et tastatur?
 
+## 2f. Omvendinger i Suggest (branch feature/suggest-inversions)
+- [ ] Vælg Bright, C Major, og tryk Suggest mange gange. Nogle rundgange har en blok med skråstreg, fx G/B. Spil dem: bassen skal gå trinvis (C, B, A, F).
+- [ ] Padsene er uændrede (ingen skråstreg på dem).
+- [ ] Settings (tandhjulet): "Inversions in suggestions" er sat som standard. Slå den fra og tryk Suggest mange gange: aldrig en skråstreg. Luk og åbn projektet igen: valget er husket.
+- [ ] Ændr en pad til en variant (fx G til G7), tryk Suggest: blokken med G bliver G7, ikke G/B.
+- [ ] Træk MIDI ud: tonerne er de samme som dem, du hører, også for G/B (B er den dybeste tone).
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

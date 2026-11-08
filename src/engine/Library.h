@@ -40,5 +40,11 @@ struct Suggestion
     int index = -1; // the library number it came from, -1 if it was made from the pads (no library entry fits)
 };
 
-Suggestion suggest (const Key& key, Mood mood, unsigned randomValue, int avoid);
+// True if a library progression has a chord with an inversion (G/B). The pads do not, so such a progression is a bit more
+// than the pads alone give.
+bool libraryEntryHasInversion (Mood mood, bool major, int index);
+
+// With `allowInversions` false (the setting "Inversions in suggestions"), progressions with inversions are not picked, so
+// every chord is in root position.
+Suggestion suggest (const Key& key, Mood mood, unsigned randomValue, int avoid, bool allowInversions = true);
 }

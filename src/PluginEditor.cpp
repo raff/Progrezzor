@@ -1943,6 +1943,9 @@ void ProgressionBar::showSettingsMenu()
     menu.addSeparator();
     menu.addSectionHeader ("Learn");
     menu.addItem (20, "Show hints from the start", true, processor.getLearnHints());
+    menu.addSeparator();
+    menu.addSectionHeader ("Suggest");
+    menu.addItem (21, "Inversions in suggestions", true, processor.getSuggestInversions());
 
     juce::Component::SafePointer<ProgressionBar> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (260),
@@ -1952,6 +1955,8 @@ void ProgressionBar::showSettingsMenu()
                                 safe->chooseHomeOctave (result - 3);
                             else if (safe != nullptr && result == 20)
                                 safe->processor.setLearnHints (! safe->processor.getLearnHints());
+                            else if (safe != nullptr && result == 21)
+                                safe->processor.setSuggestInversions (! safe->processor.getSuggestInversions());
                         });
 }
 
