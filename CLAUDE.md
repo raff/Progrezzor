@@ -216,6 +216,16 @@ Henrik, 2026-11-08. Genbruger Quick-text.
 - Er der flere akkorder end bjælken kan rumme (32), tages de første, og en kort besked siger det. En fil uden akkorder giver en tom tekst og beskeden "No chords found in that file."
 - Plug-in'et må aldrig levere ChordPro-filer med andres sange. Testfilerne i tests/chordpro er skrevet til projektet.
 
+## Gæt toneart
+
+Henrik, 2026-11-08. Når akkorder lægges ind med Quick-text (Enter) eller et ChordPro-import, gættes tonearten (dur eller mol). Der spørges altid; tonearten skiftes aldrig uden et ja.
+
+- En ChordPro-fil med {key:} bruger den (spørgsmålet "Switch key?"), og der gættes ikke.
+- Ellers prøves alle 12 dur- og 12 mol-tonearter. En toneart passer, hvis alle akkorder ligger i dens skala. I mol tæller dur-akkorden på trin V (E i A Minor) også med.
+- Dur og mol-tvilling (G Major og E Minor) afgøres sådan: er første eller sidste akkord mol-tvillingens i-akkord (Em), gættes mol; er det dur-tonartens I-akkord (G), gættes dur; ellers vinder den, hvis grundakkord bruges oftest, og uafgjort er dur.
+- Passer flere forskellige tonearter: den, hvis grundakkord er første eller sidste akkord, ellers den, hvis grundakkord bruges oftest. Uafgjort giver intet gæt (fx "C G"). Passer ingen, gættes der ikke, og tonearten beholdes. Er gættet den nuværende toneart (Minor, Dorian og Phrygian tæller som mol), sker der intet.
+- Visning: et kort nederst i rundgangsvinduet med "These chords fit A Minor." og knapperne "Switch to A Minor" og "Keep C Major". Ved Switch skifter tonearten, og akkorderne forbliver de samme akkorder (de gemmes som afstand fra tonika, så de flyttes med). Pauser tæller ikke med. Dur-akkorden på trin V tæller med i gættet, men er stadig uden for skalaen for Lock to scale.
+
 ## Stemmer
 
 - Preview-lyde bygges som små indbyggede synths uden samples. MIDI-filen indeholder kun noter.

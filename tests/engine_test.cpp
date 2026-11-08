@@ -15,6 +15,7 @@
 #include "../src/engine/Learn.h"
 #include "../src/engine/QuickText.h"
 #include "../src/engine/ChordPro.h"
+#include "../src/engine/KeyGuess.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -715,6 +716,64 @@ void testChordPro()
     // The file names
     check (isChordProFileName ("a.cho") && isChordProFileName ("a.CHOPRO") && isChordProFileName ("b.crd") && isChordProFileName ("c.Pro")
            && ! isChordProFileName ("a.txt") && ! isChordProFileName ("cho") && ! isChordProFileName ("a.mid"), "the file endings .cho .chopro .crd .pro");
+}
+
+void testKeyGuess()
+{
+    std::printf ("key guess\n");
+    const auto names = [] (const std::string& text)
+    {
+        // The chords as they would be typed in C Major, with absolute roots: a text of names, read by Quick-text
+        std::vector<GuessChord> chords;
+        for (const auto& block : parseQuickText (text, Key { 0, ScaleId::Major }, 4.0, false).blocks)
+            chords.push_back ({ block.chord.root, block.chord.type });
+        return chords;
+    };
+    const auto say = [&] (const std::string& text)
+    {
+        const auto g = guessKey (names (text));
+        return g.found ? keyName (g.key) + (g.key.scale == ScaleId::Major ? " Major" : " Minor") : std::string ("none");
+    };
+
+    // The examples
+    checkEqual (say ("G D C Em Am"), std::string ("G Major"), "G D C Em Am is G Major");
+    checkEqual (say ("C F G"), std::string ("C Major"), "C F G is C Major (C is first)");
+    checkEqual (say ("Am F C G"), std::string ("A Minor"), "Am F C G is A Minor (Am is first)");
+    checkEqual (say ("Am Dm E Am"), std::string ("A Minor"), "Am Dm E Am is A Minor (the major chord on the fifth fits)");
+    checkEqual (say ("G D Em C"), std::string ("G Major"), "G D Em C is G Major");
+    checkEqual (say ("C Ab G Bb"), std::string ("none"), "a borrowed chord that fits no key gives no guess");
+
+    // The twins: the last chord counts too, and then the key chord that is used most, and a tie is major
+    checkEqual (say ("F C G Am"), std::string ("A Minor"), "ending on the minor chord of the twin gives minor");
+    checkEqual (say ("Am C G F C"), std::string ("A Minor"), "starting on Am gives minor, though C comes last");
+    checkEqual (say ("C Dm Em F G"), std::string ("C Major"), "C Dm Em F G: C Major");
+    checkEqual (say ("Dm G C Am Dm G C"), std::string ("C Major"), "no first or last key chord: C is used most (twice, Am once)");
+    checkEqual (say ("Dm Am G Am Dm"), std::string ("A Minor"), "no first or last key chord: Am is used most");
+    checkEqual (say ("Dm G Em"), std::string ("C Major"), "a tie between the twins is major");
+
+    // Several keys fit: the first or last chord decides, else the key chord used most, else no guess
+    checkEqual (say ("C G"), std::string ("none"), "C G: C Major and G Major both fit, the first is one and the last the other, equally used: no guess");
+    checkEqual (say ("Am Em"), std::string ("none"), "Am Em: A Minor and E Minor, the same: no guess");
+    checkEqual (say ("C G G"), std::string ("G Major"), "C G G: both fit and one is first, one is last, but G is used most");
+    checkEqual (say ("C"), std::string ("C Major"), "one chord: its own key");
+    checkEqual (say ("G F C"), std::string ("C Major"), "G F C: C Major (the last chord is C)");
+    checkEqual (say (""), std::string ("none"), "no chords, no guess");
+
+    // Every key is found from its own I, IV, V and vi, in major and in minor
+    bool allMajor = true, allMinor = true;
+    for (int t = 0; t < 12; ++t)
+    {
+        const auto major = guessKey ({ { t, ChordType::Major }, { wrap12 (t + 9), ChordType::Minor }, { wrap12 (t + 5), ChordType::Major }, { wrap12 (t + 7), ChordType::Major }, { t, ChordType::Major } });
+        allMajor &= major.found && major.key.tonic == t && major.key.scale == ScaleId::Major;
+        const auto minor = guessKey ({ { t, ChordType::Minor }, { wrap12 (t + 8), ChordType::Major }, { wrap12 (t + 5), ChordType::Minor }, { wrap12 (t + 7), ChordType::Major }, { t, ChordType::Minor } });
+        allMinor &= minor.found && minor.key.tonic == t && minor.key.scale == ScaleId::Minor;
+    }
+    check (allMajor, "I vi IV V I gives the right major key in all 12 keys");
+    check (allMinor, "i VI iv V i gives the right minor key in all 12 keys (the V is major)");
+
+    // The same as the current key
+    check (sameKeyKind ({ 9, ScaleId::Minor }, { 9, ScaleId::Minor }) && sameKeyKind ({ 9, ScaleId::Dorian }, { 9, ScaleId::Minor }) && ! sameKeyKind ({ 9, ScaleId::Minor }, { 0, ScaleId::Major })
+           && ! sameKeyKind ({ 0, ScaleId::Major }, { 0, ScaleId::Minor }), "the same key: the same tonic and both major or both minor");
 }
 
 void testChosenInversion()
@@ -1841,6 +1900,7 @@ int main()
     testQuickText();
     testQuickTextBars();
     testChordPro();
+    testKeyGuess();
     testLoopPlan();
     testEditing();
     testExport();

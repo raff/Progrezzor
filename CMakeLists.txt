@@ -27,7 +27,7 @@ add_subdirectory(${CLAP_JUCE_EXTENSIONS_DIR} clap-juce-extensions EXCLUDE_FROM_A
 add_library(progrezzor_engine STATIC
     src/engine/ChordEngine.cpp src/engine/ChordEngine.h src/engine/Music.h src/engine/NoteTracker.h
     src/engine/Library.cpp src/engine/Library.h src/engine/Progression.h
-    src/engine/QuickText.cpp src/engine/QuickText.h src/engine/ChordPro.cpp src/engine/ChordPro.h src/engine/LoopPlan.cpp src/engine/LoopPlan.h src/engine/TripleBuffer.h src/engine/NextPads.h)
+    src/engine/QuickText.cpp src/engine/QuickText.h src/engine/ChordPro.cpp src/engine/ChordPro.h src/engine/KeyGuess.cpp src/engine/KeyGuess.h src/engine/LoopPlan.cpp src/engine/LoopPlan.h src/engine/TripleBuffer.h src/engine/NextPads.h)
 target_include_directories(progrezzor_engine PUBLIC src)
 target_compile_options(progrezzor_engine PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 set_target_properties(progrezzor_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)

@@ -127,6 +127,13 @@ Kræver et MIDI-tastatur.
 - [ ] Ukendte akkorder (fx N.C.) er røde, og resten virker. En fil uden akkorder giver beskeden "No chords found in that file."
 - [ ] En lang fil: de første 32 akkorder, og en besked om det.
 
+## 2m. Gæt toneart (branch feature/guess-key)
+- [ ] Stå i C Major, tryk på blyanten, skriv `G D C Em Am`, Enter: et kort spørger "These chords fit G Major." med "Switch to G Major" og "Keep C Major". Tonearten er uændret, til du trykker.
+- [ ] Switch: tonearten skifter, og akkorderne er stadig G D C Em Am (ikke flyttet). Keep: alt er som før.
+- [ ] `Am F C G` giver A Minor, `Am Dm E Am` giver A Minor, `C F G` giver C Major. En rundgang med en lånt akkord, der ikke passer, giver intet spørgsmål.
+- [ ] Står du allerede i den toneart, sker der ingenting.
+- [ ] ChordPro-fil med {key:}: ingen gætning. Uden {key:}: gættet kommer, når du trykker Enter.
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?
