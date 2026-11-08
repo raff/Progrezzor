@@ -107,6 +107,11 @@ Kræver et MIDI-tastatur.
 - [ ] Hold en pad uden loop: mønstret starter ved tryk. Slip: intet hænger.
 - [ ] Træk MIDI ud: slagene er de samme som lyden (filnavn med -Rhythm). Gem og åbn projektet: valgene er der stadig.
 
+## 2j. Tekst og tooltips (branch fix/text-padding)
+- [ ] Gå over alle knapper (topbjælken, Rec, Arp, Learn, Drag, arp-panelet med Short/Medium/Long og mønsternavne, blokke): teksten har luft til kanten overalt.
+- [ ] Hold musen over en knap: tooltip'en er smal, har flere linier og står tydeligt forskudt fra musen.
+- [ ] Settings (tandhjulet) > Help > Show tooltips: slå fra, og ingen tooltips vises. Slå til igen. Valget huskes i alle projekter.
+
 ## 3. Tidligere ting, der stadig venter
 
 - [ ] Milepæl 9: alle 8 stemninger i Mood-menuen. Tryk Suggest flere gange pr. stemning: giver de fleste klik noget brugbart?

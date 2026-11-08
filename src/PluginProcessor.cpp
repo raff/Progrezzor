@@ -69,6 +69,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     {
         homeOctave.store (juce::jlimit (-engine::kMaxHomeOctave, engine::kMaxHomeOctave, settings->getIntAttribute ("homeOctave", 0)));
         learnHints.store (settings->getIntAttribute ("learnHints", 0) != 0);
+        showTooltips.store (settings->getIntAttribute ("tooltips", 1) != 0);
         suggestInversions.store (settings->getIntAttribute ("suggestInversions", 1) != 0);
     }
 
@@ -894,6 +895,7 @@ void ProgrezzorProcessor::writeSettings() const
     juce::XmlElement xml ("ProgrezzorSettings");
     xml.setAttribute ("homeOctave", homeOctave.load());
     xml.setAttribute ("learnHints", learnHints.load() ? 1 : 0);
+    xml.setAttribute ("tooltips", showTooltips.load() ? 1 : 0);
     xml.setAttribute ("suggestInversions", suggestInversions.load() ? 1 : 0);
     const auto file = getSettingsFile();
     if (file.getParentDirectory().createDirectory().wasOk())
@@ -903,6 +905,12 @@ void ProgrezzorProcessor::writeSettings() const
 void ProgrezzorProcessor::setHomeOctave (int octaves)
 {
     homeOctave.store (juce::jlimit (-engine::kMaxHomeOctave, engine::kMaxHomeOctave, octaves));
+    writeSettings();
+}
+
+void ProgrezzorProcessor::setShowTooltips (bool nowOn)
+{
+    showTooltips.store (nowOn);
     writeSettings();
 }
 

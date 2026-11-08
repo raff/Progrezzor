@@ -43,6 +43,8 @@ Alt ligger på én skærm uden faner.
 
 Regler:
 
+- Skrift (Henrik, 2026-11-08): Små tekster (under 17 px) er Inter SemiBold (SIL OFL, resources/fonts/Inter), fordi Chakra Petch går flosset på skærmen i små størrelser. Chakra Petch bruges kun til store navne (logo, akkorder, Suggest). Før det: Chakra Petch er detaljeret og ser flosset ud under cirka 13 px, så al tekst i knapper, tiles, blokke og labels er mindst 13 px (tooltips 17). Tekst krympes ikke sidelæns, hvis det kan undgås: felterne gøres bredere, eller en hel gruppe får samme, mindre størrelse (som mønsternavnene). Små tekster som "1/2 bar" kortes til "1/2" i smalle blokke.
+- Tekst i knapper, felter og blokke holder altid mindst 8 px fra kanten og krymper lidt (ned til 70 %) i stedet for at røre kanten, uanset skrifttype (hjælpefunktionen theme::drawFitted). Tooltips er smalle (cirka 210 px tekst i stor skrift (17), flere linier), står tydeligt forskudt fra musen og har en farvet kant. Settings har "Show tooltips" (til som standard, gemt for alle projekter).
 - Første klik på en pad giver lyd, uden routing eller opsætning.
 - Gode standarder, så man kan spille med det samme. Standard er C Major og stemningen Bright (den mest almindelige og enkle). Ændret 2026-11-07 efter Henriks ønske.
 - Pads og blokke viser akkordnavnet og, småt, akkordens plads i tonearten som romertal (I, ii, III, IV, v, VI, VII, ii° for formindsket). Henrik ønskede det 2026-11-07. Store bogstaver er dur, små er mol. Ingen andre teoriord.

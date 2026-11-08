@@ -35,7 +35,8 @@ set_target_properties(progrezzor_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # The editor's fonts, as BinaryData (SIL Open Font License, see resources/fonts/*/OFL.txt)
 juce_add_binary_data(ProgrezzorFonts SOURCES
     resources/fonts/ChakraPetch/ChakraPetch-SemiBold.ttf
-    resources/fonts/ChakraPetch/ChakraPetch-Bold.ttf)
+    resources/fonts/ChakraPetch/ChakraPetch-Bold.ttf
+    resources/fonts/Inter/Inter-SemiBold.otf)
 set_target_properties(ProgrezzorFonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Test branch test/vst3-instrument: the VST3 registers as an instrument (IS_SYNTH TRUE), the CLAP stays a note effect (its
