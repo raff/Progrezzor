@@ -2098,6 +2098,98 @@ int main (int argc, char** argv)
     }
 
     {
+        std::printf ("key guess\n");
+        auto& bar = static_cast<ProgrezzorEditor*> (editor.get())->getBar();
+        const juce::File folder (CHORDPRO_TEST_DIR);
+        const int oldKey = processor.keyParam->getIndex(), oldScale = processor.scaleParam->getIndex();
+        const bool oldLock = processor.isLockedToScale();
+        const auto setKey = [&] (int tonic, engine::ScaleId scale) { *processor.keyParam = tonic; *processor.scaleParam = (int) scale; };
+        const auto typeIn = [&] (const char* text)
+        {
+            bar.setEditing (true);
+            if (! bar.isInTextMode())
+                bar.startQuickText();
+            bar.getTextEditor().setText (text, false);
+            bar.applyQuickText();
+            settle (60);
+        };
+        *processor.lockParam = true;
+        processor.setProgression ({});
+        setKey (0, engine::ScaleId::Major);
+
+        // G D C Em Am typed in C Major: it asks, and nothing is changed
+        typeIn ("G D C Em Am");
+        check (bar.isAskingKey() && bar.getGuessedKey().tonic == 7 && bar.getGuessedKey().scale == engine::ScaleId::Major, "G D C Em Am typed in C Major: it asks about G Major");
+        check (bar.getGuessSwitchButton().getButtonText() == "Switch to G Major" && bar.getGuessKeepButton().getButtonText() == "Keep C Major"
+                   && bar.getNotice() == "These chords fit G Major.", "the question and the buttons say G Major and C Major");
+        check (processor.keyParam->getIndex() == 0 && processor.getKey().scale == engine::ScaleId::Major, "the key is not changed by itself");
+        check (processor.getProgression().size() == 5 && processor.getProgression()[0].chord.root == 7, "the chords are as typed (G is 7 above C)");
+        snapshot ("keyguess_ask");
+
+        // Switch: the key changes, the chords stay the same chords
+        bar.getGuessSwitchButton().triggerClick();
+        settle (60);
+        check (! bar.isAskingKey() && processor.keyParam->getIndex() == 7 && processor.getKey().scale == engine::ScaleId::Major, "Switch changes the key to G Major");
+        check (processor.getProgression()[0].chord.root == 0 && processor.getProgression()[1].chord.root == 7 && processor.getProgression()[2].chord.root == 5
+                   && processor.getProgression()[3].chord.root == 9 && processor.getProgression()[4].chord.root == 2,
+               "and the chords are the same chords: G D C Em Am are I V IV vi ii of G");
+        int silent = 0;
+        for (int i = 0; i < (int) processor.getProgression().size(); ++i)
+            silent += processor.isBlockSilent (i) ? 1 : 0;
+        check (silent == 0, "nothing is outside the key now");
+
+        // Keep: nothing changes
+        setKey (0, engine::ScaleId::Major);
+        typeIn ("Am F C G");
+        check (bar.isAskingKey() && bar.getGuessedKey().tonic == 9 && bar.getGuessedKey().scale == engine::ScaleId::Minor, "Am F C G in C Major: A Minor is asked about");
+        check (bar.getGuessSwitchButton().getButtonText() == "Switch to A Minor", "\"Switch to A Minor\"");
+        bar.getGuessKeepButton().triggerClick();
+        settle (60);
+        check (! bar.isAskingKey() && processor.keyParam->getIndex() == 0 && processor.getKey().scale == engine::ScaleId::Major && processor.getProgression()[0].chord.root == 9,
+               "Keep: the key and the chords are as they were");
+
+        // The same key as now: nothing happens
+        setKey (9, engine::ScaleId::Minor);
+        typeIn ("Am F C G");
+        check (! bar.isAskingKey(), "the same key as the one we are in: no question");
+        setKey (9, engine::ScaleId::Dorian);
+        typeIn ("Am F C G");
+        check (! bar.isAskingKey(), "a minor scale like Dorian counts as minor: no question");
+
+        // A borrowed chord that fits no key: no guess
+        setKey (0, engine::ScaleId::Major);
+        typeIn ("C Ab G Bb");
+        check (! bar.isAskingKey(), "chords that fit no key: no question, and the key stays");
+
+        // Esc or a change in the bar answers the question
+        typeIn ("G D C Em Am");
+        check (bar.isAskingKey(), "asked again");
+        processor.undo();
+        bar.refresh();
+        check (! bar.isAskingKey(), "a change in the bar answers the question");
+
+        // ChordPro: a file that says its key is not guessed. One that does not is.
+        setKey (0, engine::ScaleId::Major);
+        bar.setEditing (true);
+        bar.importChordProFile (folder.getChildFile ("key.cho")); // {key: G}
+        bar.applyQuickText();
+        settle (60);
+        check (! bar.isAskingKey() && processor.keyParam->getIndex() == 0, "a file with {key:}: no guessing (it asked about its key in the text)");
+        setKey (9, engine::ScaleId::Minor);
+        bar.importChordProFile (folder.getChildFile ("simple.cho")); // C Am F G ..., no key
+        bar.applyQuickText();
+        settle (60);
+        check (bar.isAskingKey() && bar.getGuessedKey().tonic == 0 && bar.getGuessedKey().scale == engine::ScaleId::Major, "a file without a key: the chords are guessed (C Major) when they are put in");
+        bar.getGuessKeepButton().triggerClick();
+        settle (60);
+
+        processor.setProgression ({});
+        setKey (oldKey, (engine::ScaleId) oldScale);
+        *processor.lockParam = oldLock;
+        settle (60);
+    }
+
+    {
         std::printf ("bass note\n");
         check (! processor.bassParam->get(), "the bass note is off as standard");
         *processor.bassParam = true;

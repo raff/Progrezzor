@@ -4,6 +4,7 @@
 #include "engine/Learn.h"
 #include "engine/NextPads.h"
 #include "engine/ChordPro.h"
+#include "engine/KeyGuess.h"
 #include "ProgrezzorLookAndFeel.h"
 
 // One big pad: the name of the chord, and it lights up while it sounds. Pressing it with the mouse plays it; letting go
@@ -265,6 +266,12 @@ public:
     void importChordProText (const juce::String& text);     // what the file says (also for the tests)
     void useChordProPart (int index);                       // the part picked from the list (-1: the whole file)
     BarButton& getSwitchKeyButton() { return switchKeyButton; }
+    bool isAskingKey() const { return askingKey; }
+    engine::Key getGuessedKey() const { return guessedKey; }
+    BarButton& getGuessSwitchButton() { return guessSwitchButton; }
+    BarButton& getGuessKeepButton() { return guessKeepButton; }
+    void acceptKeyGuess();  // Switch to the guessed key; the chords stay the same chords
+    void declineKeyGuess(); // Keep the key
     bool isInterestedInFileDrag (const juce::StringArray& files) override;
     void filesDropped (const juce::StringArray& files, int x, int y) override;
     void applyBlockMenuChoice (int index, int result); // the numbers of the items of the block menu: 100+type, 200+inversion, 301/302 octave, 310-313 length, 320 lock, 321 duplicate, 330 delete
@@ -349,6 +356,14 @@ private:
     BarButton quickTextButton { "Text", BarButton::Icon::Pencil };
     BarButton allowButton { "Allow", BarButton::Icon::None };
     BarButton switchKeyButton { "Switch key", BarButton::Icon::None };
+    // The guess of the key, after chords have been put in with Quick-text: a question with two buttons, never a change by itself
+    bool askingKey = false;
+    engine::Key guessedKey;
+    int guessAskedAtVersion = -1;
+    bool guessSkip = false; // the ChordPro file said its key, so there is nothing to guess
+    BarButton guessSwitchButton { "Switch", BarButton::Icon::None };
+    BarButton guessKeepButton { "Keep", BarButton::Icon::None };
+    void offerKeyGuess();
     bool noticeHasSwitchKey = false;
     engine::ChordProResult chordPro;       // what the imported file said
     juce::String importedText, importNote; // the text that was put in the field, and what to say about it while it stays

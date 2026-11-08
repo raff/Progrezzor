@@ -1772,6 +1772,7 @@ class ProgressionBar::AskCard : public juce::Component
 {
 public:
     juce::String text;
+    bool buttonsBelow = false; // the text on top and the buttons under it (the key question)
 
     AskCard() { setInterceptsMouseClicks (false, false); }
 
@@ -1787,7 +1788,10 @@ public:
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
             g.setFont (l->titleFont (16.0f));
         g.setColour (theme::text);
-        g.drawText (text, getLocalBounds().withTrimmedRight (120).withTrimmedLeft (22), juce::Justification::centredLeft);
+        if (buttonsBelow)
+            g.drawText (text, getLocalBounds().withHeight (56).withTrimmedLeft (22).withTrimmedRight (16), juce::Justification::centredLeft);
+        else
+            g.drawText (text, getLocalBounds().withTrimmedRight (120).withTrimmedLeft (22), juce::Justification::centredLeft);
     }
 };
 
@@ -2057,6 +2061,18 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     quickTextButton.setComponentID ("quicktext");
     addChildComponent (quickTextButton);
 
+    guessSwitchButton.setVisible (false);
+    guessSwitchButton.setAccented (true);
+    guessSwitchButton.setComponentID ("guess-switch");
+    guessSwitchButton.setTooltip ("Change the key. The chords stay the same chords");
+    guessSwitchButton.onClick = [this] { acceptKeyGuess(); };
+    addChildComponent (guessSwitchButton);
+    guessKeepButton.setVisible (false);
+    guessKeepButton.setComponentID ("guess-keep");
+    guessKeepButton.setTooltip ("Keep the key as it is");
+    guessKeepButton.onClick = [this] { declineKeyGuess(); };
+    addChildComponent (guessKeepButton);
+
     switchKeyButton.setTooltip ("Change the key to the one the song says");
     switchKeyButton.setVisible (false);
     switchKeyButton.setAccented (true);
@@ -2194,6 +2210,7 @@ void ProgressionBar::leaveTextMode()
     importedText = {};
     importNote = {};
     importAsksKey = false;
+    guessSkip = false;
     noticeHasSwitchKey = false;
     updateNotice();
     updateVisibility();
@@ -2227,7 +2244,65 @@ void ProgressionBar::applyQuickText()
 
     processor.editProgression (engine::keepingBlockState (processor.getProgression(), read.blocks));
     if (read.problems.empty())
+    {
+        const bool skipGuess = guessSkip; // a ChordPro file that said its key has been asked about it already
         leaveTextMode();
+        if (! skipGuess)
+            offerKeyGuess();
+    }
+}
+
+// Which key do the chords in the bar fit? If it is another one than the key now, ask: nothing is changed without a yes.
+void ProgressionBar::offerKeyGuess()
+{
+    const auto key = processor.getKey();
+    std::vector<engine::GuessChord> chords;
+    for (const auto& block : processor.getProgression())
+        if (! block.rest)
+            chords.push_back ({ engine::wrap12 (key.tonic + block.chord.root), block.chord.type });
+
+    const auto guess = engine::guessKey (chords);
+    if (! guess.found || engine::sameKeyKind (guess.key, key))
+        return;
+
+    guessedKey = guess.key;
+    askingKey = true;
+    askingReplace = false;
+    guessAskedAtVersion = processor.getProgressionVersion();
+    updateNotice();
+}
+
+void ProgressionBar::acceptKeyGuess()
+{
+    if (! askingKey)
+        return;
+    const auto old = processor.getKey();
+    askingKey = false;
+
+    // The chords are stored as distances from the tonic, so they would move with the key. They stay the same chords instead.
+    auto progression = processor.getProgression();
+    for (auto& block : progression)
+        if (! block.rest)
+            block.chord.root = engine::wrap12 (block.chord.root + old.tonic - guessedKey.tonic);
+
+    for (auto [parameter, index] : { std::pair<juce::RangedAudioParameter*, int> { processor.keyParam, guessedKey.tonic },
+                                     std::pair<juce::RangedAudioParameter*, int> { processor.scaleParam, (int) guessedKey.scale } })
+    {
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost (parameter->convertTo0to1 ((float) index));
+        parameter->endChangeGesture();
+    }
+    processor.editProgression (progression);
+    updateNotice();
+    resized();
+}
+
+void ProgressionBar::declineKeyGuess()
+{
+    askingKey = false;
+    updateNotice();
+    resized();
+    repaint();
 }
 
 void ProgressionBar::updateTextFeedback()
@@ -2296,6 +2371,34 @@ void ProgressionBar::updateNotice()
 {
     if (textMode)
         return;
+
+    if (askingKey)
+    {
+        const auto name = juce::String (engine::keyName (guessedKey)) + " " + juce::String (engine::scaleOf (guessedKey.scale).name);
+        const auto now = juce::String (engine::keyName (processor.getKey())) + " " + juce::String (engine::scaleOf (processor.getKey().scale).name);
+        const auto asked = noticeText;
+        noticeText = "These chords fit " + name + ".";
+        noticeIsWarning = false;
+        noticeHasAllow = false;
+        allowButton.setVisible (false);
+        replaceButton.setVisible (false);
+        askCard->text = noticeText;
+        askCard->buttonsBelow = true;
+        askCard->setVisible (true);
+        guessSwitchButton.setButtonText ("Switch to " + name);
+        guessKeepButton.setButtonText ("Keep " + now);
+        guessSwitchButton.setVisible (true);
+        guessKeepButton.setVisible (true);
+        if (noticeText != asked || noticeBounds.isEmpty())
+        {
+            resized();
+            repaint();
+        }
+        return;
+    }
+    guessSwitchButton.setVisible (false);
+    guessKeepButton.setVisible (false);
+    askCard->buttonsBelow = false;
 
     if (askingReplace)
     {
@@ -2588,6 +2691,7 @@ void ProgressionBar::showChordProText (const std::vector<std::string>& chords)
     importedText = text;
     importTooMany = tooMany;
     importAsksKey = engine::chordProKeyDiffers (chordPro, processor.getKey());
+    guessSkip = chordPro.hasKey; // the file says its key (and has asked about it): nothing to guess
     importNote = chords.empty() ? "No chords found in that file." : (tooMany ? "Only the first " + juce::String (engine::kMaxBlocks) + " chords fit." : juce::String());
     if (chords.empty())
         importAsksKey = false;
@@ -2683,9 +2787,10 @@ void ProgressionBar::askToReplace (Pending what)
 
 void ProgressionBar::cancelAsk()
 {
-    if (askingReplace)
+    if (askingReplace || askingKey)
     {
         askingReplace = false;
+        askingKey = false;
         updateNotice();
     }
 }
@@ -2812,6 +2917,8 @@ void ProgressionBar::refresh()
 {
     if (processor.getProgressionVersion() != askedAtVersion)
         askingReplace = false; // anything that changes the bar answers the question
+    if (askingKey && processor.getProgressionVersion() != guessAskedAtVersion)
+        askingKey = false;
     const auto key = processor.getKey();
     const auto& progression = processor.getProgression();
 
@@ -3060,7 +3167,7 @@ void ProgressionBar::paint (juce::Graphics& g)
                     trayBounds, juce::Justification::centred);
     }
 
-    if (noticeText.isNotEmpty() && ! noticeBounds.isEmpty() && ! askingReplace)
+    if (noticeText.isNotEmpty() && ! noticeBounds.isEmpty() && ! askingReplace && ! askingKey)
     {
         g.setColour (noticeIsWarning ? theme::warn : theme::dimText);
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
@@ -3242,7 +3349,18 @@ void ProgressionBar::resized()
 
     // A short message under the blocks or the text, when there is one (with the Allow button at its end)
     noticeBounds = {};
-    if (askingReplace)
+    if (askingKey)
+    {
+        // The question sits low in the tray, with the text on top and the two buttons under it
+        const juce::Rectangle<int> card = juce::Rectangle<int> (0, 0, 520, 110).withCentre ({ trayBounds.getCentreX(), trayBounds.getBottom() - 65 }); // low in the tray, so the blocks stay in view
+        askCard->setBounds (card);
+        guessSwitchButton.setBounds (juce::Rectangle<int> (card.getRight() - 20 - 200, card.getBottom() - 18 - 38, 200, 38));
+        guessKeepButton.setBounds (juce::Rectangle<int> (guessSwitchButton.getX() - 10 - 170, card.getBottom() - 18 - 38, 170, 38));
+        askCard->toFront (false);
+        guessSwitchButton.toFront (false);
+        guessKeepButton.toFront (false);
+    }
+    else if (askingReplace)
     {
         // The question sits in the middle of the tray, over the blocks
         const juce::Rectangle<int> card = juce::Rectangle<int> (0, 0, 470, 76).withCentre (trayBounds.getCentre());

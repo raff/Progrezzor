@@ -11,6 +11,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Added
+- **Guess the key.** When you put chords in with Quick-text or import a ChordPro file, Progrezzor looks at which major or minor key they fit. If it is another key than the one you are in, a card asks "These chords fit A Minor." with Switch and Keep. It never switches by itself, and a file that says its own key is not guessed.
 - **Chord charts in Quick-text.** Type or paste a chart with bar lines, like `| C | Am | F | G |`. Every bar is one block of a bar; two chords in a bar share it (`| C G |`); `%` or `/` repeats the chord before. Line breaks and extra spaces are ignored, the old notation (`Am*2`, `Am:2`) still works, and an unknown word is marked in red while the rest is used.
 - **ChordPro import.** Settings has "Import ChordPro..." (or drag a .cho, .chopro, .crd or .pro file onto the bar). The chords in square brackets become Quick-text, one bar each, to look at and change before you press Enter. A file with parts (verse, chorus, bridge) asks which part you want. If the song says its key, it asks whether to switch; it never switches by itself.
 - **Chord rhythm.** A Hold | Arp | Rhythm switch at the top of the arp panel. Rhythm strikes the whole chord in one of 12 patterns (Offbeat, Stab, Double stab, Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse, Euclid), at 1/8 or 1/16, with Short, Medium or Long notes. It starts again in every block, follows the host's grid, and the MIDI file has the same strikes.
