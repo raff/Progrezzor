@@ -72,6 +72,7 @@ public:
     juce::AudioParameterChoice* rhythmSpeedParam = nullptr;
     juce::AudioParameterChoice* rhythmLengthParam = nullptr;
     juce::AudioParameterChoice* keyboardModeParam = nullptr; // White keys (as standard) or Chord roots: which pad a MIDI key plays
+    juce::AudioParameterChoice* voicingParam = nullptr; // Settings > Voicing: Root position (as standard) or Nearest inversion
     juce::AudioParameterBool* bassParam = nullptr;    // an extra bass note under every chord (Settings: Bass note), off as standard
     juce::AudioParameterBool* loopParam = nullptr; // the Play button: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)
@@ -172,6 +173,7 @@ public:
     // note as its root (also a black key, like Bb in D Minor), in every octave.
     int padForMidiNote (int note) const;
     static constexpr int kKeyboardWhiteKeys = 0, kKeyboardChordRoots = 1;
+    engine::VoicingMode getVoicingMode() const { return (engine::VoicingMode) voicingParam->getIndex(); }
     engine::ArpSettings getArpSettings() const;   // .on: the arp (one note at a time) is the mode
     engine::RhythmSettings getRhythmSettings() const; // .on: chord rhythm is the mode
     int getGeneralOctave() const { return octaveParam->get(); }
@@ -256,6 +258,7 @@ private:
     double bufferBeatsPerSample = 0.0;
     engine::ArpSettings blockArp; // the arp as it is during this block
     engine::RhythmSettings blockRhythm; // and the chord rhythm
+    engine::VoicingMode blockVoicing = engine::VoicingMode::RootPosition; // as it is during this block
     bool blockBass = false;       // the bass note as it is during this block
 
     // The loop (audio thread). The progression reaches it through a lock-free hand-over.

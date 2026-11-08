@@ -886,6 +886,65 @@ void testChosenInversion()
     (void) c;
 }
 
+// Voicing > Nearest inversion: each chord near the tonic chord, so the voices hardly jump
+void testCloseVoicing()
+{
+    std::printf ("close voicing\n");
+    const auto close = VoicingMode::NearestInversion;
+    const auto notesOf = [] (const Voicing& v) { return std::vector<int> (v.notes.begin(), v.notes.begin() + v.count); };
+    const Key key { 0, ScaleId::Major };
+    const Chord g7 { 7, ChordType::Dom7, kAutoInversion };
+    const Chord f { 5, ChordType::Major, kAutoInversion };
+    const Chord c { 0, ChordType::Major, kAutoInversion };
+
+    check (notesOf (voiceChord (g7, 0, kCentreNote, close, key.scale)) == std::vector<int> ({ 59, 62, 65, 67 }), "G7 in C Major is B3 D4 F4 G4");
+    check (notesOf (voiceChord (f, 0, kCentreNote, close, key.scale)) == std::vector<int> ({ 60, 65, 69 }), "F in C Major is C4 F4 A4");
+    check (notesOf (voiceChord (c, 0, kCentreNote, close, key.scale)) == std::vector<int> ({ 60, 64, 67 }), "the tonic chord stays where it is");
+    check (notesOf (voiceChord (g7, 0)) == std::vector<int> ({ 67, 71, 74, 77 }), "root position is as before (the default)");
+
+    // Always the same notes for the same chord, whatever was voiced before, in every key and scale
+    bool same = true, inRange = true, nameKept = true;
+    for (int scale = 0; scale < 4; ++scale)
+        for (int tonic = 0; tonic < 12; ++tonic)
+            for (int type = 0; type < 12; ++type)
+                for (int root = 0; root < 12; ++root)
+                {
+                    const Chord chord { root, (ChordType) type, kAutoInversion };
+                    voiceChord (g7, tonic, kCentreNote, close, (ScaleId) scale); // something else in between
+                    const auto a = voiceChord (chord, tonic, kCentreNote, close, (ScaleId) scale);
+                    const auto b = voiceChord (chord, tonic, kCentreNote, close, (ScaleId) scale);
+                    same &= a.notes == b.notes && a.count == b.count;
+                    inRange &= a.notes[0] >= 40 && a.notes[(size_t) a.count - 1] <= 90;
+                    nameKept &= chordName (chord, { tonic, (ScaleId) scale }) == chordName (chord, { tonic, (ScaleId) scale });
+                }
+    check (same, "the same chord always gives the same notes");
+    check (inRange, "the close voicings stay in a sensible range");
+
+    // A chosen inversion is used as it is
+    const Chord chosen { 7, ChordType::Dom7, 2 };
+    check (voiceChord (chosen, 0, kCentreNote, close, key.scale).notes == voiceChord (chosen, 0).notes, "a chosen inversion is respected");
+    check (voiceChord (chosen, 0, kCentreNote, close, key.scale).notes != voiceChord (g7, 0, kCentreNote, close, key.scale).notes, "...and differs from the close one");
+
+    // The name does not change, and the bass note is still the root under the chord
+    checkEqual (chordName (g7, key), "G7", "the name is G7, not G7/B");
+    check (bassNote (g7, 0) % 12 == 7 && bassNote (g7, 0) < 59, "the bass note is still the root, under the chord");
+
+    // The loop and the MIDI file have the same notes as the pads
+    Progression bar { { c, 4.0, false }, { f, 4.0, false }, { g7, 2.0, false }, { Chord { 9, ChordType::Minor, kAutoInversion }, 2.0, false } };
+    const auto snapshot = makeSnapshot (bar);
+    const auto file = exportNotes (bar, key.tonic, key.scale, false, 0, kCentreNote, {}, false, {}, close);
+    bool equal = true;
+    size_t at = 0;
+    for (int i = 0; i < snapshot.count; ++i)
+    {
+        const auto heard = voiceChord (snapshot.blocks[(size_t) i].chord, key.tonic, kCentreNote, close, key.scale);
+        for (int n = 0; n < heard.count; ++n, ++at)
+            equal &= at < file.size() && file[at].note == heard.notes[(size_t) n];
+    }
+    check (equal && at == file.size(), "the loop and the MIDI file have the same notes as the pads");
+    (void) nameKept;
+}
+
 // No magic: a chord has the same notes every time, whatever was played before it
 void testPredictableVoicing()
 {
@@ -2015,6 +2074,7 @@ int main()
     testSuggestInversions();
     testChosenInversion();
     testPredictableVoicing();
+    testCloseVoicing();
 
     std::printf ("%d checks, %d failed\n", checks, failures);
     return failures == 0 ? 0 : 1;
