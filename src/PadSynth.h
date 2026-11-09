@@ -63,8 +63,8 @@ public:
             case Strings:
                 v.attackRate = (float) (1.0 / (0.30 * sampleRate));
                 v.releaseRate = (float) (1.0 / (0.9 * sampleRate));
-                v.gain = 0.075f * (0.25f + 0.75f * vel);
-                cutoff = std::min (0.45 * sampleRate, 1400.0 + 6.0 * v.increment * sampleRate);
+                v.gain = 0.09f * (0.25f + 0.75f * vel);
+                cutoff = std::min (0.45 * sampleRate, 2600.0 + 8.0 * v.increment * sampleRate); // brighter than the Soft Pad
                 break;
             case Keys:
                 v.attackRate = (float) (1.0 / (0.004 * sampleRate));
@@ -103,6 +103,12 @@ public:
             v.phaseExtra = 0.37;
             v.level = 0.0f;
             v.filterLeft = v.filterRight = 0.0f;
+        }
+        else
+        {
+            // The same note struck again while it still rings (the same chord twice in a row): the slow sounds (Soft Pad, Strings)
+            // would just carry on, so the level dips and swells again and the second hit is heard.
+            v.level *= 0.35f;
         }
     }
 

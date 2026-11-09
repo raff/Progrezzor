@@ -275,8 +275,17 @@ public:
         if (pad >= 0)
             owner.recordPlayed (chord); // every chord played on a pad goes in the history
 
+        // A source that is struck again (the same chord twice in a row) lets go one sample before it sounds anew (when there is a sample before). Note off and
+        // note on on the very same sample are merged or put in the wrong order by some hosts and synths, so the second chord was silent.
+        int offAt = position;
+        const int onAt = position;
+        if (owner.sourceActive[(size_t) source] && owner.tracker.soundingNotes() > 0)
+        {
+            if (position > 0) // the new notes stay exactly on the line, the old ones end a sample before
+                offAt = position - 1;
+        }
         pressingAgain = true; // the loop is not heard in between
-        releaseSource (source, position); // a source that is pressed again lets go of its first pad
+        releaseSource (source, offAt); // a source that is pressed again lets go of its first pad
         pressingAgain = false;
         owner.sourcePad[(size_t) source] = pad;
         if (pad >= 0)
@@ -288,10 +297,10 @@ public:
         if (owner.blockArp.on || owner.blockRhythm.on)
             startArp (source, heard, velocity, position); // the arp: one note at a time
         else
-            owner.tracker.press (source, heard, velocity, [&] (const engine::NoteEvent& e) { emit (e, position); });
+            owner.tracker.press (source, heard, velocity, [&] (const engine::NoteEvent& e) { emit (e, onAt); });
         if (owner.blockBass) // the bass note lies under the chord (and under the arp) as long as the source is held
             owner.tracker.pressBass (source, engine::bassNote (chord, owner.keyParam->getIndex(), owner.getTotalOctave()), velocity,
-                                     [&] (const engine::NoteEvent& e) { emit (e, position); });
+                                     [&] (const engine::NoteEvent& e) { emit (e, onAt); });
 
         if (user) // what the user plays comes before the loop, which is silent as long as a hand is on a pad
             syncLoop (position);
@@ -572,11 +581,14 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // Some hosts say they play but keep giving the same position. A playing host never stands still, so after a few blocks
     // the plug-in counts on its own from where it was, and takes the host's position again if that starts to move.
-    if (hostPlaying && wasHostPlaying && std::abs (startBeat - lastHostBeat) < 1.0e-9)
+    // The same goes for a host that jumps back every block (an empty pattern that loops over nothing): a position that is not
+    // where the last one led to, block after block, is not a position the loop can follow. One jump (a DAW loop) is not.
+    if (hostPlaying && wasHostPlaying && std::abs (startBeat - (lastHostBeat + lastHostAdvance)) > 0.5 * lastHostAdvance + 1.0e-6)
         stuckBlocks = std::min (stuckBlocks + 1, 1000);
     else
         stuckBlocks = 0;
     lastHostBeat = startBeat;
+    lastHostAdvance = bpm / 60.0 / sampleRate * buffer.getNumSamples();
     if (stuckBlocks >= kStuckBlocks)
         startBeat = internalPpq;
 

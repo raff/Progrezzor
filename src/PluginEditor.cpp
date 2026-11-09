@@ -216,6 +216,9 @@ void PadButton::paint (juce::Graphics& g)
         }
 
     // The gear shows on mouseover (and stays a little visible when the pad plays another kind of chord)
+    // The key dips when it plays, and the gear dips with it
+    juce::Graphics::ScopedSaveState dip (g);
+    g.addTransform (juce::AffineTransform::translation (0.0f, on ? std::min (lip * 0.65f, 3.0f) : 0.0f));
     if (isMouseOver() || hasVariant)
         drawGear (g, gearArea().toFloat().reduced (3.0f), ink.withAlpha (isMouseOver() ? 0.9f : 0.5f));
 }
@@ -893,6 +896,10 @@ void BlockButton::paint (juce::Graphics& g)
         g.drawLine (10.0f, (float) getHeight() - 10.0f, (float) getWidth() - 10.0f, 10.0f, 1.6f);
     }
 
+    // The key dips when it is held, and the lock, gear, arrows and grip dip with it
+    juce::Graphics::ScopedSaveState dip (g);
+    g.addTransform (juce::AffineTransform::translation (0.0f, heldByMouse ? std::min (lip * 0.65f, 3.0f) : 0.0f));
+
     // In Edit the lock shows on mouseover, and always on a block that is locked (in Play only on a locked one)
     if (locked || (editable && hovered()))
         drawLock (g, lockArea().toFloat().reduced (5.0f), locked ? (heldByMouse ? theme::onAccent : juce::Colours::white) : juce::Colours::white.withAlpha (0.75f), locked);
@@ -1084,7 +1091,7 @@ public:
     ChordWheel (ProgrezzorProcessor& p, std::function<void()> closed) : processor (p), onClosed (std::move (closed))
     {
         setSize (380, 380);
-        startTimerHz (15);
+        startTimerHz (30);
     }
 
     ~ChordWheel() override
@@ -1118,7 +1125,7 @@ public:
                 const auto& s = segments[i];
                 if (s.selected != (pass == 1))
                     continue;
-                drawSegment (g, l, s, key, (int) i == hovered, (int) i == pressed);
+                drawSegment (g, l, s, key, (int) i == hovered, (int) i == pressed || (s.pad >= 0 && (shownLit & (1u << s.pad)) != 0)); // a pad that sounds lights its chord
             }
     }
 
@@ -1187,6 +1194,11 @@ private:
     void timerCallback() override
     {
         const auto key = processor.getKey();
+        if (const unsigned lit = processor.litPads(); lit != shownLit)
+        {
+            shownLit = lit;
+            repaint();
+        }
         if (key.tonic != shownTonic || (int) key.scale != shownScale)
         {
             shownTonic = key.tonic;
@@ -1349,6 +1361,7 @@ private:
     int hovered = -1, pressed = -1;
     bool previewing = false;
     int shownTonic = -1, shownScale = -1;
+    unsigned shownLit = 0;
 };
 
 // ---- ArpPanel ------------------------------------------------------------------------------------------------------
@@ -2802,6 +2815,11 @@ void ProgressionBar::filesDropped (const juce::StringArray& files, int, int)
 void ProgressionBar::showSettingsMenu()
 {
     juce::PopupMenu menu;
+    // The menu is tall. On a small screen, or with the plug-in low in the DAW window, the end of it can be cut off or hide in a
+    // scroll area, so what must always be reachable stands first.
+    menu.addSectionHeader ("Help");
+    menu.addItem (24, "Show tooltips", true, processor.getShowTooltips());
+    menu.addSeparator();
     menu.addSectionHeader ("The chords usually sit");
     const char* names[5] = { "Much lower  (2 octaves down)", "Lower  (1 octave down)", "Normal  (around middle C)",
                              "Higher  (1 octave up)", "Much higher  (2 octaves up)" };
@@ -2836,9 +2854,6 @@ void ProgressionBar::showSettingsMenu()
     menu.addSectionHeader ("Sound");
     menu.addItem (22, "Bass note", true, processor.bassParam->get());
     menu.addItem (23, "Preview sound", true, processor.voiceParam->getIndex() != PadSynth::Off);
-    menu.addSeparator();
-    menu.addSectionHeader ("Help");
-    menu.addItem (24, "Show tooltips", true, processor.getShowTooltips());
 
     juce::Component::SafePointer<ProgressionBar> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (260),
@@ -3166,6 +3181,8 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
     const float perNote = area.getWidth() / (float) (lastNote - firstNote);
     const auto xOf = [&] (int note) { return area.getX() + (float) (note - firstNote) * perNote; };
 
+    const float middleC = xOf (engine::kCentreNote) + perNote * 0.5f;
+    {
     juce::Path clip;
     clip.addRoundedRectangle (area, 6.0f);
     juce::Graphics::ScopedSaveState state (g);
@@ -3220,23 +3237,23 @@ void ProgressionBar::drawPitchStrip (juce::Graphics& g, juce::Rectangle<float> a
         }
 
     // Middle C: always in the same place, whatever Settings and the Oct buttons say. It is what the rest is measured from.
-    const float middleC = xOf (engine::kCentreNote) + perNote * 0.5f;
     g.setColour (theme::chordColour (7));
     g.fillRect (middleC - 1.0f, area.getY(), 2.0f, area.getHeight());
+    g.setColour (theme::keyEdge);
+    g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.2f);
+    } // the clip ends here: the name of the line stands under the keyboard, outside it
+
     {
         const juce::String text = "Mid C";
         const float labelWidth = 44.0f, labelHeight = 16.0f;
         const float labelX = juce::jlimit (area.getX(), area.getRight() - labelWidth, middleC - labelWidth * 0.5f);
-        const auto label = juce::Rectangle<float> (labelX, area.getBottom() - labelHeight, labelWidth, labelHeight);
+        const auto label = juce::Rectangle<float> (labelX, area.getBottom() + 1.0f, labelWidth, labelHeight);
         g.setColour (theme::chordColour (7));
         g.fillRoundedRectangle (label, 3.0f);
         g.setColour (theme::onAccent);
         g.setFont (juce::Font (juce::FontOptions (13.0f)).boldened());
         g.drawText (text, label.toNearestInt(), juce::Justification::centred);
     }
-
-    g.setColour (theme::keyEdge);
-    g.drawRoundedRectangle (area.reduced (0.5f), 6.0f, 1.2f);
 }
 
 void ProgressionBar::paint (juce::Graphics& g)
@@ -3436,6 +3453,7 @@ void ProgressionBar::resized()
     const int groupWidth = juce::jlimit (214, 460, juce::roundToInt ((float) getWidth() * 0.27f));
     auto group = area.removeFromRight (groupWidth).withTrimmedTop (labelHeight).withHeight (controlsHeight);
     area.removeFromRight (10);
+    group.removeFromBottom (16); // the name "Mid C" stands in these 16 px, under the little keyboard
     const int rowHeight = (group.getHeight() - 15) / 4;
     stripBounds = group.removeFromBottom (rowHeight);
     group.removeFromBottom (5);

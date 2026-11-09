@@ -2035,8 +2035,20 @@ int main (int argc, char** argv)
             ProgrezzorProcessor another;
             check (! another.getShowTooltips(), "the choice about tooltips is kept for every project");
         }
-        processor.setShowTooltips (true);
-        settle (200);
+        {
+            const auto countWindows = [&]
+            {
+                int n = 0;
+                for (auto* child : editor->getChildren())
+                    if (dynamic_cast<juce::TooltipWindow*> (child) != nullptr)
+                        ++n;
+                return n;
+            };
+            check (countWindows() == 0, "tooltips off: no tooltip window");
+            processor.setShowTooltips (true);
+            settle (200);
+            check (countWindows() == 1, "tooltips switched on again: the tooltip window is back");
+        }
     }
 
     {

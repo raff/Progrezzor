@@ -273,6 +273,7 @@ private:
     double sampleRate = 44100.0;
     double internalPpq = 0.0;    // only used when the host does not tell its position, or its position stands still while it plays
     double lastHostBeat = -1.0e300; // the host's position at the last block, to see if it is stuck
+    double lastHostAdvance = 0.0;  // how far the host should have moved in that block (beats)
     int stuckBlocks = 0;         // blocks in a row where a playing host gave the same position
     std::atomic<int> playingBlock { -1 };
     std::atomic<bool> editing { false };
