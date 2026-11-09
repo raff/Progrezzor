@@ -3883,20 +3883,6 @@ void ProgrezzorEditor::updateNames()
 
 void ProgrezzorEditor::timerCallback()
 {
-    // TEMPORARY diagnosis of FL Studio: a line every half second in progrezzor-diagnose.txt (first 40 lines)
-    if (++diagTick % 15 == 0 && diagLines < 40)
-    {
-        const auto file = ProgrezzorProcessor::getExportFolder().getChildFile ("progrezzor-diagnose.txt");
-        file.getParentDirectory().createDirectory();
-        if (diagLines == 0)
-            file.replaceWithText ("blocks, host gives a position, host says playing, ppq, seconds, bpm, stuck blocks, own clock\n");
-        file.appendText (juce::String (processor.diagBlocks.load()) + ", " + juce::String (processor.diagHasPosition.load())
-                         + ", " + juce::String (processor.diagRawPlaying.load()) + ", " + juce::String (processor.diagPpq.load(), 3)
-                         + ", " + juce::String (processor.diagSeconds.load(), 3) + ", " + juce::String (processor.diagBpm.load(), 1)
-                         + ", " + juce::String (processor.diagStuck.load()) + ", " + juce::String (processor.diagOwn.load()) + "\n");
-        ++diagLines;
-    }
-
     const auto key = processor.getKey();
     if (key.tonic != shownKey || (int) key.scale != shownScale || processor.getProgressionVersion() != shownProgression
         || processor.getVariantVersion() != shownVariant || (processor.isLockedToScale() ? 1 : 0) != shownLock)

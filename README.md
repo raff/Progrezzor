@@ -55,6 +55,8 @@ Progrezzor makes MIDI. A synth has to play it. If the synth plays the sound, set
 - **Bitwig Studio:** use the CLAP version. Put Progrezzor on an instrument track *before* the synth in the device chain, so the
   notes go through Progrezzor into the synth.
 - **REAPER:** put Progrezzor first in the track's FX chain and the synth after it. Progrezzor's MIDI goes on to the synth.
+- **FL Studio:** FL only tells a plug-in that it is playing when the track has something in the playlist. Put any clip on the
+  track (an empty one is enough), and Progrezzor follows FL's play. With nothing on the track, use Progrezzor's own Play button.
 - **Ableton Live:** (not tried yet on our side) put Progrezzor (VST3) on its own MIDI track, and on the synth's MIDI track set
   *MIDI From* to the Progrezzor track.
 

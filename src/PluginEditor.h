@@ -487,7 +487,6 @@ private:
     PadButton restPad; // the blank pad: drag it into the bar for a pause
     ProgressionBar bar;
     std::unique_ptr<DragGhost> ghost;
-    int diagTick = 0, diagLines = 0; // TEMPORARY (FL Studio diagnosis)
     int shownKey = -1, shownScale = -1, shownProgression = -1, shownVariant = -1, shownLock = -1;
     engine::LearnSession learn;
     int learnVersion = -1;
