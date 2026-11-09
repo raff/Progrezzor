@@ -13,6 +13,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Changed
+- **Author name.** The plug-in now says "Henrik Juhl" as its author in the host (it said "Henrik"), like SubForge.
 - **The DAW's play always starts the progression.** Before, the loop was silent while the DAW played if Play in the plug-in was off. Play now lights by itself while the DAW plays (and cannot be switched off), and goes out when the DAW stops.
 
 ### Added

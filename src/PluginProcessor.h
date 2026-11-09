@@ -279,6 +279,12 @@ private:
     std::atomic<bool> editing { false };
     std::atomic<bool> internalRun { false }; // the plug-in's own clock runs (not saved: a project opens stopped)
     std::atomic<bool> hostIsPlaying { false };
+public:
+    // TEMPORARY diagnosis of FL Studio: what the host says, read by the editor and written to a text file
+    std::atomic<long long> diagBlocks { 0 };
+    std::atomic<int> diagHasPosition { 0 }, diagRawPlaying { 0 }, diagStuck { 0 }, diagOwn { 0 };
+    std::atomic<double> diagPpq { -1.0 }, diagSeconds { -1.0 }, diagBpm { 0.0 };
+private:
     std::atomic<double> hostBarBeats { engine::kBeatsPerBar };
     bool flushNeeded = true;
 

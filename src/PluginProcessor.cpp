@@ -562,9 +562,16 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     bool hostPlaying = wasHostPlaying;
     double bpm = kFallbackBpm;
     double startBeat = internalPpq;
+    diagBlocks.fetch_add (1);
+    diagHasPosition.store (0);
     if (auto* transport = getPlayHead())
         if (const auto position = transport->getPosition())
         {
+            diagHasPosition.store (1);
+            diagRawPlaying.store (position->getIsPlaying() ? 1 : 0);
+            diagPpq.store (position->getPpqPosition().orFallback (-1.0));
+            diagSeconds.store (position->getTimeInSeconds().orFallback (-1.0));
+            diagBpm.store (position->getBpm().orFallback (0.0));
             hostPlaying = position->getIsPlaying();
             bpm = position->getBpm().orFallback (kFallbackBpm);
             if (const auto ppq = position->getPpqPosition())
@@ -587,6 +594,7 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         stuckBlocks = std::min (stuckBlocks + 1, 1000);
     else
         stuckBlocks = 0;
+    diagStuck.store (stuckBlocks);
     lastHostBeat = startBeat;
     lastHostAdvance = bpm / 60.0 / sampleRate * buffer.getNumSamples();
     if (stuckBlocks >= kStuckBlocks)
@@ -602,6 +610,7 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     if (ownClock)
         startBeat = internalPpq; // 0 when it has just been started
     const bool playing = hostPlaying || ownClock;
+    diagOwn.store (ownClock ? 1 : 0);
 
     // Transport stop stops everything that sounds
     if (wasPlaying && ! playing)

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 cmake_minimum_required(VERSION 3.22)
-project(Progrezzor VERSION 0.9.2 LANGUAGES C CXX)
+project(Progrezzor VERSION 0.9.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -68,7 +68,7 @@ set_target_properties(ProgrezzorFonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Test branch test/vst3-instrument: the VST3 registers as an instrument (IS_SYNTH TRUE), the CLAP stays a note effect (its
 # type comes from CLAP_FEATURES below, not from IS_SYNTH).
 juce_add_plugin(Progrezzor
-    COMPANY_NAME "Henrik"
+    COMPANY_NAME "Henrik Juhl"
     PLUGIN_MANUFACTURER_CODE Hjuh
     PLUGIN_CODE Prgz
     FORMATS VST3
