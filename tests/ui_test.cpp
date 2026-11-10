@@ -207,9 +207,13 @@ int main (int argc, char** argv)
     check (processor.soundingNotes() == 3, "and its chord sounds");
     snapshot ("loop_playing");
     check (processor.isPlayOn(), "Play lights by itself while the DAW plays");
-    processor.togglePlay(); // pressing it does nothing: the DAW is the one that stops
+    processor.togglePlay(); // the DAW runs: Play switches the progression off (the DAW itself is not touched)
     runBlock (processor);
-    check (processor.isPlayOn() && processor.getPlayingBlock() == 1 && processor.soundingNotes() == 3, "and it cannot be switched off");
+    check (! processor.isPlayOn() && processor.isHostPlaying() && processor.getPlayingBlock() == -1 && processor.soundingNotes() == 0,
+           "with the DAW running, Play mutes the progression and nothing hangs");
+    processor.togglePlay();
+    runBlock (processor);
+    check (processor.isPlayOn() && processor.getPlayingBlock() == 1 && processor.soundingNotes() == 3, "and switches it on again, in the right place");
     transport.playing = false;
     runBlock (processor);
 
@@ -703,6 +707,200 @@ int main (int argc, char** argv)
         *pr.arpOnParam = false;
         pr.undo();
         pr.undo();
+    }
+    std::printf ("play button\n");
+    {
+        ProgrezzorProcessor& pr = processor;
+        auto& ui = *static_cast<ProgrezzorEditor*> (editor.get());
+        auto& bar = ui.getBar();
+        const auto sounding = [&]
+        {
+            std::vector<int> notes;
+            for (int n = 0; n < 128; ++n)
+                if (pr.isNoteSounding (n))
+                    notes.push_back (n);
+            return notes;
+        };
+        const auto notesOf = [&] (const engine::Chord& chord)
+        {
+            const auto v = engine::shiftedByOctaves (engine::voiceChord (chord, pr.keyParam->getIndex()), pr.getTotalOctave());
+            std::vector<int> notes (v.notes.begin(), v.notes.begin() + v.count);
+            std::sort (notes.begin(), notes.end());
+            return notes;
+        };
+        const auto blocks = [&] (int count) // `count` blocks of audio on the plug-in's own clock
+        {
+            for (int i = 0; i < count; ++i)
+                runBlock (pr);
+        };
+        double hostBeat = 0.0;
+        const double stepBeats = 512.0 / 48000.0 * 2.0;
+        const auto atBeat = [&] (double beat, bool playing = true)
+        {
+            transport.playing = playing;
+            if (! playing)
+            {
+                hostBeat = beat;
+                transport.quarters = beat;
+                runBlock (pr);
+                return;
+            }
+            while (hostBeat + stepBeats < beat - 1.0e-9 && beat > hostBeat)
+            {
+                hostBeat += stepBeats;
+                transport.quarters = hostBeat;
+                runBlock (pr);
+            }
+            hostBeat = beat;
+            transport.quarters = beat;
+            runBlock (pr);
+        };
+        engine::Progression four;
+        for (const int root : { 0, 2, 4, 7 })
+        {
+            engine::Block b;
+            b.chord = { root, engine::ChordType::Minor, engine::kAutoInversion };
+            b.beats = 4.0;
+            four.push_back (b);
+        }
+        atBeat (0.0, false);
+        bar.clearSelection();
+        pr.setProgression (four);
+        settle (30);
+        const auto p = pr.getProgression();
+
+        // The DAW stopped: Play starts the own clock from block 1, and stops it again
+        check (! pr.isHostPlaying() && ! pr.isPlayOn(), "the DAW is stopped and Play is off");
+        pr.togglePlay();
+        blocks (3);
+        check (pr.isPlayOn() && pr.getPlayingBlock() == 0 && sounding() == notesOf (p[0].chord), "the DAW stopped: Play starts the progression from block 1");
+        blocks (200); // about four beats at 120 bpm
+        check (pr.getPlayingBlock() == 1, "on its own clock it goes on to the next block");
+        pr.togglePlay();
+        blocks (2);
+        check (! pr.isPlayOn() && pr.soundingNotes() == 0 && pr.getPlayingBlock() == -1, "Play again stops it, and every note is let go");
+
+        // From the marked block
+        bar.getBlock (2)->onSelect();
+        check (pr.getSelectedBlock() == 2, "block 3 is marked");
+        pr.togglePlay();
+        blocks (3);
+        check (pr.getPlayingBlock() == 2 && sounding() == notesOf (p[2].chord), "with a block marked the own clock starts from that block");
+        blocks (200);
+        check (pr.getPlayingBlock() == 3, "and goes on from there");
+        pr.togglePlay();
+        blocks (2);
+        check (pr.soundingNotes() == 0, "stopped: nothing hangs");
+        bar.clearSelection();
+        pr.togglePlay();
+        blocks (3);
+        check (pr.getPlayingBlock() == 0, "with nothing marked it starts from block 1 again");
+        pr.togglePlay();
+        blocks (2);
+
+        // Stop lets go of every note, also one that a hand holds
+        pr.pressPad (1);
+        pr.togglePlay();
+        blocks (3);
+        check (pr.soundingNotes() > 3, "a pad held and the progression playing sound together");
+        pr.togglePlay();
+        blocks (2);
+        check (pr.soundingNotes() == 0, "Stop lets go of every note");
+        pr.releasePad (1);
+        blocks (2);
+        check (pr.soundingNotes() == 0, "and the pad lets go without hanging notes");
+
+        // The DAW running: Play switches the progression on or off. On is the standard.
+        check (pr.loopParam->get(), "the progression is on as standard");
+        atBeat (0.5);
+        atBeat (5.0);
+        bar.updateButtons();
+        check (pr.isHostPlaying() && pr.isPlayOn() && pr.getPlayingBlock() == 1 && sounding() == notesOf (p[1].chord), "with the DAW running the progression plays with it");
+        check (ui.getBar().getPlayButton().getTooltip() == "Playing with your DAW. Click to mute the progression.", "the tooltip with the DAW");
+        check (ui.getBar().getPlayButton().isEnabled(), "and the button is not locked");
+        ui.getBar().getPlayButton().triggerClick();
+        settle (60); // a click is handled through the message queue
+        atBeat (5.1);
+        bar.updateButtons();
+        check (! pr.loopParam->get() && ! pr.isPlayOn() && pr.getPlayingBlock() == -1 && pr.soundingNotes() == 0, "a click mutes the progression: the loop is silent and nothing hangs");
+        check (pr.isHostPlaying() && ui.getBar().getPlayButton().isEnabled(), "the DAW goes on and the button is still not locked");
+        atBeat (8.5);
+        check (pr.soundingNotes() == 0, "and the progression stays silent when the DAW passes the next blocks");
+
+        // Muted: pads, MIDI keys and try on a block's place still work
+        pr.pressPad (3);
+        atBeat (8.6);
+        check (sounding() == notesOf (pr.getPadChord (3)), "muted: a pad plays");
+        pr.releasePad (3);
+        atBeat (8.7);
+        check (pr.soundingNotes() == 0, "and lets go");
+        {
+            juce::MidiBuffer keyDown;
+            keyDown.addEvent (juce::MidiMessage::noteOn (1, 62, (juce::uint8) 100), 0); // D: pad 2
+            transport.quarters = hostBeat = 8.8;
+            runBlock (pr, keyDown);
+            check (sounding() == notesOf (pr.getPadChord (1)), "muted: a MIDI key plays its pad");
+            juce::MidiBuffer off;
+            off.addEvent (juce::MidiMessage::noteOff (1, 62), 0);
+            transport.quarters = hostBeat = 8.9;
+            runBlock (pr, off);
+            check (pr.soundingNotes() == 0, "and lets go");
+        }
+        bar.getBlock (1)->onSelect();
+        pr.pressPad (4);
+        atBeat (9.0);
+        pr.pollTrial();
+        check (pr.getTrialBlock() == 1 && pr.getBlockChord (1) == pr.getPadChord (4), "muted: a pad tried on a marked block still works");
+        check (sounding() == notesOf (pr.getPadChord (4)), "and is heard");
+        pr.releasePad (4);
+        atBeat (9.1);
+        check (pr.soundingNotes() == 0, "and lets go");
+        bar.clearSelection();
+        check (pr.getTrialBlock() == -1 && pr.getProgression() == p, "Esc puts the chord back");
+
+        // The choice is saved with the project
+        juce::MemoryBlock state;
+        pr.getStateInformation (state);
+        pr.loopParam->beginChangeGesture();
+        pr.loopParam->setValueNotifyingHost (1.0f);
+        pr.loopParam->endChangeGesture();
+        check (pr.loopParam->get(), "(on again for the test)");
+        pr.setStateInformation (state.getData(), (int) state.getSize());
+        check (! pr.loopParam->get(), "the choice is saved with the project: it comes back muted");
+
+        // The DAW stops while it is muted: Play still starts the plug-in's own clock (it does not look at the choice)
+        atBeat (0.0, false);
+        bar.updateButtons();
+        check (! pr.isHostPlaying() && ! pr.isPlayOn(), "the DAW stops: Play is off");
+        check (ui.getBar().getPlayButton().getTooltip() == "Play the progression on its own clock.", "the tooltip without the DAW");
+        pr.togglePlay();
+        blocks (3);
+        check (pr.isPlayOn() && pr.getPlayingBlock() == 0 && sounding() == notesOf (p[0].chord), "the own clock plays also when the choice is muted");
+        pr.togglePlay();
+        blocks (2);
+        check (pr.soundingNotes() == 0, "and stops without hanging notes");
+
+        // Switch the progression on again while the DAW runs: it goes on in the right place
+        atBeat (0.0);
+        atBeat (9.0);
+        check (pr.soundingNotes() == 0, "the DAW starts muted: silent");
+        pr.togglePlay();
+        atBeat (9.5);
+        check (pr.loopParam->get() && pr.isPlayOn() && pr.getPlayingBlock() == 2 && sounding() == notesOf (p[2].chord), "on again: the progression is where the DAW is");
+        atBeat (0.0, false);
+        check (pr.soundingNotes() == 0, "the DAW stops: nothing hangs");
+
+        // Add (later): an empty bar cannot be started on its own clock, but with the DAW running the button works
+        pr.setProgression ({});
+        settle (30);
+        bar.updateButtons();
+        check (! ui.getBar().getPlayButton().isEnabled(), "an empty bar cannot be started on its own clock");
+        atBeat (1.0);
+        bar.updateButtons();
+        check (ui.getBar().getPlayButton().isEnabled(), "but the button is not locked when the DAW runs");
+        atBeat (0.0, false);
+        pr.setProgression (p);
+        settle (30);
     }
     processor.setPlayHead (nullptr);
 

@@ -37,8 +37,10 @@ CLAP and VST3. Windows has not been tried yet.
   other synth. Choose **Off** when another synth plays the MIDI, or switch "Preview sound" off in Settings.
 - **MIDI export.** Drag the MIDI tile into your DAW, or use Save MIDI and Open Folder. The file has the notes you hear: the chords,
   inversions, octaves, lengths, pauses, arp or rhythm and the bass note.
-- **Play.** The progression follows the DAW when it runs (also over loops and jumps in time), and plays on its own when the DAW is
-  stopped. Chord changes land exactly on the bar line. Notes never hang.
+- **Play.** With the DAW stopped, Play starts and stops the progression on its own clock (from the marked block, or from block 1).
+  With the DAW running, the progression plays with the DAW (also over loops and jumps in time), and Play, with a small link icon,
+  switches it on or off: off, the progression is silent but pads, MIDI keys and trying a chord on a block still work. The choice is
+  saved with the project. Chord changes land exactly on the bar line. Notes never hang.
 - **Edit while it plays.** Play only plays. Change the bar at any time; a change comes in when that block next begins, never in the
   middle of a chord. Click a block to mark it, then press a pad to try that chord on the block's place (dashed edge). Enter or a new
   click on the block keeps it, Esc puts the old chord back.
@@ -64,6 +66,7 @@ Progrezzor makes MIDI. A synth has to play it. If the synth plays the sound, set
   *MIDI From* to the Progrezzor track.
 
 You can also drag the MIDI file from the Drag tile onto any MIDI track and play it from there.
+If you dragged the MIDI into your DAW, mute the progression with Play, so it does not play twice.
 
 ## Build (Linux)
 

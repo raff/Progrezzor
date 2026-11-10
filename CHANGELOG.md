@@ -19,6 +19,7 @@ tag the commit (`vX.Y.Z`).
 - **Soft Pad dip and click.** In a chord change (C to Em) the tones the two chords share dipped and swelled again, with a click. They now just carry on. Only when the very same chord is struck again does the level dip (smoothly, no click), so the second hit is still heard.
 
 ### Changed
+- **The Play button is never locked.** With the DAW stopped, Play starts and stops the progression on its own clock, from the marked block if one is marked, otherwise from block 1; stopping lets go of every note. With the DAW running, Play shows a small link icon and switches the progression on or off (it plays with the DAW as standard; off, it is silent but pads, MIDI keys and trying a chord on a block still work). The choice is saved with the project. If you dragged the MIDI into your DAW, mute the progression with Play, so it does not play twice.
 - **Author name.** The plug-in now says "Henrik Juhl" as its author in the host (it said "Henrik"), like SubForge.
 - **The DAW's play always starts the progression.** Before, the loop was silent while the DAW played if Play in the plug-in was off. Play now lights by itself while the DAW plays (and cannot be switched off), and goes out when the DAW stops.
 

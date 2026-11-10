@@ -781,7 +781,11 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         internalRun.store (false);
     const bool ownClock = ! hostPlaying && internalRun.load();
     if (ownClock)
-        startBeat = internalPpq; // 0 when it has just been started
+    {
+        if (! wasPlaying) // just started: at the start of the selected block, or of block 1
+            internalPpq = ownStartBeat.exchange (0.0);
+        startBeat = internalPpq;
+    }
     const bool playing = hostPlaying || ownClock;
 
     // Transport stop stops everything that sounds
@@ -841,7 +845,9 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                 }
         activeSnap = fresh;
     }
-    loopActive = playing && ! learnOn.load() && (activeSnap.count > 0 || cursor.isRunning());
+    // The progression plays with the DAW when Play is on (loop), and always on the plug-in's own clock
+    const bool progressionOn = ! hostPlaying || loopParam->get();
+    loopActive = playing && progressionOn && ! learnOn.load() && (activeSnap.count > 0 || cursor.isRunning());
     loopPlan = loopActive ? cursor.plan (activeSnap, startBeat, resync, beatsPerSample, buffer.getNumSamples()) : engine::LoopPlan();
     if (! loopActive)
     {
@@ -958,9 +964,24 @@ void ProgrezzorProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer
 
 void ProgrezzorProcessor::togglePlay()
 {
-    // While the DAW plays, it is the DAW that stops the progression: Play follows it
-    if (! hostIsPlaying.load())
-        internalRun.store (! internalRun.load());
+    if (hostIsPlaying.load())
+    {
+        // The DAW runs: the progression is turned on or off (the DAW itself is not touched)
+        loopParam->beginChangeGesture();
+        loopParam->setValueNotifyingHost (loopParam->get() ? 0.0f : 1.0f);
+        loopParam->endChangeGesture();
+        return;
+    }
+
+    if (! internalRun.load()) // starting: from the selected block if there is one, otherwise from block 1
+    {
+        double start = 0.0;
+        const int selected = selectedBlock.load();
+        for (int i = 0; i < selected && i < (int) progression.size(); ++i)
+            start += progression[(size_t) i].beats;
+        ownStartBeat.store (start);
+    }
+    internalRun.store (! internalRun.load());
 }
 
 void ProgrezzorProcessor::setProgression (engine::Progression newProgression)

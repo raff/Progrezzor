@@ -1070,7 +1070,7 @@ int main (int argc, char** argv)
     }
 
     {
-        std::printf ("loop: Play off (the DAW still plays), an empty progression, a new key\n");
+        std::printf ("loop: Play off (the DAW runs, the progression is muted), an empty progression, a new key\n");
         received.clear();
         Session s;
         loadState (s.instance, makeState (progressionXml (9, 0, amFCG)));
@@ -1081,11 +1081,11 @@ int main (int argc, char** argv)
         InEvent off, on;
         check (paramEvent (s.instance, "Play", "Off", off) && paramEvent (s.instance, "Play", "On", on), "there is a Play parameter");
         playBlocks (s, beat, 1, 120.0, true, { off });
-        check (s.out.sounding() == 3, "Play off does not silence the loop: the DAW plays it");
+        check (s.out.sounding() == 0 && s.out.clean(), "Play off (the DAW runs) mutes the progression: it is silent and nothing hangs");
         playBlocks (s, beat, 300);
-        check (s.out.sounding() == 3, "and it goes on over the bar lines");
+        check (s.out.sounding() == 0, "and it stays silent over the bar lines");
         playBlocks (s, beat, 1, 120.0, true, { on });
-        check (s.out.sounding() == 3, "Play on brings it back");
+        check (s.out.sounding() == 3, "Play on brings it back, where the DAW is");
 
         // A new key: the same chords, moved
         InEvent key;

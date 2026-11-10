@@ -76,12 +76,24 @@ public:
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 };
 
-// The Play button of the bar: a triangle, lit while the progression plays. With Play off the bar can be edited
+// The Play button of the bar: lit while the progression plays. The DAW stopped: a triangle (start) and a square (stop) for the
+// plug-in's own clock. The DAW running: a small link icon, and the button turns the progression on or off (it plays with the DAW).
 class PlayToggle : public juce::Button
 {
 public:
     PlayToggle() : juce::Button ("Play") { setClickingTogglesState (true); }
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
+    void setLinked (bool nowLinked)
+    {
+        if (nowLinked != linked)
+        {
+            linked = nowLinked;
+            repaint();
+        }
+    }
+
+private:
+    bool linked = false; // the DAW runs and the progression follows it
 };
 
 // The Arp button: lit while the arp is on (everything is then played one note at a time). A click switches it.
@@ -317,6 +329,7 @@ public:
     void toggleLearn();
     bool isRecOn() const { return recOn; }
     BarButton& getRecButton() { return recButton; }
+    PlayToggle& getPlayButton() { return playButton; }
     std::unique_ptr<juce::Component> makeArpPanel(); // the panel behind the Arp button (also for the tests)
     void toggleArp();
     bool arpPanelShown = false;
