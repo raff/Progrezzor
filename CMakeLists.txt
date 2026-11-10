@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 cmake_minimum_required(VERSION 3.22)
-project(Progrezzor VERSION 0.9.10 LANGUAGES C CXX)
+project(Progrezzor VERSION 0.9.11 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,7 +51,7 @@ add_subdirectory(${CLAP_JUCE_EXTENSIONS_DIR} clap-juce-extensions EXCLUDE_FROM_A
 add_library(progrezzor_engine STATIC
     src/engine/ChordEngine.cpp src/engine/ChordEngine.h src/engine/Music.h src/engine/NoteTracker.h
     src/engine/Library.cpp src/engine/Library.h src/engine/Progression.h
-    src/engine/QuickText.cpp src/engine/QuickText.h src/engine/ChordPro.cpp src/engine/ChordPro.h src/engine/KeyGuess.cpp src/engine/KeyGuess.h src/engine/LoopPlan.cpp src/engine/LoopPlan.h src/engine/TripleBuffer.h src/engine/NextPads.h)
+    src/engine/QuickText.cpp src/engine/QuickText.h src/engine/ChordPro.cpp src/engine/ChordPro.h src/engine/KeyGuess.cpp src/engine/KeyGuess.h src/engine/LoopPlan.cpp src/engine/LoopPlan.h src/engine/LoopCursor.cpp src/engine/LoopCursor.h src/engine/TripleBuffer.h src/engine/NextPads.h)
 target_include_directories(progrezzor_engine PUBLIC src)
 if(NOT MSVC)
     target_compile_options(progrezzor_engine PRIVATE -Wall -Wextra -Wpedantic -Wconversion)

@@ -2188,7 +2188,7 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
         if (! editing || textMode || processor.getProgression().empty())
             return;
         clearSelection();
-        processor.editProgression ({});
+        processor.replaceProgression ({});
     };
     addAndMakeVisible (clearButton);
 
@@ -2297,7 +2297,7 @@ void ProgressionBar::applyQuickText()
     if (read.blocks.empty() && ! read.problems.empty())
         return;
 
-    processor.editProgression (engine::keepingBlockState (processor.getProgression(), read.blocks));
+    processor.replaceProgression (engine::keepingBlockState (processor.getProgression(), read.blocks));
     if (read.problems.empty())
     {
         const bool skipGuess = guessSkip; // a ChordPro file that said its key has been asked about it already

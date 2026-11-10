@@ -466,6 +466,244 @@ int main (int argc, char** argv)
         check (pr.getProgression() == original, "nothing was overwritten");
         pr.undo();
     }
+    std::printf ("live edit timing\n");
+    {
+        ProgrezzorProcessor& pr = processor;
+        const auto sounding = [&]
+        {
+            std::vector<int> notes;
+            for (int n = 0; n < 128; ++n)
+                if (pr.isNoteSounding (n))
+                    notes.push_back (n);
+            return notes;
+        };
+        const auto notesOf = [&] (const engine::Chord& chord)
+        {
+            const auto v = engine::shiftedByOctaves (engine::voiceChord (chord, pr.keyParam->getIndex()), pr.getTotalOctave());
+            std::vector<int> notes (v.notes.begin(), v.notes.begin() + v.count);
+            std::sort (notes.begin(), notes.end());
+            return notes;
+        };
+        double hostBeat = 0.0;
+        const double stepBeats = 512.0 / 48000.0 * 2.0; // one block at 120 bpm
+        const auto atBeat = [&] (double beat, bool playing = true)
+        {
+            transport.playing = playing;
+            if (! playing)
+            {
+                hostBeat = beat;
+                transport.quarters = beat;
+                runBlock (pr);
+                return;
+            }
+            while (hostBeat + stepBeats < beat - 1.0e-9 && beat > hostBeat)
+            {
+                hostBeat += stepBeats;
+                transport.quarters = hostBeat;
+                runBlock (pr);
+            }
+            hostBeat = beat;
+            transport.quarters = beat;
+            runBlock (pr);
+        };
+        const auto mk = [] (int root, double beats)
+        {
+            engine::Block b;
+            b.chord = { root, engine::ChordType::Minor, engine::kAutoInversion };
+            b.beats = beats;
+            return b;
+        };
+        const auto fresh = [&]
+        {
+            atBeat (0.0, false);
+            pr.setProgression ({ mk (0, 4), mk (2, 4), mk (4, 4), mk (7, 4) });
+            settle (30);
+            return pr.getProgression();
+        };
+        const auto stop = [&] (const char* what)
+        {
+            atBeat (0.0, false);
+            check (pr.soundingNotes() == 0, std::string ("nothing hangs after: ") + what);
+        };
+
+        // The playing block is deleted: it plays to its end, and the block that now comes after it goes on
+        auto p = fresh();
+        atBeat (0.5);
+        atBeat (9.0); // block 3 plays
+        check (pr.getPlayingBlock() == 2 && sounding() == notesOf (p[2].chord), "block 3 plays at beat 9");
+        pr.editProgression (engine::withErased (p, 2));
+        atBeat (11.9);
+        check (sounding() == notesOf (p[2].chord), "the deleted block plays to its end");
+        atBeat (12.1);
+        check (sounding() == notesOf (p[3].chord) && pr.getPlayingBlock() == 2, "and the block that came after it goes on (now the third)");
+        atBeat (16.1);
+        check (pr.getPlayingBlock() == 0 && sounding() == notesOf (p[0].chord), "then the loop starts over");
+        stop ("a deleted block");
+
+        // The playing block is made shorter than what has been played: the loop goes on at the next half bar line
+        p = fresh();
+        atBeat (0.5);
+        atBeat (11.2);
+        pr.editProgression (engine::withLength (p, 2, 2.0));
+        atBeat (11.9);
+        check (sounding() == notesOf (p[2].chord), "a block made shorter than what is played does not end in the middle of a beat");
+        atBeat (12.1);
+        check (sounding() == notesOf (p[3].chord), "it goes on at the next half bar line");
+        stop ("a block made shorter");
+
+        // The playing block is made longer: it plays longer
+        p = fresh();
+        atBeat (0.5);
+        atBeat (9.0);
+        pr.editProgression (engine::withLength (p, 2, 8.0));
+        atBeat (12.5);
+        check (sounding() == notesOf (p[2].chord) && pr.getPlayingBlock() == 2, "a block made longer plays longer");
+        atBeat (16.5);
+        check (sounding() == notesOf (p[3].chord), "and then the next one goes on");
+        stop ("a block made longer");
+
+        // A block earlier in the bar is made longer while a later one plays: nothing jumps, the change is heard in the next round
+        p = fresh();
+        atBeat (0.5);
+        atBeat (9.0);
+        pr.editProgression (engine::withLength (p, 0, 8.0));
+        atBeat (11.9);
+        check (pr.getPlayingBlock() == 2 && sounding() == notesOf (p[2].chord), "an earlier change does not move the block that plays");
+        atBeat (12.1);
+        check (pr.getPlayingBlock() == 3 && sounding() == notesOf (p[3].chord), "the loop goes on to the next block");
+        atBeat (16.5);
+        check (pr.getPlayingBlock() == 0 && sounding() == notesOf (p[0].chord), "and the longer block is heard in the next round");
+        atBeat (23.5);
+        check (pr.getPlayingBlock() == 0, "for two bars");
+        atBeat (24.5);
+        check (pr.getPlayingBlock() == 1 && sounding() == notesOf (p[1].chord), "and then the second block");
+        stop ("an earlier change");
+
+        // A later block changes while an earlier one plays: heard when the loop gets there
+        p = fresh();
+        atBeat (0.5);
+        atBeat (5.0); // block 2 plays
+        auto later = p;
+        later[3].chord = { 9, engine::ChordType::Major, engine::kAutoInversion };
+        later[3].beats = 8.0;
+        pr.editProgression (later);
+        atBeat (12.5);
+        check (pr.getPlayingBlock() == 3 && sounding() == notesOf (later[3].chord), "a later change is heard when the loop gets there");
+        atBeat (19.5);
+        check (pr.getPlayingBlock() == 3, "and the longer block plays its two bars");
+        stop ("a later change");
+
+        // The block that plays is moved: it goes on and the loop goes on from its new place
+        p = fresh();
+        atBeat (0.5);
+        atBeat (9.0);
+        pr.editProgression (engine::withMoved (p, 2, 4)); // block 3 goes last
+        atBeat (11.9);
+        check (sounding() == notesOf (p[2].chord), "a block that is moved goes on playing");
+        atBeat (12.1);
+        check (sounding() == notesOf (p[0].chord), "and the loop goes on with what comes after it in its new place (the start)");
+        stop ("a moved block");
+
+        // Clear, Suggest and Quick-text replace the whole bar: the block that plays is finished, and the loop starts from block 1
+        p = fresh();
+        atBeat (0.5);
+        atBeat (9.0);
+        pr.replaceProgression ({ mk (5, 4), mk (9, 4), mk (3, 4) });
+        const auto replaced = pr.getProgression();
+        atBeat (11.9);
+        check (sounding() == notesOf (p[2].chord), "a new bar: the block that plays is finished");
+        atBeat (12.1);
+        check (pr.getPlayingBlock() == 0 && sounding() == notesOf (replaced[0].chord), "and the loop starts from block 1 of the new bar");
+        atBeat (16.1);
+        check (pr.getPlayingBlock() == 1 && sounding() == notesOf (replaced[1].chord), "and goes on from there");
+        stop ("a new bar");
+
+        // Clear: the chord rings to the end of its block, then it is silent
+        p = fresh();
+        atBeat (0.5);
+        atBeat (9.0);
+        pr.replaceProgression ({});
+        atBeat (11.9);
+        check (sounding() == notesOf (p[2].chord), "Clear: the chord that plays rings to the end of its block");
+        atBeat (12.1);
+        check (pr.soundingNotes() == 0 && pr.getPlayingBlock() == -1, "and then it is silent");
+        pr.undo();
+        stop ("Clear");
+
+        // Suggest: the same (the old chords are finished, then the new bar from its first block)
+        p = fresh();
+        atBeat (0.5);
+        atBeat (9.0);
+        pr.suggestProgression();
+        const auto suggested = pr.getProgression();
+        atBeat (11.9);
+        check (sounding() == notesOf (p[2].chord), "Suggest: the chord that plays is finished");
+        atBeat (12.1);
+        check (pr.getPlayingBlock() == 0 && ! suggested.empty() && sounding() == notesOf (suggested[0].chord), "and the new bar starts from block 1");
+        stop ("Suggest");
+
+        // The DAW stops and starts again, jumps or loops: block 1 lies fixed again, from the host's position
+        p = fresh();
+        atBeat (0.5);
+        atBeat (9.0);
+        pr.editProgression (engine::withLength (p, 0, 8.0)); // 20 beats now
+        atBeat (9.5);
+        atBeat (0.0, false); // stop
+        check (pr.soundingNotes() == 0, "the DAW stops: nothing sounds");
+        atBeat (0.0); // start from the beginning
+        check (pr.getPlayingBlock() == 0 && sounding() == notesOf (p[0].chord), "a start from the beginning plays block 1");
+        atBeat (1.0);
+        atBeat (10.0); // the DAW jumps: the host's position in the bar as it is now (20 beats): block 2
+        check (pr.getPlayingBlock() == 1 && sounding() == notesOf (p[1].chord), "after a jump the place is the host's position in the bar as it is now");
+        atBeat (10.5);
+        atBeat (1.0); // the DAW loops back
+        check (pr.getPlayingBlock() == 0 && sounding() == notesOf (p[0].chord), "a loop in the DAW starts block 1 again");
+        stop ("DAW stop, jump and loop");
+
+        // The loop and the MIDI file are the same after the change: the next round plays what the file has
+        p = fresh();
+        atBeat (0.5);
+        atBeat (9.0);
+        auto edited = p;
+        edited[0].chord = { 5, engine::ChordType::Major, engine::kAutoInversion };
+        edited[1].beats = 8.0;
+        edited[3].chord = { 10, engine::ChordType::Minor, engine::kAutoInversion };
+        pr.editProgression (edited);
+        const auto exported = engine::exportNotes (pr.getProgression(), pr.keyParam->getIndex(), pr.getKey().scale);
+        // the round after the one that plays now: the file starts where block 1 starts, the loop got there at the end of block 4
+        atBeat (12.5);
+        atBeat (16.5); // the old round is over
+        double startOfFile = 16.0;
+        bool same = true;
+        double offset = 0.0;
+        for (size_t b = 0; b < edited.size(); ++b)
+        {
+            atBeat (startOfFile + offset + 0.5 * edited[b].beats);
+            std::vector<int> fileNotes;
+            for (const auto& n : exported)
+                if (n.start <= offset + 0.5 * edited[b].beats && n.start + n.length > offset + 0.5 * edited[b].beats && n.note >= 36)
+                    fileNotes.push_back (n.note);
+            std::sort (fileNotes.begin(), fileNotes.end());
+            fileNotes.erase (std::unique (fileNotes.begin(), fileNotes.end()), fileNotes.end());
+            same &= fileNotes == sounding();
+            offset += edited[b].beats;
+        }
+        check (same, "the loop and the MIDI file have the same notes after the change");
+        stop ("loop and file");
+
+        // An edit while a chord arps: nothing hangs
+        p = fresh();
+        *pr.arpOnParam = true;
+        atBeat (0.5);
+        atBeat (9.0);
+        pr.editProgression (engine::withLength (engine::withErased (p, 0), 1, 8.0));
+        atBeat (13.0);
+        atBeat (30.0);
+        stop ("an edit while the arp plays");
+        *pr.arpOnParam = false;
+        pr.undo();
+        pr.undo();
+    }
     processor.setPlayHead (nullptr);
 
     std::printf ("same chord twice\n");
