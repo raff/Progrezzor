@@ -102,13 +102,17 @@ public:
             v.phaseSub = 0.0;
             v.phaseExtra = 0.37;
             v.level = 0.0f;
+            v.dipping = false;
             v.filterLeft = v.filterRight = 0.0f;
         }
         else
         {
             // The same note struck again while it still rings (the same chord twice in a row): the slow sounds (Soft Pad, Strings)
             // would just carry on, so the level dips and swells again and the second hit is heard.
-            v.level *= 0.35f;
+            // The dip is a short ramp, not a jump (a jump is a click).
+            v.dipTo = v.level * 0.35f;
+            v.dipRate = (v.level - v.dipTo) / (float) (0.015 * sampleRate);
+            v.dipping = v.dipRate > 0.0f;
         }
     }
 
@@ -138,7 +142,13 @@ public:
 
             for (int i = start; i < end; ++i)
             {
-                if (v.gate)
+                if (v.dipping)
+                {
+                    v.level -= v.dipRate;
+                    if (v.level <= v.dipTo || ! v.gate)
+                        v.dipping = false;
+                }
+                else if (v.gate)
                     v.level = std::min (1.0f, v.level + v.attackRate);
                 else
                 {
@@ -261,6 +271,8 @@ private:
         float decay = 1.0f, decayRate = 1.0f; // sounds that die away by themselves (Keys, Stab, Pluck)
         float attackRate = 0.001f;
         float modIndex = 1.5f;
+        bool dipping = false; // a note struck again while it rings: the level glides down first, then swells
+        float dipTo = 0.0f, dipRate = 0.0f;
     };
 
     // A saw wave with the PolyBLEP correction at its jump, so that it does not alias much
