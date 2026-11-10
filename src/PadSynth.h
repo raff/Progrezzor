@@ -168,13 +168,17 @@ public:
                 if (v.restruck)
                 {
                     v.restruck = false;
-                    if (freshStrikes == 0) // nothing new: the same chord (or note) again
+                    // The short sounds (Keys, Stab, Pluck, Piano) die away by themselves, so a tone that two chords share is struck
+                    // again in a chord change: left to ring it would be almost gone, and the chord would sound as if only its new
+                    // tones were played. The slow sounds (Soft Pad, Strings, Organ) carry a shared tone on, and dip only when the
+                    // very same chord (nothing new) is struck again, so that the second hit is heard.
+                    const bool short_ = v.decayRate < 1.0f || v.type == Piano;
+                    if (short_ || freshStrikes == 0)
                     {
-                        // The slow sounds dip and swell. The short ones (Keys, Stab, Pluck) go down to nothing quickly and are struck
-                        // anew there. Always a ramp, never a jump (a jump clicks).
-                        const bool short_ = v.decayRate < 1.0f || v.type == Piano;
+                        // Always a ramp, never a jump (a jump clicks): the short ones go down to nothing quickly and are struck anew
+                        // there, the slow ones dip and swell.
                         v.dipTo = short_ ? 0.0f : v.dipFrom * 0.35f;
-                        v.dipRate = (v.dipFrom - v.dipTo) / (float) ((short_ ? 0.006 : 0.015) * sampleRate);
+                        v.dipRate = (v.dipFrom - v.dipTo) / (float) ((short_ ? 0.004 : 0.015) * sampleRate);
                         v.dipping = v.dipRate > 0.0f;
                         v.strikeAfterDip = short_;
                         if (short_ && ! v.dipping) // nothing sounds: strike at once

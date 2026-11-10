@@ -13,6 +13,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Fixed
+- **Piano, Keys, Stab and Pluck: a chord change that shares tones sounds as the whole chord.** D to F#m shares F# and A, and those were left ringing while they had almost faded, so only the new tone was heard. These sounds now strike the shared tones again (smoothly, no click). Soft Pad, Strings and Organ still carry shared tones on.
 - **Keys, Stab and Pluck: no jump when a note rings and is struck again.** The fading bell used to jump back to full strength on the very same sample (the same chord twice, or a tone two chords share). Now the same chord again goes quickly down to nothing and is struck anew, and a shared tone just carries on.
 - **Soft Pad dip and click.** In a chord change (C to Em) the tones the two chords share dipped and swelled again, with a click. They now just carry on. Only when the very same chord is struck again does the level dip (smoothly, no click), so the second hit is still heard.
 

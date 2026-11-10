@@ -1956,6 +1956,36 @@ int main (int argc, char** argv)
             check (synth.isSilent(), "and nothing is left ringing");
         }
 
+        // A chord change where the chords share two tones (D to F#m: F# and A): a sound that fades by itself must strike the shared tones
+        // again, or only the new tone is heard. The chord after the change is as strong as a chord struck from silence.
+        for (const int voice : { (int) PadSynth::Piano, (int) PadSynth::Keys, (int) PadSynth::Pluck })
+        {
+            PadSynth synth;
+            synth.setPianoBank (&bank);
+            synth.prepare (48000.0);
+            synth.setVoice (voice);
+            const int hold = voice == PadSynth::Pluck ? 24000 : 72000; // the chord has been ringing for a while before it changes
+            std::vector<float> out ((size_t) (hold + 48000), 0.0f), right (out.size(), 0.0f);
+            for (const int n : { 62, 66, 69 })
+                synth.noteOn (n, 100);
+            synth.render (out.data(), right.data(), 0, hold - 1);
+            for (const int n : { 62, 66, 69 })
+                synth.noteOff (n);
+            synth.render (out.data(), right.data(), hold - 1, hold);
+            for (const int n : { 66, 69, 73 }) // F#m
+                synth.noteOn (n, 100);
+            synth.render (out.data(), right.data(), hold, hold + 48000);
+            const auto rms = [&] (int from, int to)
+            {
+                double e = 0.0;
+                for (int i = from; i < to; ++i)
+                    e += (double) out[(size_t) i] * out[(size_t) i];
+                return std::sqrt (e / (to - from));
+            };
+            const double firstRms = rms (480, 480 + 9600), later = rms (hold + 480, hold + 480 + 9600);
+            check (later > firstRms * 0.6, "sound " + std::to_string (voice) + ": after D to F#m the whole chord is heard, not only the new tone");
+        }
+
         // Fast chord changes, every 60 ms: finite, never louder than full scale
         {
             PadSynth synth;
