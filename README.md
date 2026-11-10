@@ -39,6 +39,9 @@ CLAP and VST3. Windows has not been tried yet.
   inversions, octaves, lengths, pauses, arp or rhythm and the bass note.
 - **Play.** The progression follows the DAW when it runs (also over loops and jumps in time), and plays on its own when the DAW is
   stopped. Chord changes land exactly on the bar line. Notes never hang.
+- **Edit while it plays.** Play only plays. Change the bar at any time; a change comes in when that block next begins, never in the
+  middle of a chord. Click a block to mark it, then press a pad to try that chord on the block's place (dashed edge). Enter or a new
+  click on the block keeps it, Esc puts the old chord back.
 
 ## Formats
 

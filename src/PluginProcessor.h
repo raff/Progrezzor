@@ -125,6 +125,20 @@ public:
     void setProgression (engine::Progression newProgression);
     int getProgressionVersion() const { return progressionVersion.load(); } // goes up with each change, for the editor
 
+    // ---- Try a chord on its place (message thread, except the notes of the pads) ----
+    // With a block selected, a pad (mouse or MIDI) does not play on top of the loop: its chord stands in for the block's, shown
+    // with a dashed edge, and the loop plays it on the block's place. Nothing is changed in the progression until it is kept.
+    void setSelectedBlock (int index); // the bar tells which block is selected (-1 none); any try-out on another block is put back
+    int getSelectedBlock() const { return selectedBlock.load(); }
+    void tryChord (const engine::Chord& chord); // the selected block plays this chord for now
+    void pollTrial();                           // takes the pad presses that the audio thread sent here (the editor's timer)
+    bool commitTrial();                         // keep the try-out: one step for Undo
+    void cancelTrial();                         // the old chord is back
+    int getTrialBlock() const { return trialBlock; }  // -1 if none
+    int getTrialVersion() const { return trialVersion.load(); }
+    // The chord a block shows and plays now: the try-out if it has one
+    engine::Chord getBlockChord (int index) const;
+
     // Every change the user makes goes through here: the old progression is kept for Undo. (setProgression above is for
     // loading and for the live steps of a drag; it keeps nothing.)
     void editProgression (engine::Progression newProgression);
@@ -215,6 +229,7 @@ private:
     class AudioWork; // what happens in one block, see the .cpp
 
     void sendGuiEvent (GuiEvent);
+    bool sendsToTrial (int pad); // audio thread, see the .cpp
 
     static constexpr int kQueueSize = 64;
     juce::AbstractFifo fifo { kQueueSize };
@@ -264,6 +279,11 @@ private:
 
     // The loop (audio thread). The progression reaches it through a lock-free hand-over.
     engine::TripleBuffer<engine::LoopSnapshot> loopBuffer;
+    // What the loop plays (audio thread). A change that the editor publishes waits in `pendingSnap` until the next block line,
+    // so that a chord is never cut in the middle by an edit.
+    engine::LoopSnapshot activeSnap;
+    engine::LoopSnapshot pendingSnap;
+    bool hasPending = false;
     engine::LoopPlan loopPlan;
     int loopIndex = -1;          // the block that plays now, -1 if none
     bool loopActive = false;     // the host plays, Play is on and there is a progression
@@ -302,6 +322,14 @@ private:
     int generatedVersion = -1; // progressionVersion right after the last Suggest
     juce::Random random;
     std::atomic<int> progressionVersion { 0 };
+    void publishLoop (int swapNowBlock = -1);
+    int trialBlock = -1;
+    engine::Chord trialChord;
+    std::atomic<int> trialVersion { 0 };
+    std::atomic<int> selectedBlock { -1 };
+    static constexpr int kTrialQueueSize = 16;
+    juce::AbstractFifo trialFifo { kTrialQueueSize };
+    std::array<int, kTrialQueueSize> trialQueue {};
 
     std::atomic<unsigned> lit { 0 };
     std::atomic<int> soundingCount { 0 };

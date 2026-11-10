@@ -1109,7 +1109,7 @@ int main (int argc, char** argv)
 
         // An empty progression plays nothing
         loadState (s.instance, makeState (progressionXml (9, 0, {})));
-        playBlocks (s, beat, 2);
+        playBlocks (s, beat, 1600); // the chord that sounds rings to the end of its block (an edit never cuts a chord), then it is silent
         check (s.out.sounding() == 0, "an empty progression is silent");
     }
 
