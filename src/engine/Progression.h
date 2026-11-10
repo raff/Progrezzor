@@ -27,6 +27,10 @@ struct Block
     bool locked = false; // a locked block stays when Suggest replaces the rest
     bool disabled = false; // Quick-text put a chord outside the scale here: it is silent while Lock to scale is on
     bool rest = false;     // a pause: silence for the length of the block (the chord is not used)
+    // The block's identity: it lives through moves and changes (chord, length, lock), so that the loop can find the block that plays
+    // again after the bar has been edited. 0 means "not given yet": the processor gives every block its own number. Not saved,
+    // and not part of ==, because two blocks that look the same are the same to the user.
+    int id = 0;
 
     friend bool operator== (const Block& a, const Block& b)
     {

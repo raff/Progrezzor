@@ -8,6 +8,7 @@
 #include "engine/ChordEngine.h"
 #include "engine/Library.h"
 #include "engine/LoopPlan.h"
+#include "engine/LoopCursor.h"
 #include "engine/TripleBuffer.h"
 #include "engine/NoteTracker.h"
 #include "engine/ProgressionEdit.h"
@@ -142,6 +143,9 @@ public:
     // Every change the user makes goes through here: the old progression is kept for Undo. (setProgression above is for
     // loading and for the live steps of a drag; it keeps nothing.)
     void editProgression (engine::Progression newProgression);
+    // The same for a change that replaces the whole bar (Clear, Suggest, Quick-text): the loop finishes the block that plays and
+    // goes on from block 1
+    void replaceProgression (engine::Progression newProgression);
     bool canUndo() const { return ! undoStack.empty(); }
     bool canRedo() const { return ! redoStack.empty(); }
     void undo();
@@ -283,11 +287,18 @@ private:
 
     // The loop (audio thread). The progression reaches it through a lock-free hand-over.
     engine::TripleBuffer<engine::LoopSnapshot> loopBuffer;
-    // What the loop plays (audio thread). A change that the editor publishes waits in `pendingSnap` until the next block line,
-    // so that a chord is never cut in the middle by an edit.
+    // What the loop plays (audio thread): the newest copy of the bar, and the cursor that knows which block plays and how far it has
+    // got (see LoopCursor). An edit finds the block that plays again in the new copy and goes on from there. The chord that the
+    // block sounds is taken when the block begins and kept until it is over, so that an edit never changes a chord in the middle of
+    // a block.
     engine::LoopSnapshot activeSnap;
-    engine::LoopSnapshot pendingSnap;
-    bool hasPending = false;
+    engine::LoopCursor cursor;
+    int seenRestartSerial = 0;
+    bool loopBlockPlaying = false;   // a block sounds in the loop (also one that was deleted and plays to its end)
+    int loopBlockId = 0;
+    engine::Chord loopBlockChord;
+    bool loopBlockRest = false, loopBlockDisabled = false;
+    double loopBlockStartBeat = 0.0, loopBlockBeats = 0.0; // the host's position of its start, and its length as it plays now
     engine::LoopPlan loopPlan;
     int loopIndex = -1;          // the block that plays now, -1 if none
     bool loopActive = false;     // the host plays, Play is on and there is a progression
@@ -327,6 +338,10 @@ private:
     juce::Random random;
     std::atomic<int> progressionVersion { 0 };
     void publishLoop (int swapNowBlock = -1);
+    void assignBlockIds (engine::Progression&); // every block gets an identity of its own (see Block::id)
+    int nextBlockId = 1;
+    bool pendingRestart = false;
+    int restartSerial = 0;
     int trialBlock = -1;
     engine::Chord trialChord;
     std::atomic<int> trialVersion { 0 };

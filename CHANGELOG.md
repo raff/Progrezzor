@@ -13,6 +13,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Fixed
+- **Editing while it plays no longer makes the loop jump.** The loop used to work out its place from the DAW's position modulo the length of the progression, so every change of a length moved the blocks under it. Now the loop keeps track of which block plays and how far it has got (blocks have a lasting identity), and counts on with the DAW's time. A change is heard the next time the loop reaches the changed place. A deleted block plays to its end, then the block after it goes on; a block made shorter than what is played goes on at the next half bar line; Clear, Suggest and Quick-text start from block 1 at the next block line. A stop and start, a jump or a loop in the DAW finds the place from the DAW's position as before.
 - **Keys, Stab and Pluck: no jump when a note rings and is struck again.** The fading bell used to jump back to full strength on the very same sample (the same chord twice, or a tone two chords share). Now the same chord again goes quickly down to nothing and is struck anew, and a shared tone just carries on.
 - **Soft Pad dip and click.** In a chord change (C to Em) the tones the two chords share dipped and swelled again, with a click. They now just carry on. Only when the very same chord is struck again does the level dip (smoothly, no click), so the second hit is still heard.
 

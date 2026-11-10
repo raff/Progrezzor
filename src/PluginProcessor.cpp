@@ -26,6 +26,7 @@ enum { noteOnMessage, noteOffMessage, allNotesOffMessage };
 
 constexpr int kLoopVelocity = 100;
 constexpr double kFallbackBpm = 120.0;
+constexpr double kJumpBeats = 0.25;  // the host's position must be at least this far from where it should be to count as a jump (a quarter of a beat)
 constexpr int kStuckBlocks = 4;       // a playing host that gives the same position this many blocks in a row is not moving
 }
 
@@ -150,6 +151,8 @@ void ProgrezzorProcessor::prepareToPlay (double newSampleRate, int)
     wasHostPlaying = false;
     internalRun.store (false);
     loopIndex = -1;
+    loopBlockPlaying = false;
+    cursor.reset();
     internalPpq = 0.0;
     // The host may have been off for a while. Whatever was sounding gets its note off in the first block.
     flushNeeded = true;
@@ -269,7 +272,13 @@ void ProgrezzorProcessor::publishLoop (int swapNowBlock)
         block.disabled = false;
         block.rest = false;
     }
-    slot.swapNowBlock = swapNowBlock;
+    slot.swapNowId = swapNowBlock >= 0 && swapNowBlock < slot.count ? slot.blocks[(size_t) swapNowBlock].id : 0;
+    if (pendingRestart)
+    {
+        ++restartSerial;
+        pendingRestart = false;
+    }
+    slot.restartSerial = restartSerial;
     loopBuffer.publish();
 }
 
@@ -325,13 +334,10 @@ public:
     // The loop: which block sounds. Call it whenever the block, the user's hands or the key may have changed.
     void syncLoop (int position, bool again = false)
     {
-        const auto& snapshot = owner.activeSnap;
-        bool wanted = owner.loopActive && owner.loopIndex >= 0 && owner.loopIndex < snapshot.count;
+        bool wanted = owner.loopActive && owner.loopBlockPlaying;
         if (wanted) // a block that Quick-text disabled (a chord outside the scale, with the lock on) keeps its time but is silent
-        {
-            const auto& block = snapshot.blocks[(size_t) owner.loopIndex];
-            wanted = ! block.rest && ! (block.disabled && owner.lockParam->get() && ! engine::chordFitsScale (block.chord, (engine::ScaleId) owner.scaleParam->getIndex()));
-        }
+            wanted = ! owner.loopBlockRest
+                     && ! (owner.loopBlockDisabled && owner.lockParam->get() && ! engine::chordFitsScale (owner.loopBlockChord, (engine::ScaleId) owner.scaleParam->getIndex()));
         const int loopSource = engine::NoteTracker::loopSource();
 
         if (! wanted)
@@ -340,7 +346,7 @@ public:
             return;
         }
 
-        const auto chord = snapshot.blocks[(size_t) owner.loopIndex].chord;
+        const auto chord = owner.loopBlockChord;
         const int tonic = owner.keyParam->getIndex();
         if (! again && owner.sourceActive[(size_t) loopSource] && owner.loopChord == chord && owner.loopTonic == tonic)
             return;
@@ -350,31 +356,67 @@ public:
         pressSource (loopSource, -1, chord, kLoopVelocity, position);
     }
 
-    // The host's position of the start of the loop's block `loopIndex`, for the block that is playing at `position`
-    double loopBlockStart (int position) const
+    // A block of the bar begins: what it sounds is taken from the bar now and kept until the block is over
+    void startBlock (int index, double startBeat, double beats)
     {
-        const auto& snapshot = owner.activeSnap;
-        double offset = 0.0;
-        for (int i = 0; i < owner.loopIndex && i < snapshot.count; ++i)
-            offset += snapshot.blocks[(size_t) i].beats;
-        const double now = owner.bufferStartBeat + position * owner.bufferBeatsPerSample;
-        const double cycles = std::floor ((now - offset) / snapshot.total + 1.0e-6);
-        return offset + cycles * snapshot.total;
+        const auto& block = owner.activeSnap.blocks[(size_t) index];
+        owner.loopIndex = index;
+        owner.loopBlockPlaying = true;
+        owner.loopBlockId = block.id;
+        owner.loopBlockChord = block.chord;
+        owner.loopBlockRest = block.rest;
+        owner.loopBlockDisabled = block.disabled;
+        owner.loopBlockStartBeat = startBeat;
+        owner.loopBlockBeats = beats;
     }
 
-    // The loop starts the block at its first sample
-    void beginLoop (int index)
+    // The loop begins this block of audio: the cursor says which block plays and how far it has got
+    void beginLoop()
     {
-        owner.loopIndex = index;
+        const auto& plan = owner.loopPlan;
         nextChange = 0;
-        // The arp of a block that the host has jumped away from (or into the middle of) starts over on the new grid
-        bool stale = false;
-        if (index >= 0)
+        if (plan.playing && plan.startIndex >= 0)
         {
-            const auto& slot = owner.arpSlots[(size_t) engine::NoteTracker::loopSource()];
-            stale = slot.running && slot.onGrid && std::abs (slot.gridStart - loopBlockStart (0)) > 1.0e-6;
+            const int id = owner.activeSnap.blocks[(size_t) plan.startIndex].id;
+            if (! owner.loopBlockPlaying || owner.loopBlockId != id || plan.startsOnLine)
+                startBlock (plan.startIndex, plan.startBlockBeat, plan.startBlockBeats); // a block that begins here (or the host has put us in)
+            else // the same block goes on: it keeps its chord, also if the bar has been edited. Its length may have changed.
+            {
+                owner.loopIndex = plan.startIndex;
+                owner.loopBlockStartBeat = plan.startBlockBeat;
+                owner.loopBlockBeats = plan.startBlockBeats;
+            }
         }
-        syncLoop (0, owner.loopPlan.startsOnLine || stale); // a block that starts here sounds anew, even with the same chord
+        else if (plan.playing && owner.loopBlockPlaying) // the block was deleted: it plays to its end
+        {
+            owner.loopIndex = -1;
+            owner.loopBlockStartBeat = plan.startBlockBeat;
+            owner.loopBlockBeats = plan.startBlockBeats;
+        }
+        else
+        {
+            owner.loopBlockPlaying = false;
+            owner.loopIndex = -1;
+        }
+
+        // The arp of a block that the host has jumped away from (or into the middle of) starts over on the new grid. The arp of a
+        // block that was made longer goes on to the end of it.
+        bool stale = false;
+        if (owner.loopBlockPlaying)
+        {
+            auto& slot = owner.arpSlots[(size_t) engine::NoteTracker::loopSource()];
+            stale = slot.running && slot.onGrid && std::abs (slot.gridStart - owner.loopBlockStartBeat) > 1.0e-6;
+            if (slot.running && slot.onGrid && ! stale && std::abs (slot.blockLen - owner.loopBlockBeats) > 1.0e-9)
+            {
+                slot.blockLen = owner.loopBlockBeats;
+                if ((double) slot.step * slot.stepBeats < slot.blockLen - 1.0e-9)
+                {
+                    slot.dueBeat = slot.gridStart + (double) slot.step * slot.stepBeats;
+                    slot.dueIn = (slot.dueBeat - owner.bufferStartBeat) / owner.bufferBeatsPerSample;
+                }
+            }
+        }
+        syncLoop (0, plan.startsOnLine || stale); // a block that starts here sounds anew, even with the same chord
     }
 
     // The loop goes through the block changes that fall before `position`
@@ -384,29 +426,14 @@ public:
         {
             const auto change = owner.loopPlan.changes[(size_t) nextChange++];
             advanceArp (change.sample); // the steps before the change come first
-            if (owner.hasPending) // a block line: what the editor has changed takes effect here, never in the middle of a chord
+            if (change.index < 0) // the bar was emptied and the block has played to its end
             {
-                owner.activeSnap = owner.pendingSnap;
-                owner.hasPending = false;
-                const double bps = owner.bufferBeatsPerSample;
-                const auto fresh = engine::planLoop (owner.activeSnap, owner.bufferStartBeat + change.sample * bps, bps, numSamples - change.sample);
-                owner.loopPlan.numChanges = 0;
-                if (fresh.startIndex < 0)
-                {
-                    owner.loopIndex = -1;
-                    owner.loopActive = false;
-                    syncLoop (change.sample); // the bar was emptied: the chord ends here
-                    nextChange = 0;
-                    return;
-                }
-                for (int k = 0; k < fresh.numChanges && owner.loopPlan.numChanges < engine::kMaxLoopChanges; ++k)
-                    owner.loopPlan.changes[(size_t) owner.loopPlan.numChanges++] = { fresh.changes[(size_t) k].sample + change.sample, fresh.changes[(size_t) k].index };
-                nextChange = 0;
-                owner.loopIndex = fresh.startIndex;
-                syncLoop (change.sample, true);
+                owner.loopBlockPlaying = false;
+                owner.loopIndex = -1;
+                syncLoop (change.sample);
                 continue;
             }
-            owner.loopIndex = change.index;
+            startBlock (change.index, change.startBeat, owner.activeSnap.blocks[(size_t) change.index].beats);
             syncLoop (change.sample, true); // every block change strikes the chord again, also when it is the same chord
         }
     }
@@ -525,13 +552,12 @@ public:
         slot.step = 0;
         slot.running = true;
         slot.offIn = -1.0;
-        slot.onGrid = source == engine::NoteTracker::loopSource() && owner.loopIndex >= 0;
+        slot.onGrid = source == engine::NoteTracker::loopSource() && owner.loopBlockPlaying;
         if (slot.onGrid)
         {
             // The step that is under way on the host's grid (step 0 when the block has just begun) plays at once
-            const auto& snapshot = owner.activeSnap;
-            slot.gridStart = loopBlockStart (position);
-            slot.blockLen = snapshot.blocks[(size_t) owner.loopIndex].beats;
+            slot.gridStart = owner.loopBlockStartBeat;
+            slot.blockLen = owner.loopBlockBeats;
             const double now = owner.bufferStartBeat + position * owner.bufferBeatsPerSample;
             slot.step = std::max<std::int64_t> (0, (std::int64_t) std::floor ((now - slot.gridStart) / slot.stepBeats + 1.0e-6));
         }
@@ -732,10 +758,15 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     // the plug-in counts on its own from where it was, and takes the host's position again if that starts to move.
     // The same goes for a host that jumps back every block (an empty pattern that loops over nothing): a position that is not
     // where the last one led to, block after block, is not a position the loop can follow. One jump (a DAW loop) is not.
-    if (hostPlaying && wasHostPlaying && std::abs (startBeat - (lastHostBeat + lastHostAdvance)) > 0.5 * lastHostAdvance + 1.0e-6)
+    const bool hostMoved = hostPlaying && wasHostPlaying && std::abs (startBeat - (lastHostBeat + lastHostAdvance)) > 0.5 * lastHostAdvance + 1.0e-6;
+    if (hostMoved)
         stuckBlocks = std::min (stuckBlocks + 1, 1000);
     else
         stuckBlocks = 0;
+    // A jump in the host's time, or a loop in the host (not a host that does not move). Small differences are not jumps: the loop's
+    // cursor takes them in, and a host that is a little off must not make the loop find its place anew.
+    const bool hostJumped = hostMoved && stuckBlocks < kStuckBlocks
+                            && std::abs (startBeat - (lastHostBeat + lastHostAdvance)) > std::max (0.5 * lastHostAdvance, kJumpBeats);
     lastHostBeat = startBeat;
     lastHostAdvance = bpm / 60.0 / sampleRate * buffer.getNumSamples();
     if (stuckBlocks >= kStuckBlocks)
@@ -743,6 +774,7 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // Two clocks: the host's when it plays (the loop follows its position), otherwise the plug-in's own, which the Play
     // button starts from the beginning of the progression. When the host starts, it takes over.
+    const bool hostStarted = hostPlaying && ! wasHostPlaying;
     wasHostPlaying = hostPlaying;
     hostIsPlaying.store (hostPlaying);
     if (hostPlaying)
@@ -757,7 +789,12 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     {
         work.releaseEverything (0);
         loopIndex = -1;
+        loopBlockPlaying = false;
+        cursor.reset();
     }
+    // The loop's place is worked out from the host's position (block 1 lies where the position says) when it starts, when the DAW
+    // starts or takes over, and after a jump in the host's time or a loop in the host. Otherwise the cursor counts on.
+    const bool resync = (playing && ! wasPlaying) || hostStarted || hostJumped;
     wasPlaying = playing;
 
     const double beatsPerSample = bpm / 60.0 / sampleRate;
@@ -789,32 +826,28 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     // or on its own clock when Play was pressed with the host stopped
     if (loopBuffer.update())
     {
-        pendingSnap = loopBuffer.read();
-        hasPending = true;
+        // The bar was changed: the block that plays is found again in the new copy and goes on from where it is (see LoopCursor)
+        const auto& fresh = loopBuffer.read();
+        const bool restart = fresh.restartSerial != seenRestartSerial;
+        seenRestartSerial = fresh.restartSerial;
+        cursor.adopt (activeSnap, fresh, restart, startBeat, 0.5 * hostBarBeats.load());
+        if (fresh.swapNowId != 0 && loopBlockPlaying && loopBlockId == fresh.swapNowId) // a try-out on the block that plays: at once
+            for (int i = 0; i < fresh.count; ++i)
+                if (fresh.blocks[(size_t) i].id == fresh.swapNowId)
+                {
+                    loopBlockChord = fresh.blocks[(size_t) i].chord;
+                    loopBlockRest = fresh.blocks[(size_t) i].rest;
+                    loopBlockDisabled = fresh.blocks[(size_t) i].disabled;
+                }
+        activeSnap = fresh;
     }
-    const auto planNow = [&]
+    loopActive = playing && ! learnOn.load() && (activeSnap.count > 0 || cursor.isRunning());
+    loopPlan = loopActive ? cursor.plan (activeSnap, startBeat, resync, beatsPerSample, buffer.getNumSamples()) : engine::LoopPlan();
+    if (! loopActive)
     {
-        loopActive = playing && activeSnap.count > 0 && ! learnOn.load();
-        loopPlan = loopActive ? engine::planLoop (activeSnap, startBeat, beatsPerSample, buffer.getNumSamples()) : engine::LoopPlan();
-        if (! loopActive)
-            loopIndex = -1;
-    };
-    planNow();
-    if (hasPending)
-    {
-        // A change waits for the next block line (see advanceLoop). It takes effect at once if the loop is not sounding a block
-        // (or it is the very first sample of a block), and a try-out of another chord on the block that plays takes effect at once.
-        const bool sounding = loopActive && loopIndex >= 0;
-        const bool tryOut = sounding && pendingSnap.swapNowBlock == loopIndex && engine::sameShape (pendingSnap, activeSnap);
-        const bool onLine = loopActive && loopPlan.startsOnLine;
-        if (! sounding || tryOut || onLine)
-        {
-            activeSnap = pendingSnap;
-            hasPending = false;
-            planNow();
-            if (onLine)
-                loopPlan.startsOnLine = true; // the block that just began sounds anew
-        }
+        cursor.reset();
+        loopIndex = -1;
+        loopBlockPlaying = false;
     }
 
     // The mouse first (it arrived before this block), then the MIDI keyboard in the order of the buffer. What the user
@@ -841,7 +874,7 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     }
 
     if (loopActive)
-        work.beginLoop (loopPlan.startIndex);
+        work.beginLoop();
     else
         work.syncLoop (0); // lets go of the loop's chord if Play was turned off or the progression emptied
 
@@ -914,6 +947,8 @@ void ProgrezzorProcessor::processBlockBypassed (juce::AudioBuffer<float>& buffer
     synth.allNotesOff();
     loopIndex = -1;
     loopActive = false;
+    loopBlockPlaying = false;
+    cursor.reset();
     internalPpq = 0.0;
     internalRun.store (false);
     work.finish();
@@ -935,6 +970,7 @@ void ProgrezzorProcessor::setProgression (engine::Progression newProgression)
 
     const auto oldSize = progression.size();
     progression = std::move (newProgression);
+    assignBlockIds (progression);
 
     // A try-out belongs to a block: if the number of blocks changes, it is dropped
     if (trialBlock >= 0 && (trialBlock >= (int) progression.size() || oldSize != progression.size()))
@@ -947,6 +983,29 @@ void ProgrezzorProcessor::setProgression (engine::Progression newProgression)
     publishLoop();
 
     ++progressionVersion;
+}
+
+// Every block has an identity that lives through moves and changes, so that the loop can find the block that plays again after an
+// edit. New blocks (and copies) have none yet and get the next number. The numbers are not saved: a project opens with new ones.
+void ProgrezzorProcessor::assignBlockIds (engine::Progression& blocks)
+{
+    for (size_t i = 0; i < blocks.size(); ++i)
+    {
+        bool taken = blocks[i].id <= 0;
+        for (size_t j = 0; j < i && ! taken; ++j)
+            taken = blocks[j].id == blocks[i].id;
+        if (taken)
+            blocks[i].id = nextBlockId++;
+        else
+            nextBlockId = std::max (nextBlockId, blocks[i].id + 1);
+    }
+}
+
+void ProgrezzorProcessor::replaceProgression (engine::Progression newProgression)
+{
+    pendingRestart = true; // read by publishLoop() if the bar really changes
+    editProgression (std::move (newProgression));
+    pendingRestart = false;
 }
 
 void ProgrezzorProcessor::editProgression (engine::Progression newProgression)
@@ -1022,7 +1081,7 @@ void ProgrezzorProcessor::suggestProgression()
         pads[(size_t) pad] = getPadChord (pad);
     suggestion.blocks = engine::withPadVariants (std::move (suggestion.blocks), (engine::ScaleId) scaleParam->getIndex(), pads);
 
-    editProgression (engine::keepingLocked (progression, std::move (suggestion.blocks)));
+    replaceProgression (engine::keepingLocked (progression, std::move (suggestion.blocks)));
     generatedVersion = progressionVersion.load();
 }
 

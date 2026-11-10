@@ -142,6 +142,7 @@ inline Progression withDuplicated (Progression p, int from, int gap)
 
     Block copy = p[(size_t) from];
     copy.locked = false;
+    copy.id = 0; // a new block, with an identity of its own
     p.insert (p.begin() + std::clamp (gap, 0, (int) p.size()), copy);
     return p;
 }

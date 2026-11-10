@@ -6,6 +6,7 @@
 #include "../src/engine/ChordEngine.h"
 #include "../src/engine/Library.h"
 #include "../src/engine/LoopPlan.h"
+#include "../src/engine/LoopCursor.h"
 #include "../src/engine/TripleBuffer.h"
 #include "../src/engine/NoteTracker.h"
 #include "../src/engine/ProgressionEdit.h"
@@ -1201,6 +1202,246 @@ Progression fourBlocks (double beats = 4.0)
     return p;
 }
 
+// ---- The loop's cursor: which block plays, and what an edit does to it ----------------------------------------------------------
+namespace
+{
+struct BlockSpec
+{
+    int id;
+    double beats;
+};
+
+LoopSnapshot snapshotOf (std::initializer_list<BlockSpec> blocks)
+{
+    Progression p;
+    for (const auto& b : blocks)
+    {
+        Block block;
+        block.chord = { b.id % 12, ChordType::Major, kAutoInversion };
+        block.beats = b.beats;
+        block.id = b.id;
+        p.push_back (block);
+    }
+    return makeSnapshot (p);
+}
+
+// Plays the loop in blocks of 512 samples at 120 BPM (a quarter note is 24000 samples) and writes down where each block starts
+struct CursorSim
+{
+    struct Start
+    {
+        double beat;
+        int id; // -1: the loop stopped (the bar was emptied)
+    };
+
+    const double bps = 1.0 / 24000.0;
+    const int n = 512;
+    LoopCursor cursor;
+    LoopSnapshot snap;
+    double beat = 0.0;
+    std::vector<Start> starts;
+    LoopPlan lastPlan, firstPlan;
+
+    explicit CursorSim (LoopSnapshot s, double from = 0.0) : snap (s), beat (from) {}
+
+    // Edit: the audio thread has taken a new copy of the bar
+    void edit (LoopSnapshot fresh, bool restart = false, double halfBar = 2.0)
+    {
+        cursor.adopt (snap, fresh, restart, beat, halfBar);
+        snap = fresh;
+    }
+
+    void run (double until, bool resyncFirst = false)
+    {
+        bool resync = resyncFirst;
+        bool first = true;
+        while (beat < until - 1.0e-9)
+        {
+            lastPlan = cursor.plan (snap, beat, resync, bps, n);
+            if (first)
+                firstPlan = lastPlan;
+            first = false;
+            resync = false;
+            if (lastPlan.startsOnLine && lastPlan.startIndex >= 0)
+                starts.push_back ({ lastPlan.startBlockBeat, snap.blocks[(size_t) lastPlan.startIndex].id });
+            for (int i = 0; i < lastPlan.numChanges; ++i)
+            {
+                const auto& c = lastPlan.changes[(size_t) i];
+                starts.push_back ({ c.startBeat, c.index >= 0 ? snap.blocks[(size_t) c.index].id : -1 });
+            }
+            beat += n * bps;
+        }
+    }
+
+    // "beat:id" of every start from `from` to before `to`, for comparing
+    std::string since (double from, double to = 1.0e9) const
+    {
+        std::string text;
+        for (const auto& s : starts)
+            if (s.beat >= from - 1.0e-6 && s.beat < to - 1.0e-6)
+                text += std::to_string ((int) std::lround (s.beat)) + ":" + std::to_string (s.id) + " ";
+        return text;
+    }
+};
+}
+
+void testLoopCursor()
+{
+    std::printf ("loop cursor\n");
+    const auto four = snapshotOf ({ { 1, 4 }, { 2, 4 }, { 3, 4 }, { 4, 4 } });
+
+    {
+        CursorSim sim (four);
+        sim.run (20.0);
+        check (sim.since (0.0, 20.0) == "0:1 4:2 8:3 12:4 16:1 ", "it plays the blocks in turn, one bar each: " + sim.since (0.0, 20.0));
+    }
+    {
+        // A change later in the bar is heard when the loop gets there: block 3 made two bars long while block 1 plays
+        CursorSim sim (four, 1.0);
+        sim.run (2.0);
+        sim.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 3, 8 }, { 4, 4 } }));
+        sim.run (30.0);
+        check (sim.since (2.0, 30.0) == "4:2 8:3 16:4 20:1 24:2 28:3 ", "a later change is heard when the loop gets to it: " + sim.since (2.0, 30.0));
+    }
+    {
+        // A change earlier in the bar is heard in the next round, and the block that plays does not jump: block 1 made two bars
+        // long while block 3 plays
+        CursorSim sim (four, 9.0);
+        sim.run (10.0);
+        sim.edit (snapshotOf ({ { 1, 8 }, { 2, 4 }, { 3, 4 }, { 4, 4 } }));
+        sim.run (30.0);
+        check (sim.since (10.0, 30.0) == "12:4 16:1 24:2 28:3 ", "an earlier change is heard in the next round, and nothing jumps: " + sim.since (10.0, 30.0));
+    }
+    {
+        // The block that plays is moved: it goes on, and the block that comes after it in its new place is next
+        CursorSim sim (four, 9.0);
+        sim.run (10.0);
+        sim.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 4, 4 }, { 3, 4 } }));
+        sim.run (28.0);
+        check (sim.since (10.0, 28.0) == "12:1 16:2 20:4 24:3 ", "a block that is moved plays on, then its new neighbour: " + sim.since (10.0, 28.0));
+    }
+    {
+        // The block that plays is deleted: it plays to its end, and the block that now comes after it goes on
+        CursorSim sim (four, 9.0);
+        sim.run (10.0);
+        sim.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 4, 4 } }));
+        sim.run (24.0);
+        check (sim.since (10.0, 24.0) == "12:4 16:1 20:2 ", "a deleted block plays to its end, then the one after it: " + sim.since (10.0, 24.0));
+        CursorSim last (four, 13.0);
+        last.run (14.0);
+        last.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 3, 4 } }));
+        last.run (24.0);
+        check (last.since (14.0, 24.0) == "16:1 20:2 ", "the last block deleted while it plays: the loop goes on from the first: " + last.since (14.0, 24.0));
+    }
+    {
+        // Two blocks deleted in a row (the one that plays and the one after it): the next one that is left goes on
+        CursorSim sim (four, 9.0);
+        sim.run (10.0);
+        sim.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 4, 4 } }));
+        sim.edit (snapshotOf ({ { 1, 4 }, { 2, 4 } }));
+        sim.run (24.0);
+        check (sim.since (10.0, 24.0) == "12:1 16:2 20:1 ", "when the block that was to come next goes too, the next after it does: " + sim.since (10.0, 24.0));
+    }
+    {
+        // The block that plays is made longer: it plays longer
+        CursorSim sim (four, 9.0);
+        sim.run (10.0);
+        sim.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 3, 8 }, { 4, 4 } }));
+        sim.run (24.0);
+        check (sim.since (10.0, 24.0) == "16:4 20:1 ", "a block made longer plays longer: " + sim.since (10.0, 24.0));
+    }
+    {
+        // Shorter, but not yet played so far: it ends where the new length says
+        CursorSim sim (four, 9.0);
+        sim.run (10.0);
+        sim.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 3, 3 }, { 4, 4 } })); // 2 beats are played, 3 is the new length
+        sim.run (20.0);
+        check (sim.since (10.0, 20.0) == "11:4 15:1 19:2 ", "a block made shorter, but not yet played that far, ends at its new length: " + sim.since (10.0, 20.0));
+    }
+    {
+        // Shorter than what has been played: the loop goes on at the next half bar line (a half bar is 2 beats), not before
+        CursorSim sim (four, 9.0);
+        sim.run (11.2);
+        sim.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 3, 2 }, { 4, 4 } }), false, 2.0);
+        sim.run (20.0);
+        check (sim.since (11.0, 20.0) == "12:4 16:1 ", "a block made shorter than what is played goes on at the next half bar line: " + sim.since (11.0, 20.0));
+        CursorSim bar (four, 9.0);
+        bar.run (11.2);
+        bar.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 3, 1 }, { 4, 4 } }), false, 2.0); // 1 beat: nothing left of it
+        bar.run (20.0);
+        check (bar.since (11.0, 20.0) == "12:4 16:1 ", "also when it is made much shorter: " + bar.since (11.0, 20.0));
+        CursorSim half (four, 9.0);
+        half.run (10.3);
+        half.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 3, 1 }, { 4, 4 } }), false, 2.0);
+        half.run (20.0);
+        check (half.since (10.0, 20.0) == "12:4 16:1 ", "the half bar line after 10.3 is 12: " + half.since (10.0, 20.0));
+        // On a half bar line already: it ends there
+        CursorSim on (four, 9.0);
+        on.run (10.0);
+        on.beat = 10.0; // exactly on the line
+        on.edit (snapshotOf ({ { 1, 4 }, { 2, 4 }, { 3, 1 }, { 4, 4 } }), false, 2.0);
+        on.run (14.0);
+        check (on.since (10.0, 14.0) == "10:4 ", "on a half bar line it ends at once: " + on.since (10.0, 14.0));
+    }
+    {
+        // The whole bar is replaced (Clear, Suggest, Quick-text): the block that plays is finished and the loop starts from block 1
+        CursorSim sim (four, 9.0);
+        sim.run (10.0);
+        sim.edit (snapshotOf ({ { 11, 4 }, { 12, 4 }, { 13, 4 } }), true);
+        sim.run (30.0);
+        check (sim.since (10.0, 30.0) == "12:11 16:12 20:13 24:11 28:12 ", "a new bar starts from block 1 at the next block line: " + sim.since (10.0, 30.0));
+        // Also when a locked block that plays is still in the new bar (Suggest keeps locked blocks)
+        CursorSim locked (four, 9.0);
+        locked.run (10.0);
+        locked.edit (snapshotOf ({ { 12, 4 }, { 3, 4 }, { 13, 4 } }), true);
+        locked.run (24.0);
+        check (locked.since (10.0, 24.0) == "12:12 16:3 20:13 ", "a locked block that plays does not hold the loop back: " + locked.since (10.0, 24.0));
+    }
+    {
+        // The bar is emptied: the block that plays is finished, then the loop is silent
+        CursorSim sim (four, 9.0);
+        sim.run (10.0);
+        sim.edit (snapshotOf ({}), true);
+        sim.run (30.0);
+        check (sim.since (10.0, 30.0) == "12:-1 " && ! sim.cursor.isRunning(), "an emptied bar: the block plays to its end, then it stops: " + sim.since (10.0, 30.0));
+        // and a bar that comes back is played from the host's position again
+        sim.edit (four);
+        sim.run (34.0, true);
+        check (sim.since (30.0).find (":") != std::string::npos && sim.cursor.isRunning(), "a bar that comes back plays again");
+    }
+    {
+        // The DAW stops and starts, jumps, or loops: the position is worked out from the host's position, block 1 lies fixed again
+        CursorSim sim (four, 9.0);
+        sim.run (10.0);
+        sim.edit (snapshotOf ({ { 1, 8 }, { 2, 4 }, { 3, 4 }, { 4, 4 } })); // 20 beats now
+        sim.run (13.0);
+        sim.beat = 0.0; // stop, and start at the beginning
+        sim.run (0.5, true);
+        check (sim.firstPlan.startIndex == 0 && sim.firstPlan.startsOnLine, "a start at the beginning plays block 1");
+        sim.beat = 10.0; // a jump
+        sim.run (10.2, true);
+        check (sim.firstPlan.startIndex == 1 && std::abs (sim.firstPlan.startElapsed - 2.0) < 1.0e-6, "after a jump the place is the host's position in the bar as it is now");
+        sim.beat = 20.0 + 1.0; // the host loops: this is beat 1 of round two
+        sim.run (21.2, true);
+        check (sim.firstPlan.startIndex == 0 && std::abs (sim.firstPlan.startElapsed - 1.0) < 1.0e-6, "and a loop in the host the same");
+        sim.run (30.0);
+        check (sim.since (21.0, 30.0) == "28:2 ", "and then the cursor counts on from there: " + sim.since (21.0, 30.0));
+    }
+    {
+        // A host that is a little off from block to block does not make the loop jump: the cursor takes the difference in
+        CursorSim sim (four, 0.0);
+        sim.run (1.0);
+        bool steady = true;
+        for (int i = 0; i < 300; ++i)
+        {
+            sim.beat += (i % 3 == 0 ? 0.004 : (i % 3 == 1 ? -0.003 : 0.0)); // wobble, far below a jump
+            sim.run (sim.beat + sim.n * sim.bps * 0.99);
+            steady &= sim.lastPlan.playing;
+        }
+        check (steady && sim.cursor.isRunning(), "a host with a little jitter does not make the loop find its place anew");
+    }
+}
+
 void testLoopPlan()
 {
     std::printf ("loop plan\n");
@@ -2056,6 +2297,7 @@ int main()
     testKeyGuess();
     testTextExport();
     testLoopPlan();
+    testLoopCursor();
     testEditing();
     testExport();
     testNextPads();

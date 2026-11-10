@@ -50,6 +50,10 @@ LoopPlan planLoop (const LoopSnapshot& snapshot, double startBeat, double beatsP
         }
 
         plan.startIndex = index;
+        plan.playing = true;
+        plan.startElapsed = phase - (lineEnd - snapshot.blocks[(size_t) index].beats);
+        plan.startBlockBeat = startBeat - plan.startElapsed;
+        plan.startBlockBeats = snapshot.blocks[(size_t) index].beats;
         plan.startsOnLine = (phase - (lineEnd - snapshot.blocks[(size_t) index].beats)) / beatsPerSample < 1.0 - kSampleTolerance;
         toNextLine = lineEnd - phase;
         nextIndex = (index + 1) % snapshot.count;
@@ -61,7 +65,7 @@ LoopPlan planLoop (const LoopSnapshot& snapshot, double startBeat, double beatsP
         if (sample >= numSamples)
             break;
 
-        plan.changes[(size_t) plan.numChanges++] = { sample, nextIndex };
+        plan.changes[(size_t) plan.numChanges++] = { sample, nextIndex, startBeat + toNextLine };
         toNextLine += snapshot.blocks[(size_t) nextIndex].beats;
         nextIndex = (nextIndex + 1) % snapshot.count;
     }
