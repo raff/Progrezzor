@@ -608,6 +608,15 @@ void BlockButton::setSelected (bool nowSelected)
     }
 }
 
+void BlockButton::setTrial (bool nowTrial)
+{
+    if (nowTrial != trial)
+    {
+        trial = nowTrial;
+        repaint();
+    }
+}
+
 // "1 bar", "1/2 bar", "1 1/2 bars", "2 bars"
 juce::String BlockButton::lengthText (double beats, double barBeats)
 {
@@ -802,10 +811,22 @@ void BlockButton::paint (juce::Graphics& g)
         g.setColour (theme::accent.brighter (0.5f));
         g.drawRoundedRectangle (body.expanded (0.5f), 9.5f, 3.4f);
     }
-    else if (selected && ! playing)
+    else if (selected && ! trial)
     {
-        g.setColour (theme::accent);
-        g.drawRoundedRectangle (body.expanded (0.5f), 9.5f, 2.6f);
+        // A selected block pulses, also while it plays (then the pulse lies over the white outline)
+        const float pulse = 0.5f + 0.5f * std::sin ((float) juce::Time::getMillisecondCounter() * 0.008f);
+        g.setColour (theme::accent.withAlpha (0.6f + 0.4f * pulse));
+        g.drawRoundedRectangle (body.expanded (0.5f), 9.5f, 2.2f + 1.2f * pulse);
+    }
+    if (trial) // a chord from a pad is being tried here: dashed edge
+    {
+        juce::Path edge;
+        edge.addRoundedRectangle (body.expanded (1.5f), 10.5f);
+        juce::Path dashed;
+        const float dashes[] = { 7.0f, 5.0f };
+        juce::PathStrokeType (3.4f).createDashedStroke (dashed, edge, dashes, 2);
+        g.setColour (theme::accent.brighter (0.6f));
+        g.fillPath (dashed);
     }
 
     if (outsideScale) // not in the scale: a dashed red edge and dimmer text
@@ -1921,6 +1942,8 @@ public:
 void ProgressionBar::setRec (bool on)
 {
     recOn = on && ! textMode && ! processor.isLearning(); // also while Play is lit: chords you play are added while the progression plays
+    if (recOn)
+        clearSelection(); // with Rec on, pads add chords to the bar instead of trying chords on a block
     recButton.setToggleState (recOn, juce::dontSendNotification);
     recSeen = processor.getPlayedCount();
     repaint (trayBounds);
@@ -2039,7 +2062,7 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
             processor.togglePlay();
         updateButtons();
     };
-    playButton.setTooltip ("Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
+    playButton.setTooltip ("Play the progression. You can change the chords while it plays. It follows the DAW when the DAW is playing");
     addAndMakeVisible (playButton);
 
     settingsButton.setTooltip ("Settings: where the chords usually sit (kept for every project)");
@@ -2486,8 +2509,8 @@ void ProgressionBar::updateButtons()
     // starting and stopping.
     const bool playOn = processor.isPlayOn();
     playButton.setToggleState (playOn, juce::dontSendNotification);
-    playButton.setTooltip (processor.isHostPlaying() ? "Playing with the DAW. Stop the DAW to change the chords"
-                                                     : "Play the progression. Stop it to change the chords. It follows the DAW when the DAW is playing");
+    playButton.setTooltip (processor.isHostPlaying() ? "Playing with the DAW. Stop the DAW to stop the progression"
+                                                     : "Play the progression. You can change the chords while it plays. It follows the DAW when the DAW is playing");
     playButton.setEnabled (playOn || ! processor.getProgression().empty()); // an empty bar cannot be played
     arpButton.setToggleState (processor.arpOnParam->get(), juce::dontSendNotification);
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
@@ -2519,10 +2542,9 @@ void ProgressionBar::updateButtons()
         repaint (stripBounds);
     }
     if (playOn != lastPlayOn)
-    {
-        lastPlayOn = playOn;
-        setEditing (! playOn);
-    }
+        lastPlayOn = playOn; // Play only plays: the bar can be edited while it plays
+    if (selected >= 0 && selected < blocks.size())
+        blocks[selected]->repaint(); // the edge of the selected block pulses
     undoButton.setEnabled (processor.canUndo());
     redoButton.setEnabled (processor.canRedo());
     dragTile.setReady (! processor.getProgression().empty());
@@ -2930,18 +2952,38 @@ void ProgressionBar::cancelAsk()
     }
 }
 
+// A click on a block marks it; a click on the marked block again lets go of it and keeps a chord that is being tried on it.
+// Another block: the old chord is put back and the new block is marked. (Rec is on: pads add chords, so nothing is marked.)
 void ProgressionBar::select (int index)
 {
-    selected = index == selected ? -1 : index;
+    if (index == selected)
+    {
+        processor.commitTrial();
+        selected = -1;
+    }
+    else
+        selected = recOn ? -1 : index;
+    processor.setSelectedBlock (selected);
     for (int i = 0; i < blocks.size(); ++i)
         blocks[i]->setSelected (i == selected);
 }
 
+// Nothing is marked: a chord that was being tried is put back
 void ProgressionBar::clearSelection()
 {
     selected = -1;
+    processor.setSelectedBlock (-1);
     for (int i = 0; i < blocks.size(); ++i)
         blocks[i]->setSelected (false);
+}
+
+bool ProgressionBar::keepTrial()
+{
+    if (selected < 0)
+        return false;
+    const bool kept = processor.commitTrial();
+    clearSelection();
+    return kept;
 }
 
 // A chord dragged from a pad: over the middle of a block it replaces that block, near an edge or between blocks it is
@@ -3071,8 +3113,10 @@ void ProgressionBar::refresh()
             auto* block = blocks.add (new BlockButton());
             block->onPress = [this, i]
             {
-                if (i < (int) processor.getProgression().size() && ! processor.isBlockSilent (i) && ! processor.getProgression()[(size_t) i].rest)
-                    processor.pressBlock (i, processor.getProgression()[(size_t) i].chord);
+                // Play on: a click only marks the block, there is no sound on top of the loop
+                if (! processor.isPlayOn() && i < (int) processor.getProgression().size() && ! processor.isBlockSilent (i)
+                    && (! processor.getProgression()[(size_t) i].rest || i == processor.getTrialBlock()))
+                    processor.pressBlock (i, processor.getBlockChord (i));
             };
             block->onRelease = [this, i] { processor.releaseBlock (i); };
             block->onSelect = [this, i] { select (i); };
@@ -3143,7 +3187,14 @@ void ProgressionBar::refresh()
 
     for (int i = 0; i < blocks.size(); ++i)
     {
-        const auto& block = progression[(size_t) i];
+        auto block = progression[(size_t) i];
+        const bool tried = i == processor.getTrialBlock();
+        if (tried) // a chord from a pad is being tried here
+        {
+            block.chord = processor.getBlockChord (i);
+            block.rest = false;
+        }
+        blocks[i]->setTrial (tried);
         blocks[i]->setRest (block.rest);
         blocks[i]->setChordName (block.rest ? juce::String ("Rest") : juce::String (engine::chordName (block.chord, key)));
         blocks[i]->setLength (block.beats, processor.getHostBarBeats());
@@ -3152,7 +3203,7 @@ void ProgressionBar::refresh()
         blocks[i]->setLocked (block.locked);
         blocks[i]->setOctave (block.rest ? 0 : block.chord.octave);
         blocks[i]->setOutsideScale (! block.rest && processor.isLockedToScale() && ! engine::chordFitsScale (block.chord, key.scale));
-        blocks[i]->setSilent (processor.isBlockSilent (i));
+        blocks[i]->setSilent (! tried && processor.isBlockSilent (i));
         blocks[i]->setPlaying (i == playingBlock);
         blocks[i]->setSelected (i == selected);
     }
@@ -3778,7 +3829,7 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     };
     addAndMakeVisible (restPad);
 
-    bar.setEditing (! processor.isPlayOn()); // with Play off the bar can be edited
+    bar.setEditing (true); // Play only plays: the bar can be edited at any time
     updateNames();
 
     setWantsKeyboardFocus (true);
@@ -3862,6 +3913,10 @@ void ProgrezzorEditor::toggleWheel()
 
 void ProgrezzorEditor::mouseDown (const juce::MouseEvent& e)
 {
+    // A click on bare background (not a block, a pad or a button) lets go of the marked block, and a chord that was tried goes back
+    if (e.originalComponent == this || e.originalComponent == &bar)
+        bar.clearSelection();
+
     if (wheelPanel == nullptr)
         return;
     const auto* hit = e.originalComponent;
@@ -3876,6 +3931,7 @@ void ProgrezzorEditor::updateNames()
     shownKey = key.tonic;
     shownScale = (int) key.scale;
     shownVariant = processor.getVariantVersion();
+    shownTrial = processor.getTrialVersion();
     shownLock = processor.isLockedToScale() ? 1 : 0;
 
     for (int i = 0; i < ProgrezzorProcessor::kNumPads; ++i)
@@ -3892,8 +3948,10 @@ void ProgrezzorEditor::updateNames()
 
 void ProgrezzorEditor::timerCallback()
 {
+    processor.pollTrial(); // pads pressed while a block is selected are tried on that block
     const auto key = processor.getKey();
     if (key.tonic != shownKey || (int) key.scale != shownScale || processor.getProgressionVersion() != shownProgression
+        || processor.getTrialVersion() != shownTrial
         || processor.getVariantVersion() != shownVariant || (processor.isLockedToScale() ? 1 : 0) != shownLock)
         updateNames();
 
@@ -4121,6 +4179,12 @@ bool ProgrezzorEditor::keyPressed (const juce::KeyPress& key)
 
     if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
         return bar.isEditing() && bar.deleteSelected();
+
+    if (code == juce::KeyPress::returnKey && bar.getSelected() >= 0)
+    {
+        bar.keepTrial();
+        return true;
+    }
 
     if (code == juce::KeyPress::escapeKey && bar.getSelected() >= 0)
     {

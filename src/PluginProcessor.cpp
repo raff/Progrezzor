@@ -181,6 +181,98 @@ void ProgrezzorProcessor::releaseBlock (int block)
     sendGuiEvent ({ engine::NoteTracker::blockSource (block), false, -1, {} });
 }
 
+// Audio thread: a pad was pressed. With a block selected (and not in Learn) the editor is told, so that the pad's chord is tried on
+// that block. True if so.
+bool ProgrezzorProcessor::sendsToTrial (int pad)
+{
+    if (selectedBlock.load() < 0 || learnOn.load())
+        return false;
+    const auto write = trialFifo.write (1);
+    if (write.blockSize1 > 0)
+        trialQueue[(size_t) write.startIndex1] = pad;
+    else if (write.blockSize2 > 0)
+        trialQueue[(size_t) write.startIndex2] = pad;
+    return true;
+}
+
+void ProgrezzorProcessor::pollTrial()
+{
+    for (;;)
+    {
+        const auto read = trialFifo.read (1);
+        const int index = read.blockSize1 > 0 ? read.startIndex1 : (read.blockSize2 > 0 ? read.startIndex2 : -1);
+        if (index < 0)
+            break;
+        const int pad = trialQueue[(size_t) index];
+        if (pad >= 0 && pad < kNumPads)
+            tryChord (getPadChord (pad));
+    }
+}
+
+void ProgrezzorProcessor::setSelectedBlock (int index)
+{
+    if (index < 0 || index >= (int) progression.size())
+        index = -1;
+    if (trialBlock >= 0 && trialBlock != index)
+        cancelTrial(); // the old chord is back
+    selectedBlock.store (index);
+}
+
+void ProgrezzorProcessor::tryChord (const engine::Chord& chord)
+{
+    const int block = selectedBlock.load();
+    if (block < 0 || block >= (int) progression.size())
+        return;
+    trialBlock = block;
+    trialChord = chord;
+    ++trialVersion;
+    publishLoop (block); // if the loop is on this block now, it switches at once
+}
+
+void ProgrezzorProcessor::cancelTrial()
+{
+    if (trialBlock < 0)
+        return;
+    const int was = trialBlock;
+    trialBlock = -1;
+    ++trialVersion;
+    publishLoop (was);
+}
+
+bool ProgrezzorProcessor::commitTrial()
+{
+    if (trialBlock < 0 || trialBlock >= (int) progression.size())
+        return false;
+    const int block = trialBlock;
+    const auto chord = trialChord;
+    trialBlock = -1; // the change below publishes the loop with the new chord in the block itself
+    ++trialVersion;
+    editProgression (engine::withReplaced (progression, block, chord));
+    return true;
+}
+
+engine::Chord ProgrezzorProcessor::getBlockChord (int index) const
+{
+    if (index == trialBlock)
+        return trialChord;
+    return index >= 0 && index < (int) progression.size() ? progression[(size_t) index].chord : engine::Chord();
+}
+
+void ProgrezzorProcessor::publishLoop (int swapNowBlock)
+{
+    auto& slot = loopBuffer.writeSlot();
+    slot = engine::makeSnapshot (progression);
+    if (trialBlock >= 0 && trialBlock < slot.count)
+    {
+        auto& block = slot.blocks[(size_t) trialBlock];
+        block.chord = trialChord;
+        block.disabled = false;
+        block.rest = false;
+    }
+    slot.swapNowBlock = swapNowBlock;
+    loopBuffer.publish();
+}
+
 void ProgrezzorProcessor::sendGuiEvent (GuiEvent event)
 {
     if (event.source < 0 || event.source >= engine::NoteTracker::kNumSources)
@@ -233,7 +325,7 @@ public:
     // The loop: which block sounds. Call it whenever the block, the user's hands or the key may have changed.
     void syncLoop (int position, bool again = false)
     {
-        const auto& snapshot = owner.loopBuffer.read();
+        const auto& snapshot = owner.activeSnap;
         bool wanted = owner.loopActive && owner.loopIndex >= 0 && owner.loopIndex < snapshot.count;
         if (wanted) // a block that Quick-text disabled (a chord outside the scale, with the lock on) keeps its time but is silent
         {
@@ -261,7 +353,7 @@ public:
     // The host's position of the start of the loop's block `loopIndex`, for the block that is playing at `position`
     double loopBlockStart (int position) const
     {
-        const auto& snapshot = owner.loopBuffer.read();
+        const auto& snapshot = owner.activeSnap;
         double offset = 0.0;
         for (int i = 0; i < owner.loopIndex && i < snapshot.count; ++i)
             offset += snapshot.blocks[(size_t) i].beats;
@@ -292,6 +384,28 @@ public:
         {
             const auto change = owner.loopPlan.changes[(size_t) nextChange++];
             advanceArp (change.sample); // the steps before the change come first
+            if (owner.hasPending) // a block line: what the editor has changed takes effect here, never in the middle of a chord
+            {
+                owner.activeSnap = owner.pendingSnap;
+                owner.hasPending = false;
+                const double bps = owner.bufferBeatsPerSample;
+                const auto fresh = engine::planLoop (owner.activeSnap, owner.bufferStartBeat + change.sample * bps, bps, numSamples - change.sample);
+                owner.loopPlan.numChanges = 0;
+                if (fresh.startIndex < 0)
+                {
+                    owner.loopIndex = -1;
+                    owner.loopActive = false;
+                    syncLoop (change.sample); // the bar was emptied: the chord ends here
+                    nextChange = 0;
+                    return;
+                }
+                for (int k = 0; k < fresh.numChanges && owner.loopPlan.numChanges < engine::kMaxLoopChanges; ++k)
+                    owner.loopPlan.changes[(size_t) owner.loopPlan.numChanges++] = { fresh.changes[(size_t) k].sample + change.sample, fresh.changes[(size_t) k].index };
+                nextChange = 0;
+                owner.loopIndex = fresh.startIndex;
+                syncLoop (change.sample, true);
+                continue;
+            }
             owner.loopIndex = change.index;
             syncLoop (change.sample, true); // every block change strikes the chord again, also when it is the same chord
         }
@@ -415,7 +529,7 @@ public:
         if (slot.onGrid)
         {
             // The step that is under way on the host's grid (step 0 when the block has just begun) plays at once
-            const auto& snapshot = owner.loopBuffer.read();
+            const auto& snapshot = owner.activeSnap;
             slot.gridStart = loopBlockStart (position);
             slot.blockLen = snapshot.blocks[(size_t) owner.loopIndex].beats;
             const double now = owner.bufferStartBeat + position * owner.bufferBeatsPerSample;
@@ -673,11 +787,35 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // The loop plays whenever the host plays, whatever Play says (Play only chooses between editing and playing the blocks by hand),
     // or on its own clock when Play was pressed with the host stopped
-    loopBuffer.update();
-    loopActive = playing && loopBuffer.read().count > 0 && ! learnOn.load();
-    loopPlan = loopActive ? engine::planLoop (loopBuffer.read(), startBeat, beatsPerSample, buffer.getNumSamples()) : engine::LoopPlan();
-    if (! loopActive)
-        loopIndex = -1;
+    if (loopBuffer.update())
+    {
+        pendingSnap = loopBuffer.read();
+        hasPending = true;
+    }
+    const auto planNow = [&]
+    {
+        loopActive = playing && activeSnap.count > 0 && ! learnOn.load();
+        loopPlan = loopActive ? engine::planLoop (activeSnap, startBeat, beatsPerSample, buffer.getNumSamples()) : engine::LoopPlan();
+        if (! loopActive)
+            loopIndex = -1;
+    };
+    planNow();
+    if (hasPending)
+    {
+        // A change waits for the next block line (see advanceLoop). It takes effect at once if the loop is not sounding a block
+        // (or it is the very first sample of a block), and a try-out of another chord on the block that plays takes effect at once.
+        const bool sounding = loopActive && loopIndex >= 0;
+        const bool tryOut = sounding && pendingSnap.swapNowBlock == loopIndex && engine::sameShape (pendingSnap, activeSnap);
+        const bool onLine = loopActive && loopPlan.startsOnLine;
+        if (! sounding || tryOut || onLine)
+        {
+            activeSnap = pendingSnap;
+            hasPending = false;
+            planNow();
+            if (onLine)
+                loopPlan.startsOnLine = true; // the block that just began sounds anew
+        }
+    }
 
     // The mouse first (it arrived before this block), then the MIDI keyboard in the order of the buffer. What the user
     // plays comes before the loop, which is silent as long as a hand is on a pad.
@@ -690,9 +828,14 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
         const auto event = queue[(size_t) index];
         if (event.down)
+        {
+            // With a block selected a pad is a try-out on that block. While the loop plays it does not sound on top of it.
+            if (event.pad >= 0 && sendsToTrial (event.pad) && loopActive)
+                continue;
             work.pressSource (event.source, event.pad,
                               event.pad >= 0 ? getPadChord (event.pad) : event.chord,
                               kMouseVelocity, 0);
+        }
         else
             work.releaseSource (event.source, 0);
     }
@@ -747,6 +890,8 @@ void ProgrezzorProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         if (pad < 0)
             continue; // a key without a chord
 
+        if (sendsToTrial (pad) && loopActive)
+            continue; // a try-out on the selected block, not a chord on top of the loop
         work.pressSource (source, pad, getPadChord (pad), juce::jlimit (1, 127, message.velocity), message.position);
     }
 
@@ -788,11 +933,18 @@ void ProgrezzorProcessor::setProgression (engine::Progression newProgression)
     if (newProgression.size() > (size_t) engine::kMaxBlocks)
         newProgression.resize ((size_t) engine::kMaxBlocks);
 
+    const auto oldSize = progression.size();
     progression = std::move (newProgression);
 
+    // A try-out belongs to a block: if the number of blocks changes, it is dropped
+    if (trialBlock >= 0 && (trialBlock >= (int) progression.size() || oldSize != progression.size()))
+    {
+        trialBlock = -1;
+        ++trialVersion;
+    }
+
     // The loop on the audio thread gets its own copy
-    loopBuffer.writeSlot() = engine::makeSnapshot (progression);
-    loopBuffer.publish();
+    publishLoop();
 
     ++progressionVersion;
 }

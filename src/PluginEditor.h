@@ -163,6 +163,7 @@ public:
     void setChordName (const juce::String& name);
     void setPlaying (bool nowPlaying); // the loop is playing this block
     void setSelected (bool nowSelected);
+    void setTrial (bool nowTrial);
     void setRoot (int pitchClass); // gives the block the colour of its chord
     void setNumeral (const juce::String& nowNumeral); // I, ii, III ... shown with the length
     void setLength (double beats, double barBeats); // shown small on the block: 1 bar, 1/2 bar, 2 bars
@@ -206,6 +207,7 @@ private:
     bool heldByMouse = false;
     bool playing = false;
     bool selected = false;
+    bool trial = false; // another chord is being tried on this block (dashed edge)
     bool dropTarget = false;
     bool learnDone = false, learnTarget = false;
     juce::uint32 wrongUntil = 0;
@@ -252,6 +254,7 @@ public:
     // The selected block (-1 for none). A click on a pad replaces its chord.
     int getSelected() const { return selected; }
     void clearSelection();
+    bool keepTrial(); // Enter: the chord that is being tried stays in the block (one step for Undo). False if nothing is tried.
     bool replaceBlock (int index, const engine::Chord&); // false if there is no such block
     bool replaceBlockWithRest (int index);                // the block becomes a pause
     void addRestWhileRecording();                         // Rec is on and the blank pad was pressed: a pause at the end
@@ -490,7 +493,7 @@ private:
     PadButton restPad; // the blank pad: drag it into the bar for a pause
     ProgressionBar bar;
     std::unique_ptr<DragGhost> ghost;
-    int shownKey = -1, shownScale = -1, shownProgression = -1, shownVariant = -1, shownLock = -1;
+    int shownKey = -1, shownScale = -1, shownProgression = -1, shownVariant = -1, shownLock = -1, shownTrial = -1;
     engine::LearnSession learn;
     int learnVersion = -1;
     bool wasLearning = false;

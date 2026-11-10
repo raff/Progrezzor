@@ -256,6 +256,216 @@ int main (int argc, char** argv)
     check (processor.getPlayingBlock() == 1, "and the loop still goes on to the next chord");
     transport.playing = false;
     runBlock (processor);
+
+    std::printf ("live edit and try on its place\n");
+    {
+        ProgrezzorProcessor& pr = processor;
+        auto& liveBar = static_cast<ProgrezzorEditor*> (editor.get())->getBar();
+        const auto sounding = [&]
+        {
+            std::vector<int> notes;
+            for (int n = 0; n < 128; ++n)
+                if (pr.isNoteSounding (n))
+                    notes.push_back (n);
+            return notes;
+        };
+        const auto notesOf = [&] (const engine::Chord& chord)
+        {
+            const auto v = engine::shiftedByOctaves (engine::voiceChord (chord, pr.keyParam->getIndex()), pr.getTotalOctave());
+            std::vector<int> notes (v.notes.begin(), v.notes.begin() + v.count);
+            std::sort (notes.begin(), notes.end());
+            return notes;
+        };
+        // Moves the host on to `beat` block by block (a host does not jump every block), and ends exactly there
+        double hostBeat = 0.0;
+        const double stepBeats = 512.0 / 48000.0 * 2.0; // one block at 120 bpm
+        const auto atBeat = [&] (double beat, bool playing = true)
+        {
+            transport.playing = playing;
+            if (! playing || beat < hostBeat)
+            {
+                hostBeat = beat;
+                transport.quarters = beat;
+                runBlock (pr);
+                return;
+            }
+            while (hostBeat + stepBeats < beat - 1.0e-9)
+            {
+                hostBeat += stepBeats;
+                transport.quarters = hostBeat;
+                runBlock (pr);
+            }
+            hostBeat = beat;
+            transport.quarters = beat;
+            runBlock (pr);
+        };
+        const auto mk = [] (int root, double beats)
+        {
+            engine::Block b;
+            b.chord = { root, engine::ChordType::Minor, engine::kAutoInversion };
+            b.beats = beats;
+            return b;
+        };
+        pr.setProgression ({ mk (0, 4), mk (2, 4), mk (4, 4), mk (7, 4) });
+        settle();
+        const auto original = pr.getProgression();
+        const auto firstNotes = notesOf (original[0].chord);
+
+        // An edit while it plays: the chord that sounds is never cut, the change comes when that block begins next time
+        atBeat (1.0);
+        check (pr.getPlayingBlock() == 0 && sounding() == firstNotes, "block 1 plays");
+        auto changed = original;
+        changed[0].chord = { 5, engine::ChordType::Major, engine::kAutoInversion };
+        changed[2].chord = { 9, engine::ChordType::Major, engine::kAutoInversion };
+        pr.editProgression (changed);
+        atBeat (1.5);
+        check (sounding() == firstNotes, "an edit does not change the chord that is sounding");
+        atBeat (3.95);
+        check (sounding() == firstNotes, "not even right before its end");
+        atBeat (4.0);
+        check (pr.getPlayingBlock() == 1 && sounding() == notesOf (original[1].chord), "the next block is as before");
+        atBeat (8.0);
+        check (pr.getPlayingBlock() == 2 && sounding() == notesOf (changed[2].chord), "an edited block sounds new when it begins");
+        atBeat (16.0);
+        check (pr.getPlayingBlock() == 0 && sounding() == notesOf (changed[0].chord), "and the first block is new in the next round");
+        atBeat (17.0);
+        check (sounding() == notesOf (changed[0].chord), "it stays");
+
+        // Deleting everything while it plays: the chord ends at its block line, nothing hangs
+        pr.editProgression ({});
+        atBeat (17.5);
+        check ((size_t) pr.soundingNotes() == notesOf (changed[0].chord).size(), "an emptied bar lets the chord ring to its end");
+        atBeat (20.0);
+        check (pr.soundingNotes() == 0 && pr.getPlayingBlock() == -1, "and then it is silent");
+        pr.undo();
+        atBeat (21.0);
+        check (pr.getPlayingBlock() == 1 || pr.getPlayingBlock() == 0, "Undo brings the loop back");
+        atBeat (36.0, false);
+        check (pr.soundingNotes() == 0, "stop: nothing hangs");
+
+        // A click on a block while Play is on marks it and gives no sound
+        pr.setProgression (original);
+        settle();
+        pr.undo();
+        pr.setProgression (original);
+        settle();
+        atBeat (1.0);
+        const auto base = sounding();
+        const auto mouse = [] (juce::Component& c, bool right)
+        {
+            const juce::Point<float> where { 30.0f, 30.0f };
+            return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), where, right ? juce::ModifierKeys (juce::ModifierKeys::rightButtonModifier) : juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, juce::Time::getCurrentTime(), where, juce::Time::getCurrentTime(), 1, false);
+        };
+        liveBar.getBlock (1)->mouseDown (mouse (*liveBar.getBlock (1), false));
+        atBeat (1.1);
+        check (liveBar.getSelected() == 1 && pr.getSelectedBlock() == 1, "Play on: a click marks the block");
+        check (sounding() == base, "and gives no extra sound on top of the loop");
+        liveBar.getBlock (1)->mouseUp (mouse (*liveBar.getBlock (1), false));
+        atBeat (1.2);
+        check (liveBar.getSelected() == 1 && sounding() == base, "the mark stays after the click");
+
+        // A pad with a block marked: no sound on top, the chord is tried on the block
+        pr.pressPad (3);
+        atBeat (1.3);
+        pr.pollTrial();
+        check (sounding() == base, "a pad does not sound on top of the loop when a block is marked");
+        check (pr.getTrialBlock() == 1 && pr.getBlockChord (1) == pr.getPadChord (3), "it becomes the block's chord for now");
+        check (pr.getProgression() == original, "the progression itself is not changed");
+        pr.releasePad (3);
+        atBeat (1.4);
+        pr.pressPad (4); // as many as you like
+        atBeat (1.5);
+        pr.pollTrial();
+        pr.releasePad (4);
+        atBeat (1.6);
+        check (pr.getBlockChord (1) == pr.getPadChord (4), "the next pad takes its place");
+        check (sounding() == base, "block 1 still sounds, as it is not the block that plays");
+        atBeat (5.0);
+        check (pr.getPlayingBlock() == 1 && sounding() == notesOf (pr.getPadChord (4)), "the loop plays the tried chord on the block's place");
+        check (pr.getTrialBlock() == 1, "while the block is dashed");
+
+        // The block plays now: the next pad switches at once
+        pr.pressPad (5);
+        atBeat (5.1);
+        pr.pollTrial();
+        atBeat (5.2);
+        pr.releasePad (5);
+        atBeat (5.3);
+        check (sounding() == notesOf (pr.getPadChord (5)) && pr.getPlayingBlock() == 1, "a pad on the block that plays switches at once");
+
+        // Keep: one step for Undo, the loop and the MIDI file have the same notes
+        const auto padFive = pr.getPadChord (5);
+        check (liveBar.keepTrial(), "Enter keeps it");
+        atBeat (5.4);
+        check (pr.getProgression()[1].chord == padFive && pr.getTrialBlock() == -1 && liveBar.getSelected() == -1, "the block has the chord, nothing is marked");
+        check (sounding() == notesOf (padFive), "and it keeps sounding");
+        {
+            std::vector<int> fileNotes;
+            for (const auto& n : engine::exportNotes (pr.getProgression(), pr.keyParam->getIndex(), pr.getKey().scale))
+                if (n.start < 8.0 && n.start >= 4.0 && n.note >= 36)
+                    fileNotes.push_back (n.note);
+            std::sort (fileNotes.begin(), fileNotes.end());
+            fileNotes.erase (std::unique (fileNotes.begin(), fileNotes.end()), fileNotes.end());
+            check (fileNotes == notesOf (padFive), "the MIDI file has the same notes as the loop");
+        }
+        pr.undo();
+        atBeat (5.5);
+        check (pr.getProgression() == original, "one Undo gives the old chord back");
+        pr.redo();
+        pr.undo();
+
+        // Esc, a click beside the blocks, or another block: the old chord is back
+        atBeat (5.6);
+        liveBar.getBlock (1)->onSelect();
+        pr.pressPad (6);
+        atBeat (5.7);
+        pr.pollTrial();
+        pr.releasePad (6);
+        atBeat (5.8);
+        check (pr.getTrialBlock() == 1 && sounding() == notesOf (pr.getPadChord (6)), "tried again");
+        settle (60);
+        snapshot ("block_trial");
+        liveBar.clearSelection(); // Esc
+        atBeat (5.9);
+        check (pr.getTrialBlock() == -1 && sounding() == notesOf (original[1].chord) && pr.getProgression() == original, "Esc puts the old chord back at once");
+
+        liveBar.getBlock (1)->onSelect();
+        pr.pressPad (6);
+        atBeat (6.0);
+        pr.pollTrial();
+        pr.releasePad (6);
+        liveBar.getBlock (2)->onSelect(); // another block
+        atBeat (6.1);
+        check (pr.getTrialBlock() == -1 && liveBar.getSelected() == 2 && sounding() == notesOf (original[1].chord), "another block: the old chord is back and the new one is marked");
+        liveBar.clearSelection();
+
+        // Nothing marked: pads sound on top of the loop as before
+        pr.pressPad (3);
+        atBeat (6.2);
+        check (sounding().size() > notesOf (original[1].chord).size() && pr.getTrialBlock() == -1, "nothing marked: a pad sounds on top");
+        pr.releasePad (3);
+        atBeat (6.3);
+
+        // Play off: a click marks and plays the chord as a preview, a pad tries the chord
+        atBeat (7.0, false);
+        check (! pr.isPlayOn() && pr.soundingNotes() == 0, "stopped");
+        liveBar.getBlock (1)->mouseDown (mouse (*liveBar.getBlock (1), false));
+        runBlock (pr);
+        check (liveBar.getSelected() == 1 && sounding() == notesOf (original[1].chord), "Play off: a click marks the block and plays its chord");
+        liveBar.getBlock (1)->mouseUp (mouse (*liveBar.getBlock (1), false));
+        runBlock (pr);
+        pr.pressPad (3);
+        runBlock (pr);
+        pr.pollTrial();
+        check (sounding() == notesOf (pr.getPadChord (3)) && pr.getTrialBlock() == 1, "Play off: the pad sounds and is tried on the block");
+        pr.releasePad (3);
+        runBlock (pr);
+        check (pr.soundingNotes() == 0, "no hanging notes");
+        liveBar.clearSelection();
+        check (pr.getProgression() == original, "nothing was overwritten");
+        pr.undo();
+    }
     processor.setPlayHead (nullptr);
 
     std::printf ("same chord twice\n");
@@ -311,35 +521,30 @@ int main (int argc, char** argv)
         settle();
         check (bar.numBlocks() == 4, "four blocks");
 
-        // With Play off (the start) the bar can be edited
-        check (bar.isEditing(), "the bar starts editable, Play is off");
-        // Play on: a block only plays, nothing in the bar can be changed
-        bar.setEditing (false);
+        // The bar can always be edited: Play only plays
+        check (bar.isEditing(), "the bar starts editable");
         const auto mouse = [] (juce::Component& c, juce::Point<float> where, bool right)
         {
             return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), where, right ? juce::ModifierKeys (juce::ModifierKeys::rightButtonModifier) : juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
                                      0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c, juce::Time::getCurrentTime(), where, juce::Time::getCurrentTime(), 1, false);
         };
         const auto inPlay = processor.getProgression();
-        bar.getBlock (1)->mouseDown (mouse (*bar.getBlock (1), { 30.0f, 30.0f }, true)); // right-click
-        bar.getBlock (1)->mouseUp (mouse (*bar.getBlock (1), { 30.0f, 30.0f }, true));
-        bar.getBlock (1)->mouseDown (mouse (*bar.getBlock (1), { 30.0f, 30.0f }, false)); // a click: plays
+        processor.togglePlay();
         runBlock (processor);
-        check (processor.soundingNotes() == 3, "in Play a click on a block plays its chord");
+        bar.updateButtons();
+        check (processor.isPlayOn() && bar.isEditing() && processor.isEditing(), "Play on: the bar can still be edited");
+        const int soundingBefore = processor.soundingNotes();
+        bar.getBlock (1)->mouseDown (mouse (*bar.getBlock (1), { 30.0f, 30.0f }, false)); // a click: marks, no sound
+        runBlock (processor);
+        check (processor.soundingNotes() == soundingBefore && bar.getSelected() == 1, "in Play a click on a block marks it and adds no sound");
         bar.getBlock (1)->mouseUp (mouse (*bar.getBlock (1), { 30.0f, 30.0f }, false));
-        runBlock (processor);
-        check (processor.soundingNotes() == 0 && bar.getSelected() == -1, "and lets go of it, without selecting it");
-        check (processor.getProgression() == inPlay, "right-click and clicks change nothing in Play");
+        bar.clearSelection();
         ui.getPad (3).onPress();
         ui.getPad (3).onRelease();
-        check (processor.getProgression() == inPlay, "a pad never replaces a block in Play");
+        check (processor.getProgression() == inPlay, "a pad never replaces a block");
         runBlock (processor);
-
-        // The Play button decides: on is Play, off can be edited
         processor.togglePlay();
-        bar.updateButtons();
-        check (! bar.isEditing() && processor.isPlayOn(), "Play on: no editing");
-        processor.togglePlay();
+        runBlock (processor);
         bar.updateButtons();
         check (bar.isEditing() && processor.isEditing() && ! processor.isPlayOn(), "Play off: the bar can be edited");
         settle (50);

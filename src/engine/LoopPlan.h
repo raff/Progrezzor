@@ -3,6 +3,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 
 #include "Progression.h"
 
@@ -28,6 +29,9 @@ struct LoopSnapshot
 {
     int count = 0;
     double total = 0.0; // beats
+    // A try-out of another chord on this block (see the processor): if the loop is on this block right now, it switches at
+    // once instead of waiting for the next block line. -1 for an ordinary change, which waits for the next block line.
+    int swapNowBlock = -1;
     std::array<LoopBlock, kMaxBlocks> blocks {};
 };
 
@@ -42,6 +46,17 @@ inline LoopSnapshot makeSnapshot (const Progression& progression)
         snapshot.total += block.beats;
     }
     return snapshot;
+}
+
+// Same blocks, same lengths (only chords may differ): a try-out can then take effect in the middle of a block
+inline bool sameShape (const LoopSnapshot& a, const LoopSnapshot& b)
+{
+    if (a.count != b.count)
+        return false;
+    for (int i = 0; i < a.count; ++i)
+        if (std::abs (a.blocks[(size_t) i].beats - b.blocks[(size_t) i].beats) > 1.0e-9)
+            return false;
+    return true;
 }
 
 constexpr int kMaxLoopChanges = 64;
