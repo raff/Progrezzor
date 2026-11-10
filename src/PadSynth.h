@@ -100,7 +100,7 @@ public:
                 // A sample of a real piano: it fades by itself. Quick attack, a short release like a damper.
                 v.attackRate = (float) (1.0 / (0.002 * sampleRate));
                 v.releaseRate = (float) (1.0 / (0.30 * sampleRate));
-                v.gain = 0.30f * (0.25f + 0.75f * vel);
+                v.gain = 0.40f * (0.25f + 0.75f * vel);
                 const auto* sample = pianoBank != nullptr ? pianoBank->nearest (note) : nullptr;
                 v.sample = sample != nullptr ? sample->data.data() : nullptr;
                 v.sampleLength = sample != nullptr ? (int) sample->data.size() : 0;

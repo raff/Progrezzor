@@ -2,12 +2,13 @@
 # Copyright (C) 2026 Henrik Juhl. Part of Progrezzor, licensed under the GNU AGPLv3 (see LICENSE).
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# Makes the Piano preview samples (resources/piano/*.flac) from the VCSL upright piano "Upright Piano, Knight"
+# Makes the Piano preview samples (resources/piano/*.flac) from the VCSL concert grand "Grand Piano, Steinway B"
 # (Versilian Community Sample Library, CC0, https://github.com/sgossner/VCSL). Only needed to remake the samples; the
 # finished files are in the project. Needs ffmpeg.
 #
 # Usage: tools/make_piano_samples.py <folder with the downloaded wav files named keyNNN.wav> <output folder>
-#   keyNNN.wav is the file "Player_vl2_rr1_<tag>.wav" (the louder of the two velocity layers) for the note with MIDI number NNN.
+#   keyNNN.wav is the file "Sus/JHPiano_Sus_Close_<note>_vl3_rr1.wav" (the middle of the three velocity layers) for the note with
+#   MIDI number NNN (middle C is 60). The library has a sample for every second note; the roots used are 36, 40, 42, 46, 48 ... 96.
 #
 # Every sample is: cut at the start where the silence ends, at most 3 seconds, a soft fade out at the end, mono, 44.1 kHz,
 # the same peak level for all, 16 bit FLAC.

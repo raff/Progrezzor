@@ -1651,7 +1651,7 @@ int main (int argc, char** argv)
     std::printf ("piano\n");
     {
         const auto& bank = processor.getPianoBank();
-        check (bank.samples.size() == 21 && bank.samples.front().rootKey == 37 && bank.samples.back().rootKey == 97, "the Piano has its 21 samples, from C#1 to C#6");
+        check (bank.samples.size() == 21 && bank.samples.front().rootKey == 36 && bank.samples.back().rootKey == 96, "the Piano has its 21 samples, from C2 to C7");
         size_t bytes = 0;
         for (int i = 0; i < PianoData::namedResourceListSize; ++i)
         {

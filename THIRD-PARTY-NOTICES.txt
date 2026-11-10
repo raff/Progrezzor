@@ -806,13 +806,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 
 ==============================================================================
-VCSL - Versilian Community Sample Library, "Upright Piano, Knight" (commit c1ea7bc)
+VCSL - Versilian Community Sample Library, "Grand Piano, Steinway B" (commit c1ea7bc)
 Used for: the Piano preview sound
-Source: https://github.com/sgossner/VCSL (Chordophones/Zithers/Upright Piano, Knight)
-Sampled by Simon Dalzell of Ivy Audio for the VSCO 2 Pro sample set; published by Versilian Studios LLC.
+Source: https://github.com/sgossner/VCSL (Chordophones/Zithers/Grand Piano, Steinway B)
+Published by Versilian Studios LLC (the Versilian Community Sample Library).
 ==============================================================================
 
-Only 21 notes of the louder velocity layer (Player_vl2_rr1) are used. Progrezzor cut each to at most 3 seconds with a soft
+Only 21 notes of the middle velocity layer (JHPiano_Sus_Close_*_vl3_rr1) are used. Progrezzor cut each to at most 3 seconds with a soft
 fade out, made it mono at 44.1 kHz and the same peak level, and stored it as 16 bit FLAC (resources/piano, made with
 tools/make_piano_samples.py). The library is dedicated to the public domain; the licence text follows exactly as it
 appears in the library's LICENSE file.
