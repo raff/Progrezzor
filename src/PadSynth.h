@@ -50,6 +50,7 @@ public:
         v.active = true;
         v.gate = true;
         v.type = voiceType;
+        const float decayBefore = v.decay; // a note that rings keeps how far it has faded (see below)
         v.decay = 1.0f;
         v.releaseRate = releaseStep;
         v.attackRate = attackStep;
@@ -111,6 +112,7 @@ public:
             // The same note struck again while it still rings. Whether it dips is decided in render(), when all notes that
             // start together are known: the same chord again dips (so that the second hit is heard), but in a chord change the
             // notes the two chords share just carry on.
+            v.decay = decayBefore; // never a jump: the bell is struck anew in render(), after the level has gone down
             v.restruck = true;
             v.dipFrom = v.level;
             ++restrikes;
@@ -145,11 +147,17 @@ public:
                 if (v.restruck)
                 {
                     v.restruck = false;
-                    if (freshStrikes == 0) // nothing new: the same chord (or note) again, so the level dips and swells
+                    if (freshStrikes == 0) // nothing new: the same chord (or note) again
                     {
-                        v.dipTo = v.dipFrom * 0.35f;
-                        v.dipRate = (v.dipFrom - v.dipTo) / (float) (0.015 * sampleRate); // a ramp, not a jump (a jump clicks)
+                        // The slow sounds dip and swell. The short ones (Keys, Stab, Pluck) go down to nothing quickly and are struck
+                        // anew there. Always a ramp, never a jump (a jump clicks).
+                        const bool short_ = v.decayRate < 1.0f;
+                        v.dipTo = short_ ? 0.0f : v.dipFrom * 0.35f;
+                        v.dipRate = (v.dipFrom - v.dipTo) / (float) ((short_ ? 0.006 : 0.015) * sampleRate);
                         v.dipping = v.dipRate > 0.0f;
+                        v.strikeAfterDip = short_;
+                        if (short_ && ! v.dipping) // nothing sounds: strike at once
+                            v.decay = 1.0f;
                     }
                 }
             restrikes = freshStrikes = 0;
@@ -165,7 +173,12 @@ public:
                 {
                     v.level -= v.dipRate;
                     if (v.level <= v.dipTo || ! v.gate)
+                    {
                         v.dipping = false;
+                        if (v.strikeAfterDip && v.gate)
+                            v.decay = 1.0f; // the bell is struck anew, from nothing
+                        v.strikeAfterDip = false;
+                    }
                 }
                 else if (v.gate)
                     v.level = std::min (1.0f, v.level + v.attackRate);
@@ -292,6 +305,7 @@ private:
         float modIndex = 1.5f;
         bool dipping = false; // a note struck again while it rings: the level glides down first, then swells
         float dipTo = 0.0f, dipRate = 0.0f, dipFrom = 0.0f;
+        bool strikeAfterDip = false; // Keys, Stab and Pluck: the decay starts over when the dip has reached nothing
         bool restruck = false; // struck again while it rang, in the batch that render() has not seen yet
     };
 
