@@ -13,7 +13,7 @@ tag the commit (`vX.Y.Z`).
 ## [Unreleased]
 
 ### Fixed
-- **Soft Pad click.** A note struck again while it still rings (a tone two chords share, often where the loop starts over) dropped in level in one step, which clicked. It now glides down over a few milliseconds and swells again.
+- **Soft Pad dip and click.** In a chord change (C to Em) the tones the two chords share dipped and swelled again, with a click. They now just carry on. Only when the very same chord is struck again does the level dip (smoothly, no click), so the second hit is still heard.
 
 ### Changed
 - **Author name.** The plug-in now says "Henrik Juhl" as its author in the host (it said "Henrik"), like SubForge.

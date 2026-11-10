@@ -38,6 +38,7 @@ public:
     {
         for (auto& v : voices)
             v = Voice();
+        restrikes = freshStrikes = 0;
     }
 
     void noteOn (int note, int velocity)
@@ -107,13 +108,15 @@ public:
         }
         else
         {
-            // The same note struck again while it still rings (the same chord twice in a row): the slow sounds (Soft Pad, Strings)
-            // would just carry on, so the level dips and swells again and the second hit is heard.
-            // The dip is a short ramp, not a jump (a jump is a click).
-            v.dipTo = v.level * 0.35f;
-            v.dipRate = (v.level - v.dipTo) / (float) (0.015 * sampleRate);
-            v.dipping = v.dipRate > 0.0f;
+            // The same note struck again while it still rings. Whether it dips is decided in render(), when all notes that
+            // start together are known: the same chord again dips (so that the second hit is heard), but in a chord change the
+            // notes the two chords share just carry on.
+            v.restruck = true;
+            v.dipFrom = v.level;
+            ++restrikes;
+            return;
         }
+        ++freshStrikes;
     }
 
     void noteOff (int note)
@@ -135,6 +138,22 @@ public:
     // Adds the sound of the voices to samples [start, end) of the two channels
     void render (float* left, float* right, int start, int end)
     {
+        if (restrikes > 0 || freshStrikes > 0)
+        {
+            // Notes that started together, at the same sample, are all known now (see noteOn)
+            for (auto& v : voices)
+                if (v.restruck)
+                {
+                    v.restruck = false;
+                    if (freshStrikes == 0) // nothing new: the same chord (or note) again, so the level dips and swells
+                    {
+                        v.dipTo = v.dipFrom * 0.35f;
+                        v.dipRate = (v.dipFrom - v.dipTo) / (float) (0.015 * sampleRate); // a ramp, not a jump (a jump clicks)
+                        v.dipping = v.dipRate > 0.0f;
+                    }
+                }
+            restrikes = freshStrikes = 0;
+        }
         for (auto& v : voices)
         {
             if (! v.active)
@@ -272,7 +291,8 @@ private:
         float attackRate = 0.001f;
         float modIndex = 1.5f;
         bool dipping = false; // a note struck again while it rings: the level glides down first, then swells
-        float dipTo = 0.0f, dipRate = 0.0f;
+        float dipTo = 0.0f, dipRate = 0.0f, dipFrom = 0.0f;
+        bool restruck = false; // struck again while it rang, in the batch that render() has not seen yet
     };
 
     // A saw wave with the PolyBLEP correction at its jump, so that it does not alias much
@@ -300,6 +320,7 @@ private:
     }
 
     int voiceType = Pad;
+    int restrikes = 0, freshStrikes = 0; // notes struck since the last render, already ringing / from silence
     double sampleRate = 44100.0;
     float attackStep = 0.001f, releaseStep = 0.001f, fastReleaseStep = 0.01f;
     std::array<Voice, 128> voices {}; // one voice per MIDI note: a note is never on twice
