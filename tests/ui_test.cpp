@@ -5,6 +5,7 @@
 //   ProgrezzorUiTest [snapshot-prefix]      exit code 0 = all checks passed
 
 #include "../src/PluginEditor.h"
+#include "PianoData.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1608,9 +1609,12 @@ int main (int argc, char** argv)
         processor.setProgression ({});
 
         // Every sound is heard, stays clean and dies away after the note is let go
-        for (int voice = 0; voice < PadSynth::numVoices; ++voice)
+        for (int voice = 0; voice < PadSynth::numChoices; ++voice)
         {
+            if (voice == PadSynth::Off)
+                continue;
             PadSynth synth;
+            synth.setPianoBank (&processor.getPianoBank());
             synth.prepare (48000.0);
             synth.setVoice (voice);
             std::vector<float> left (512), right (512);
@@ -1641,6 +1645,184 @@ int main (int argc, char** argv)
                 synth.render (left.data(), right.data(), 0, 512);
             }
             check (synth.isSilent(), "sound " + std::to_string (voice) + " dies away after the notes are let go");
+        }
+    }
+
+    std::printf ("piano\n");
+    {
+        const auto& bank = processor.getPianoBank();
+        check (bank.samples.size() == 21 && bank.samples.front().rootKey == 37 && bank.samples.back().rootKey == 97, "the Piano has its 21 samples, from C#1 to C#6");
+        size_t bytes = 0;
+        for (int i = 0; i < PianoData::namedResourceListSize; ++i)
+        {
+            int size = 0;
+            PianoData::getNamedResource (PianoData::namedResourceList[i], size);
+            bytes += (size_t) size;
+        }
+        check (bytes < 5u * 1024u * 1024u, "the samples take less than 5 MB (" + std::to_string (bytes / 1024) + " KB)");
+        bool longEnough = true;
+        for (const auto& sample : bank.samples)
+            longEnough &= sample.data.size() <= (size_t) (3.0 * PianoBank::kSampleRate) + 2 && sample.data.size() > 4000;
+        check (longEnough, "every sample is at most 3 seconds");
+
+        const auto render = [&] (PadSynth& synth, int samples)
+        {
+            std::vector<float> out ((size_t) samples, 0.0f), right ((size_t) samples, 0.0f);
+            for (int at = 0; at < samples; at += 512)
+                synth.render (out.data(), right.data(), at, std::min (samples, at + 512));
+            return out;
+        };
+        const auto maxStep = [] (const std::vector<float>& x, int from, int to)
+        {
+            float m = 0.0f;
+            for (int i = std::max (1, from); i < std::min ((int) x.size(), to); ++i)
+                m = std::max (m, std::abs (x[(size_t) i] - x[(size_t) (i - 1)]));
+            return m;
+        };
+
+        // Every note from C2 to C7 (and a little beyond, as Oct +-2 and the bass go) sounds, and goes on sounding for a while: no holes
+        bool allSound = true, noHoles = true, sane = true;
+        std::string where;
+        for (int note = 24; note <= 108; ++note)
+        {
+            PadSynth synth;
+            synth.setPianoBank (&bank);
+            synth.prepare (48000.0);
+            synth.setVoice (PadSynth::Piano);
+            synth.noteOn (note, 100);
+            const auto x = render (synth, 48000);
+            for (int window = 0; window < 8; ++window) // the first 0.8 s, in windows of 0.1 s
+            {
+                float peak = 0.0f;
+                for (int i = window * 4800; i < (window + 1) * 4800; ++i)
+                    peak = std::max (peak, std::abs (x[(size_t) i]));
+                if (peak < 1.0e-4f)
+                {
+                    (window == 0 ? allSound : noHoles) = false;
+                    where += " " + std::to_string (note);
+                }
+                if (window == 0 && (peak < 0.01f || peak > 0.9f))
+                    sane = false;
+            }
+        }
+        check (allSound && noHoles, "Piano: every note from C1 to C8 sounds, without holes" + where);
+        check (sane, "and at a level that is neither too soft nor too loud");
+
+        // The same note struck again while it rings, and a chord change with shared tones: no click (a click is a step bigger than a
+        // fresh strike makes)
+        for (const int note : { 36, 48, 60, 72, 84, 96 })
+        {
+            PadSynth synth;
+            synth.setPianoBank (&bank);
+            synth.prepare (48000.0);
+            synth.setVoice (PadSynth::Piano);
+            std::vector<float> out (48000 * 3, 0.0f), right (48000 * 3, 0.0f);
+            synth.noteOn (note, 100);
+            synth.render (out.data(), right.data(), 0, 48000 * 2 - 1); // held, it rings
+            synth.noteOff (note);
+            synth.render (out.data(), right.data(), 48000 * 2 - 1, 48000 * 2);
+            synth.noteOn (note, 100); // the same chord again: off one sample before, on again
+            synth.render (out.data(), right.data(), 48000 * 2, 48000 * 3);
+            const float fresh = maxStep (out, 0, 2400);
+            const float again = maxStep (out, 48000 * 2 - 100, 48000 * 2 + 2400);
+            check (again <= fresh * 1.25f && again > 0.0f, "Piano note " + std::to_string (note) + " struck again rings no click");
+        }
+        {
+            PadSynth synth;
+            synth.setPianoBank (&bank);
+            synth.prepare (48000.0);
+            synth.setVoice (PadSynth::Piano);
+            std::vector<float> out (48000 * 3, 0.0f), right (48000 * 3, 0.0f);
+            for (const int n : { 60, 64, 67, 48 })
+                synth.noteOn (n, 100);
+            synth.render (out.data(), right.data(), 0, 48000 * 2 - 1);
+            const float fresh = maxStep (out, 0, 2400);
+            for (const int n : { 60, 64, 67, 48 })
+                synth.noteOff (n);
+            synth.render (out.data(), right.data(), 48000 * 2 - 1, 48000 * 2);
+            for (const int n : { 64, 67, 71, 40 }) // C to Em: E and G are shared and still ring
+                synth.noteOn (n, 100);
+            synth.render (out.data(), right.data(), 48000 * 2, 48000 * 3);
+            const float changeStep = maxStep (out, 48000 * 2 - 100, 48000 * 2 + 2400);
+            check (changeStep <= fresh * 1.25f, "Piano: a chord change with shared tones rings no click");
+            for (const int n : { 64, 67, 71, 40 })
+                synth.noteOff (n);
+            render (synth, 48000 * 2);
+            check (synth.isSilent(), "and nothing is left ringing");
+        }
+
+        // Fast chord changes, every 60 ms: finite, never louder than full scale
+        {
+            PadSynth synth;
+            synth.setPianoBank (&bank);
+            synth.prepare (48000.0);
+            synth.setVoice (PadSynth::Piano);
+            const int chords[3][3] = { { 60, 64, 67 }, { 64, 67, 71 }, { 62, 65, 69 } };
+            std::vector<float> out (48000 * 2, 0.0f), right (48000 * 2, 0.0f);
+            int at = 0, last = -1;
+            for (int k = 0; at < 48000 * 2 - 3000; ++k, at += 2880)
+            {
+                if (last >= 0)
+                    for (const int n : chords[last])
+                        synth.noteOff (n);
+                for (const int n : chords[k % 3])
+                    synth.noteOn (n, 100);
+                last = k % 3;
+                synth.render (out.data(), right.data(), at, at + 2880);
+            }
+            bool fine = true;
+            for (const float v : out)
+                fine &= std::isfinite (v) && std::abs (v) < 1.0f;
+            check (fine, "Piano: fast chord changes stay finite and below full scale");
+        }
+
+        // In the plug-in: Piano is a choice that the project saves, Off keeps its number, and the MIDI is the same as with Soft Pad
+        check (processor.voiceParam->choices[PadSynth::Off] == "Off" && processor.voiceParam->choices[PadSynth::Piano] == "Piano", "Off is still number 6, and Piano is number 7");
+        {
+            const auto sounding = [&] (int voice)
+            {
+                *processor.voiceParam = voice;
+                std::vector<int> notes;
+                float peak = 0.0f;
+                const auto block = [&]
+                {
+                    juce::MidiBuffer midiOut;
+                    juce::AudioBuffer<float> audio (2, 512);
+                    processor.processBlock (audio, midiOut);
+                    for (const auto m : midiOut)
+                        if (m.getMessage().isNoteOn())
+                            notes.push_back (m.getMessage().getNoteNumber());
+                    for (int i = 0; i < 512; ++i)
+                        peak = std::max (peak, std::abs (audio.getSample (0, i)));
+                };
+                for (int b = 0; b < 10; ++b)
+                    block();
+                notes.clear();
+                peak = 0.0f;
+                processor.pressPad (0);
+                for (int b = 0; b < 4; ++b)
+                    block();
+                processor.releasePad (0);
+                for (int b = 0; b < 300; ++b)
+                    block();
+                return std::make_pair (notes, peak);
+            };
+            const auto soft = sounding (PadSynth::Pad), piano = sounding (PadSynth::Piano);
+            check (! piano.first.empty() && piano.first == soft.first, "the MIDI is the same with Piano as with Soft Pad");
+            check (piano.second > 0.0f, "and the Piano is heard on a pad");
+            *processor.voiceParam = PadSynth::Piano;
+            juce::MemoryBlock state;
+            processor.getStateInformation (state);
+            *processor.voiceParam = 0;
+            processor.setStateInformation (state.getData(), (int) state.getSize());
+            check (processor.voiceParam->getIndex() == PadSynth::Piano, "a saved project comes back with Piano");
+            *processor.voiceParam = 0;
+        }
+        {
+            auto* box = dynamic_cast<juce::ComboBox*> (editor->findChildWithID ("voice"));
+            check (box != nullptr && box->getNumItems() == 8 && box->getItemText (0) == "Soft Pad" && box->getItemText (1) == "Piano"
+                       && box->getItemText (2) == "Strings" && box->getItemText (7) == "Off",
+                   "the sound chooser lists Piano after Soft Pad and Off last");
         }
     }
 

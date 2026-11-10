@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 cmake_minimum_required(VERSION 3.22)
-project(Progrezzor VERSION 0.9.3 LANGUAGES C CXX)
+project(Progrezzor VERSION 0.9.6 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -65,6 +65,12 @@ juce_add_binary_data(ProgrezzorFonts SOURCES
     resources/fonts/Inter/Inter-SemiBold.otf)
 set_target_properties(ProgrezzorFonts PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# The samples of the Piano preview sound, as BinaryData of their own (FLAC, mono, 44.1 kHz, CC0 from the Versilian Community Sample
+# Library, see THIRD-PARTY-NOTICES.txt). tools/make_piano_samples.py makes them.
+file(GLOB PROGREZZOR_PIANO_SAMPLES "${CMAKE_CURRENT_SOURCE_DIR}/resources/piano/piano_*.flac")
+juce_add_binary_data(ProgrezzorPiano HEADER_NAME PianoData.h NAMESPACE PianoData SOURCES ${PROGREZZOR_PIANO_SAMPLES})
+set_target_properties(ProgrezzorPiano PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # Test branch test/vst3-instrument: the VST3 registers as an instrument (IS_SYNTH TRUE), the CLAP stays a note effect (its
 # type comes from CLAP_FEATURES below, not from IS_SYNTH).
 juce_add_plugin(Progrezzor
@@ -92,11 +98,14 @@ target_sources(Progrezzor PRIVATE
 target_compile_definitions(Progrezzor PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    JUCE_USE_OGGVORBIS=0 # only FLAC is read (the Piano samples): the other audio formats are left out, to keep the plug-in small
+    JUCE_USE_MP3AUDIOFORMAT=0
     JUCE_VST3_CAN_REPLACE_VST2=0)
 
 target_link_libraries(Progrezzor
     PRIVATE
         ProgrezzorFonts
+        ProgrezzorPiano
         progrezzor_engine
         juce::juce_audio_utils
     PUBLIC
@@ -155,12 +164,15 @@ if(NOT WIN32) # the editor test sets environment variables the POSIX way
         JucePlugin_Name="Progrezzor"
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
+        JUCE_USE_OGGVORBIS=0
+        JUCE_USE_MP3AUDIOFORMAT=0
         CHORDPRO_TEST_DIR="${CMAKE_SOURCE_DIR}/tests/chordpro" # the small example files
         JUCE_MODAL_LOOPS_PERMITTED=1) # the test runs the message loop for a while, so that the editor's timer fires
 
     target_link_libraries(ProgrezzorUiTest
         PRIVATE
             ProgrezzorFonts
+            ProgrezzorPiano
             progrezzor_engine
             juce::juce_audio_utils
         PUBLIC

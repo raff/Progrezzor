@@ -1,4 +1,7 @@
 #include "PluginProcessor.h"
+#include "PianoData.h"
+
+#include <juce_audio_formats/juce_audio_formats.h>
 #include "PluginEditor.h"
 
 #include <cmath>
@@ -31,6 +34,7 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     // without audio ports.
     : AudioProcessor (BusesProperties().withOutput ("Output", juce::AudioChannelSet::stereo(), true))
 {
+    loadPianoBank();
     juce::StringArray keys, scales;
     for (const char* name : keyNames)
         keys.add (name);
@@ -46,7 +50,8 @@ ProgrezzorProcessor::ProgrezzorProcessor()
     juce::StringArray moods, voices;
     for (const char* name : engine::moodNames)
         moods.add (name);
-    for (const char* name : { "Soft Pad", "Strings", "Keys", "Organ", "Stab", "Pluck", "Off" }) // Off: no preview sound (the MIDI is the same)
+    // The order is the number that projects save, so it never changes: Piano came after Off (the sound chooser shows Piano second)
+    for (const char* name : { "Soft Pad", "Strings", "Keys", "Organ", "Stab", "Pluck", "Off", "Piano" }) // Off: no preview sound (the MIDI is the same)
         voices.add (name);
     addParameter (moodParam = new juce::AudioParameterChoice ({ "mood", 1 }, "Mood", moods, (int) engine::Mood::Bright));
     addParameter (voiceParam = new juce::AudioParameterChoice ({ "voice", 1 }, "Voice", voices, 0));
@@ -105,6 +110,36 @@ engine::RhythmSettings ProgrezzorProcessor::getRhythmSettings() const
     settings.hits = arpHitsParam->get();
     settings.rotation = arpRotationParam->get();
     return settings;
+}
+
+// The Piano samples are built into the plug-in (FLAC, see resources/piano). They are decoded here, once, when the plug-in is made
+// (never on the audio thread), and then only read.
+void ProgrezzorProcessor::loadPianoBank()
+{
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+
+    for (int i = 0; i < PianoData::namedResourceListSize; ++i)
+    {
+        const juce::String name (PianoData::namedResourceList[i]); // piano_037_flac
+        if (! name.startsWith ("piano_"))
+            continue;
+
+        int size = 0;
+        const char* data = PianoData::getNamedResource (PianoData::namedResourceList[i], size);
+        std::unique_ptr<juce::AudioFormatReader> reader (formats.createReaderFor (std::make_unique<juce::MemoryInputStream> (data, (size_t) size, false)));
+        if (reader == nullptr || reader->lengthInSamples <= 0)
+            continue;
+
+        PianoBank::Sample sample;
+        sample.rootKey = name.fromFirstOccurrenceOf ("piano_", false, false).upToFirstOccurrenceOf ("_", false, false).getIntValue();
+        juce::AudioBuffer<float> buffer (1, (int) reader->lengthInSamples);
+        reader->read (&buffer, 0, buffer.getNumSamples(), 0, true, false);
+        sample.data.assign (buffer.getReadPointer (0), buffer.getReadPointer (0) + buffer.getNumSamples());
+        pianoBank.samples.push_back (std::move (sample));
+    }
+    std::sort (pianoBank.samples.begin(), pianoBank.samples.end(), [] (const auto& a, const auto& b) { return a.rootKey < b.rootKey; });
+    synth.setPianoBank (&pianoBank);
 }
 
 void ProgrezzorProcessor::prepareToPlay (double newSampleRate, int)

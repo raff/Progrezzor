@@ -3652,12 +3652,12 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     addMouseListener (this, true); // to see clicks anywhere in the window: a click outside the wheel closes it
 
     moodBox.addItemList (processor.moodParam->choices, 1);
-    for (int i = 0; i < processor.voiceParam->choices.size(); ++i) // a line over Off, which is not a sound
-    {
-        if (i == processor.voiceParam->choices.size() - 1)
-            voiceBox.addSeparator();
+    // Soft Pad, Piano, then the synths, and Off under a line (it is not a sound). The item number is the parameter's number plus one.
+    for (const int i : { (int) PadSynth::Pad, (int) PadSynth::Piano, (int) PadSynth::Strings, (int) PadSynth::Keys, (int) PadSynth::Organ,
+                         (int) PadSynth::Stab, (int) PadSynth::Pluck })
         voiceBox.addItem (processor.voiceParam->choices[i], i + 1);
-    }
+    voiceBox.addSeparator();
+    voiceBox.addItem (processor.voiceParam->choices[PadSynth::Off], PadSynth::Off + 1);
     moodAttachment = std::make_unique<juce::ComboBoxParameterAttachment> (*processor.moodParam, moodBox);
     voiceAttachment = std::make_unique<juce::ComboBoxParameterAttachment> (*processor.voiceParam, voiceBox);
     moodBox.setTooltip ("Mood: the feeling of the progressions Suggest gives");

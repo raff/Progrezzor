@@ -33,7 +33,7 @@ CLAP and VST3. Windows has not been tried yet.
   click a chord to hear it, double-click to use it as the key.
 - **Bass note.** Settings has "Bass note": one low note under every chord. With the arp or rhythm on, it lies as one long note
   under it.
-- **Preview sound.** A few small built-in sounds (Soft Pad, Strings, Keys, Organ, Stab, Pluck) let you hear what you play with no
+- **Preview sound.** A few built-in sounds (Soft Pad, a real Piano, Strings, Keys, Organ, Stab, Pluck) let you hear what you play with no
   other synth. Choose **Off** when another synth plays the MIDI, or switch "Preview sound" off in Settings.
 - **MIDI export.** Drag the MIDI tile into your DAW, or use Save MIDI and Open Folder. The file has the notes you hear: the chords,
   inversions, octaves, lengths, pauses, arp or rhythm and the bass note.

@@ -197,6 +197,7 @@ public:
     bool getLearnHints() const { return learnHints.load(); } // hints (the keys to hold) from the start
     void setLearnHints (bool nowOn); // message thread: kept in the settings file
     void togglePreviewSound(); // Settings: Preview sound. Off, or back to the sound chosen last. Message thread.
+    const PianoBank& getPianoBank() const { return pianoBank; } // the samples of Piano, for the tests
     int getLastPreviewVoice() const { return lastPreviewVoice.load(); }
     bool getSuggestInversions() const { return suggestInversions.load(); } // Suggest may use inversions (G/B), on as standard
     void setSuggestInversions (bool nowOn); // message thread: kept in the settings file
@@ -213,6 +214,9 @@ private:
     };
 
     class AudioWork; // what happens in one block, see the .cpp
+
+    void loadPianoBank();
+    PianoBank pianoBank; // the samples of the Piano sound, filled once in the constructor
 
     void sendGuiEvent (GuiEvent);
 

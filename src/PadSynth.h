@@ -6,6 +6,8 @@
 #include <array>
 #include <cmath>
 
+#include "PianoBank.h"
+
 // The preview sounds: small built-in synths, no samples. Pad (the first): two slightly detuned saw waves (one in each ear)
 // and a soft sine an octave below, through a low-pass filter, with a slow attack and a long release. Then Strings (a wider,
 // slower saw ensemble), Keys (two-operator FM), Organ (a few sine drawbars), Stab (short and bright) and Pluck (a saw
@@ -14,16 +16,21 @@
 class PadSynth
 {
 public:
-    enum Voice_ { Pad, Strings, Keys, Organ, Stab, Pluck, numVoices, Off = numVoices }; // Off: no preview sound at all
+    // The numbers are saved in projects, so they never change. Off is 6 and Piano was added after it (the sound chooser lists Piano
+    // second and Off last).
+    enum Voice_ { Pad, Strings, Keys, Organ, Stab, Pluck, Off, Piano, numChoices }; // Off: no preview sound at all
 
     // The voice that new notes get. Notes that already sound keep theirs until they end; Off lets them fade out quickly.
     void setVoice (int index)
     {
-        const int wanted = std::max (0, std::min ((int) Off, index));
+        const int wanted = std::max (0, std::min ((int) numChoices - 1, index));
         if (wanted == Off && voiceType != Off)
             allNotesOff();
         voiceType = wanted;
     }
+
+    // The samples of Piano. They must outlive the synth and not change (see PianoBank). Without them Piano is silent.
+    void setPianoBank (const PianoBank* bank) { pianoBank = bank; }
 
     void prepare (double newSampleRate)
     {
@@ -46,7 +53,8 @@ public:
         if (note < 0 || note > 127 || voiceType == Off)
             return;
         auto& v = voices[(size_t) note];
-        const bool wasSilent = ! v.active;
+        // A voice that rings as another kind of sound than the new one starts anew (a sample and a synth cannot carry on as each other)
+        const bool wasSilent = ! v.active || ((v.type == Piano) != (voiceType == Piano));
         v.active = true;
         v.gate = true;
         v.type = voiceType;
@@ -87,6 +95,18 @@ public:
                 v.gain = 0.11f * (0.25f + 0.75f * vel);
                 cutoff = std::min (0.45 * sampleRate, 2600.0 + 8.0 * v.increment * sampleRate);
                 break;
+            case Piano:
+            {
+                // A sample of a real piano: it fades by itself. Quick attack, a short release like a damper.
+                v.attackRate = (float) (1.0 / (0.002 * sampleRate));
+                v.releaseRate = (float) (1.0 / (0.30 * sampleRate));
+                v.gain = 0.30f * (0.25f + 0.75f * vel);
+                const auto* sample = pianoBank != nullptr ? pianoBank->nearest (note) : nullptr;
+                v.sample = sample != nullptr ? sample->data.data() : nullptr;
+                v.sampleLength = sample != nullptr ? (int) sample->data.size() : 0;
+                v.sampleRate = sample != nullptr ? std::pow (2.0, (note - sample->rootKey) / 12.0) * PianoBank::kSampleRate / sampleRate : 1.0;
+                break;
+            }
             case Pluck:
                 v.attackRate = (float) (1.0 / (0.002 * sampleRate));
                 v.releaseRate = (float) (1.0 / (0.25 * sampleRate));
@@ -103,6 +123,7 @@ public:
             v.phaseRight = 0.61;
             v.phaseSub = 0.0;
             v.phaseExtra = 0.37;
+            v.samplePos = 0.0;
             v.level = 0.0f;
             v.dipping = false;
             v.filterLeft = v.filterRight = 0.0f;
@@ -151,13 +172,16 @@ public:
                     {
                         // The slow sounds dip and swell. The short ones (Keys, Stab, Pluck) go down to nothing quickly and are struck
                         // anew there. Always a ramp, never a jump (a jump clicks).
-                        const bool short_ = v.decayRate < 1.0f;
+                        const bool short_ = v.decayRate < 1.0f || v.type == Piano;
                         v.dipTo = short_ ? 0.0f : v.dipFrom * 0.35f;
                         v.dipRate = (v.dipFrom - v.dipTo) / (float) ((short_ ? 0.006 : 0.015) * sampleRate);
                         v.dipping = v.dipRate > 0.0f;
                         v.strikeAfterDip = short_;
                         if (short_ && ! v.dipping) // nothing sounds: strike at once
+                        {
                             v.decay = 1.0f;
+                            v.samplePos = 0.0;
+                        }
                     }
                 }
             restrikes = freshStrikes = 0;
@@ -176,7 +200,10 @@ public:
                     {
                         v.dipping = false;
                         if (v.strikeAfterDip && v.gate)
-                            v.decay = 1.0f; // the bell is struck anew, from nothing
+                        {
+                            v.decay = 1.0f; // the bell (or the piano string) is struck anew, from nothing
+                            v.samplePos = 0.0;
+                        }
                         v.strikeAfterDip = false;
                     }
                 }
@@ -197,6 +224,12 @@ public:
                 if (v.decay < 0.0002f && v.decayRate < 1.0f)
                 {
                     v.active = false; // the sound has died away by itself
+                    break;
+                }
+
+                if (v.type == Piano && (v.sample == nullptr || v.samplePos >= (double) (v.sampleLength - 1)))
+                {
+                    v.active = false; // the sample has ended (it fades out by itself)
                     break;
                 }
 
@@ -238,6 +271,18 @@ public:
                         outLeft = outRight = tone * 0.45f;
                         advance (v.phaseLeft, inc);
                         advance (v.phaseSub, inc * 0.5);
+                        break;
+                    }
+                    case Piano: // a sample, played at the pitch of the note (stretched from the nearest one), mono
+                    {
+                        const int at = (int) v.samplePos;
+                        const float t = (float) (v.samplePos - (double) at);
+                        const float p0 = v.sample[std::max (0, at - 1)], p1 = v.sample[at];
+                        const float p2 = v.sample[std::min (v.sampleLength - 1, at + 1)], p3 = v.sample[std::min (v.sampleLength - 1, at + 2)];
+                        // Four-point Hermite: smooth also when the sample is stretched
+                        const float c1 = 0.5f * (p2 - p0), c2 = p0 - 2.5f * p1 + 2.0f * p2 - 0.5f * p3, c3 = 0.5f * (p3 - p0) + 1.5f * (p1 - p2);
+                        outLeft = outRight = ((c3 * t + c2) * t + c1) * t + p1;
+                        v.samplePos += v.sampleRate;
                         break;
                     }
                     case Stab: // two detuned saws that start bright and close quickly
@@ -303,6 +348,9 @@ private:
         float decay = 1.0f, decayRate = 1.0f; // sounds that die away by themselves (Keys, Stab, Pluck)
         float attackRate = 0.001f;
         float modIndex = 1.5f;
+        const float* sample = nullptr; // Piano: the samples of the note (see PianoBank)
+        int sampleLength = 0;
+        double samplePos = 0.0, sampleRate = 1.0; // where in the sample, and how far it moves per output sample (the pitch)
         bool dipping = false; // a note struck again while it rings: the level glides down first, then swells
         float dipTo = 0.0f, dipRate = 0.0f, dipFrom = 0.0f;
         bool strikeAfterDip = false; // Keys, Stab and Pluck: the decay starts over when the dip has reached nothing
@@ -334,6 +382,7 @@ private:
     }
 
     int voiceType = Pad;
+    const PianoBank* pianoBank = nullptr;
     int restrikes = 0, freshStrikes = 0; // notes struck since the last render, already ringing / from silence
     double sampleRate = 44100.0;
     float attackStep = 0.001f, releaseStep = 0.001f, fastReleaseStep = 0.01f;
