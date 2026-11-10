@@ -76,24 +76,14 @@ public:
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
 };
 
-// The Play button of the bar: lit while the progression plays. The DAW stopped: a triangle (start) and a square (stop) for the
-// plug-in's own clock. The DAW running: a small link icon, and the button turns the progression on or off (it plays with the DAW).
+// The Play button of the bar. The DAW stopped: a triangle that starts the plug-in's own clock (from block 1), and a green lit square
+// while it plays (a click stops it). The DAW running: the progression plays with the DAW, and the button is lit and grey and cannot
+// be pressed.
 class PlayToggle : public juce::Button
 {
 public:
     PlayToggle() : juce::Button ("Play") { setClickingTogglesState (true); }
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
-    void setLinked (bool nowLinked)
-    {
-        if (nowLinked != linked)
-        {
-            linked = nowLinked;
-            repaint();
-        }
-    }
-
-private:
-    bool linked = false; // the DAW runs and the progression follows it
 };
 
 // The Arp button: lit while the arp is on (everything is then played one note at a time). A click switches it.

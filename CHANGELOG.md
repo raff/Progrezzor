@@ -20,7 +20,7 @@ tag the commit (`vX.Y.Z`).
 
 ### Changed
 - **Rec is now called Add.** The red record dot is replaced by a plus. It works as before: switched on, every chord you play is added to the end of the progression. Tooltip: "Add every chord you play to the end of the progression."
-- **The Play button is never locked.** With the DAW stopped, Play starts and stops the progression on its own clock, from the marked block if one is marked, otherwise from block 1; stopping lets go of every note. With the DAW running, Play shows a small link icon and switches the progression on or off (it plays with the DAW as standard; off, it is silent but pads, MIDI keys and trying a chord on a block still work). The choice is saved with the project. If you dragged the MIDI into your DAW, mute the progression with Play, so it does not play twice.
+- **Play has two simple rules.** With the DAW running, the progression always plays with it, and Play is lit and grey and cannot be pressed (tooltip "Your DAW is playing."). With the DAW stopped, Play starts and stops the progression on its own clock, always from block 1; stopping lets go of every note. There is no way to mute the progression in the plug-in while the DAW runs: if you dragged the MIDI into your DAW, bypass Progrezzor so the progression does not play twice.
 - **Author name.** The plug-in now says "Henrik Juhl" as its author in the host (it said "Henrik"), like SubForge.
 - **The DAW's play always starts the progression.** Before, the loop was silent while the DAW played if Play in the plug-in was off. Play now lights by itself while the DAW plays (and cannot be switched off), and goes out when the DAW stops.
 

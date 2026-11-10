@@ -345,29 +345,20 @@ void WheelToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButto
 void PlayToggle::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonDown)
 {
     const bool on = getToggleState();
-    const auto bounds = getLocalBounds().toFloat();
-    if (on)
-        theme::drawGlow (g, bounds.reduced (5.0f, 6.0f), theme::go, 7.0f, 14.0f, 0.3f);
     const bool usable = isEnabled();
-    const auto face = theme::drawKey (g, bounds, on ? theme::go : (usable ? theme::pad : theme::pad.darker (0.3f)), 14.0f, 6.0f,
-                                      isButtonDown && usable, isMouseOver && usable);
+    const auto bounds = getLocalBounds().toFloat();
+    if (on && usable)
+        theme::drawGlow (g, bounds.reduced (5.0f, 6.0f), theme::go, 7.0f, 14.0f, 0.3f);
+
+    // Lit and pressable: green. Lit but not pressable (the DAW plays): grey. Off: the plain key.
+    const auto base = on ? (usable ? theme::go : theme::pad.brighter (0.25f)) : (usable ? theme::pad : theme::pad.darker (0.3f));
+    const auto face = theme::drawKey (g, bounds, base, 14.0f, 6.0f, isButtonDown && usable, isMouseOver && usable);
 
     // The icon says what a click does: a triangle (start) while it is stopped, a square (stop) while it plays on its own clock.
-    // With the DAW running it is a triangle (it plays with the DAW), and a small link in the corner.
+    // While the DAW plays, the square is grey and nothing happens when it is pressed.
     const float size = std::min (face.getWidth(), face.getHeight()) * 0.36f;
-    g.setColour (on ? theme::onAccent : (usable ? theme::dimText : theme::dimText.withAlpha (0.4f)));
-    if (linked)
-    {
-        // Two links of a chain, side by side and tilted, in the top right corner
-        const float r = std::min (face.getWidth(), face.getHeight()) * 0.085f;
-        const auto centre = juce::Point<float> (face.getRight() - r * 3.6f, face.getY() + r * 3.4f);
-        juce::Path link;
-        link.addRoundedRectangle (-r * 1.9f, -r * 0.95f, r * 2.3f, r * 1.9f, r * 0.95f);
-        link.addRoundedRectangle (-r * 0.4f, -r * 0.95f, r * 2.3f, r * 1.9f, r * 0.95f);
-        g.strokePath (link, juce::PathStrokeType (std::max (1.4f, r * 0.42f)),
-                      juce::AffineTransform::rotation (-0.6f).translated (centre.x + r * 0.7f, centre.y));
-    }
-    if (on && ! linked)
+    g.setColour (on ? (usable ? theme::onAccent : theme::dimText.brighter (0.3f)) : (usable ? theme::dimText : theme::dimText.withAlpha (0.4f)));
+    if (on)
     {
         g.fillRoundedRectangle (juce::Rectangle<float> (size * 1.05f, size * 1.05f).withCentre (face.getCentre()), size * 0.16f);
     }
@@ -2073,8 +2064,9 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     playButton.setClickingTogglesState (false);
     playButton.onClick = [this]
     {
-        // Never locked: with the DAW running it turns the progression on or off. Only an empty bar cannot be started on its own clock.
-        if (processor.isHostPlaying() || processor.isPlayOn() || ! processor.getProgression().empty())
+        if (processor.isHostPlaying())
+            return; // the DAW plays the progression, and the button cannot be pressed
+        if (processor.isPlayOn() || ! processor.getProgression().empty()) // nothing to play in an empty bar
             processor.togglePlay();
         updateButtons();
     };
@@ -2525,11 +2517,8 @@ void ProgressionBar::updateButtons()
     // starting and stopping.
     const bool playOn = processor.isPlayOn();
     playButton.setToggleState (playOn, juce::dontSendNotification);
-    playButton.setLinked (processor.isHostPlaying());
-    playButton.setTooltip (processor.isHostPlaying() ? (playOn ? "Playing with your DAW. Click to mute the progression."
-                                                               : "The progression is muted. Click to play it with your DAW.")
-                                                     : "Play the progression on its own clock.");
-    playButton.setEnabled (processor.isHostPlaying() || playOn || ! processor.getProgression().empty()); // the button is never locked; an empty bar cannot be started
+    playButton.setTooltip (processor.isHostPlaying() ? "Your DAW is playing." : "Play the progression on its own clock.");
+    playButton.setEnabled (! processor.isHostPlaying() && (playOn || ! processor.getProgression().empty())); // not while the DAW plays; an empty bar cannot be played
     arpButton.setToggleState (processor.arpOnParam->get(), juce::dontSendNotification);
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
     takePlayedChords();

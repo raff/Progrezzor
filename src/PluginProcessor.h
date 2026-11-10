@@ -75,7 +75,7 @@ public:
     juce::AudioParameterChoice* keyboardModeParam = nullptr; // White keys (as standard) or Chord roots: which pad a MIDI key plays
     juce::AudioParameterChoice* voicingParam = nullptr; // Settings > Voicing: Root position (as standard) or Nearest inversion
     juce::AudioParameterBool* bassParam = nullptr;    // an extra bass note under every chord (Settings: Bass note), off as standard
-    juce::AudioParameterBool* loopParam = nullptr; // Play while the DAW runs: whether the progression plays with the DAW (on as standard). The own clock does not look at it
+    juce::AudioParameterBool* loopParam = nullptr; // not used for anything (kept, hidden, so that old projects open as before). Was: whether the progression loops while the host plays
     juce::AudioParameterBool* lockParam = nullptr; // Lock to scale (on by default)
 
     engine::Key getKey() const
@@ -104,14 +104,12 @@ public:
     void setEditing (bool nowEditing) { editing.store (nowEditing); }
     bool isEditing() const { return editing.load(); }
 
-    // The Play button, never locked. The DAW stopped: it starts or stops the plug-in's own clock (from the selected block if one is
-    // selected, otherwise from block 1; stopping lets go of every note). The DAW running: it turns the progression on or off (the
-    // progression plays with the DAW; off: the loop is silent, but pads, MIDI keys and try-out on a block's place still work). The
-    // choice is the parameter loop, so it is saved with the project. For the editor.
+    // The Play button has two rules. The DAW running: the progression plays with the DAW, always (there is no way to switch it off in
+    // the plug-in), and Play is lit and grey and cannot be pressed. The DAW stopped: Play starts and stops the plug-in's own clock,
+    // always from block 1; stopping lets go of every note. For the editor.
     void togglePlay();
-    // Play lights while the progression plays: with the DAW when the DAW runs and the progression is on, otherwise on the
-    // plug-in's own clock
-    bool isPlayOn() const { return hostIsPlaying.load() ? loopParam->get() : internalRun.load(); }
+    // Play is lit while the progression plays: with the DAW whenever the DAW runs, otherwise on the plug-in's own clock
+    bool isPlayOn() const { return hostIsPlaying.load() || internalRun.load(); }
     bool isHostPlaying() const { return hostIsPlaying.load(); }
 
     // The length of a bar in the host's time signature, in beats (4 until the host has told)
@@ -316,7 +314,6 @@ private:
     std::atomic<int> playingBlock { -1 };
     std::atomic<bool> editing { false };
     std::atomic<bool> internalRun { false }; // the plug-in's own clock runs (not saved: a project opens stopped)
-    std::atomic<double> ownStartBeat { 0.0 }; // where the own clock starts (the start of the selected block), read when it starts
     std::atomic<bool> hostIsPlaying { false };
     std::atomic<double> hostBarBeats { engine::kBeatsPerBar };
     bool flushNeeded = true;
