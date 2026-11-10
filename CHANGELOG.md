@@ -25,6 +25,7 @@ tag the commit (`vX.Y.Z`).
 - **The DAW's play always starts the progression.** Before, the loop was silent while the DAW played if Play in the plug-in was off. Play now lights by itself while the DAW plays (and cannot be switched off), and goes out when the DAW stops.
 
 ### Added
+- **Version and About.** The version number stands small and dim under the logo (taken from CMake, so it always fits). At the bottom of the Settings menu, "About Progrezzor..." opens a small panel inside the window with the name, version, author, licence, two links and the credits. It closes with its cross, Esc or a click outside.
 - **Piano preview sound.** A real concert grand piano (Steinway B), from the CC0 Versilian Community Sample Library (see THIRD-PARTY-NOTICES.txt). It is second in the sound chooser, after Soft Pad. 21 small samples (about 1.5 MB) are built in; the notes between them are the nearest sample, stretched. The MIDI is the same as with the other sounds.
 - **Edit while it plays.** Play only plays, it does not lock. Drag, length, the block menu, delete, Quick-text, Clear, Suggest and Rec work while the progression plays, also when the DAW runs. A change takes effect the next time that block begins, never in the middle of a chord.
 - **Click a block while it plays:** it is marked (pulsing edge) and gives no sound on top of the loop. With Play off it is marked and plays its chord as before.

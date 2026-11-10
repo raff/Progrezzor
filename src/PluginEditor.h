@@ -314,6 +314,7 @@ public:
     BlockButton* getBlock (int i) { return blocks[i]; }
     void shiftGeneralOctave (int steps);
     void showSettingsMenu();
+    std::function<void()> onAbout; // "About Progrezzor..." at the bottom of the Settings menu: the editor opens the panel
     void showBlockMenu (int index); // right-click or the gear on a block
     void showArpPanel();
     void toggleLearn();
@@ -459,6 +460,12 @@ public:
     juce::Button& getWheelButton() { return wheelButton; }
     bool isWheelOpen() const { return wheelPanel != nullptr; }
     juce::Component* getWheelPanel() { return wheelPanel.get(); }
+    // The small version number under the logo, and the About panel (a panel inside the window, like the chord wheel)
+    static juce::String getVersionText() { return juce::String ("v") + JucePlugin_VersionString; }
+    void showAbout();
+    void closeAbout();
+    bool isAboutOpen() const { return aboutPanel != nullptr; }
+    juce::Component* getAboutPanel() { return aboutPanel.get(); }
 
 private:
     class DragGhost;
@@ -472,6 +479,7 @@ private:
     void toggleWheel(); // the chord wheel beside the key
     void closeWheel();
     void placeWheel();
+    void placeAbout();
 
     ProgrezzorProcessor& processor;
     theme::LookAndFeel look;
@@ -484,6 +492,7 @@ private:
     std::unique_ptr<juce::ParameterAttachment> voiceAttachment;
 
     WheelToggle wheelButton;
+    std::unique_ptr<juce::Component> aboutPanel; // About Progrezzor: a panel inside the window, closed by its cross, Esc or a click outside
     std::unique_ptr<juce::Component> wheelPanel; // the chord wheel, a panel inside the window (open or not is kept while the window lives)
     LockToggle lockButton;
     std::unique_ptr<juce::ButtonParameterAttachment> lockAttachment;

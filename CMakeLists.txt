@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 cmake_minimum_required(VERSION 3.22)
-project(Progrezzor VERSION 0.9.14 LANGUAGES C CXX)
+project(Progrezzor VERSION 0.9.15 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -162,6 +162,8 @@ if(NOT WIN32) # the editor test sets environment variables the POSIX way
 
     target_compile_definitions(ProgrezzorUiTest PRIVATE
         JucePlugin_Name="Progrezzor"
+        JucePlugin_VersionString="${PROJECT_VERSION}"
+        CMAKE_PROJECT_VERSION_FOR_TEST="${PROJECT_VERSION}"
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
         JUCE_USE_OGGVORBIS=0

@@ -847,6 +847,72 @@ int main (int argc, char** argv)
         pr.setProgression (p);
         settle (30);
     }
+    std::printf ("version and about\n");
+    {
+        auto& ui = *static_cast<ProgrezzorEditor*> (editor.get());
+        check (ProgrezzorEditor::getVersionText() == juce::String ("v") + JucePlugin_VersionString && ProgrezzorEditor::getVersionText().startsWith ("v0."),
+               "the version under the logo comes from CMake: " + ProgrezzorEditor::getVersionText().toStdString());
+        check (juce::String (JucePlugin_VersionString) == juce::String (CMAKE_PROJECT_VERSION_FOR_TEST), "and it is the version of the project");
+        settle (30);
+        snapshot ("version");
+
+        check (! ui.isAboutOpen(), "About is closed at first");
+        check (static_cast<bool> (ui.getBar().onAbout), "the Settings menu has an About item that opens it");
+        ui.getBar().onAbout();
+        settle (60);
+        check (ui.isAboutOpen() && ui.getAboutPanel() != nullptr && ui.getAboutPanel()->isVisible(), "About opens as a panel inside the window");
+        check (ui.getAboutPanel()->getBounds().getCentre() == ui.getLocalBounds().getCentre() && ui.getLocalBounds().contains (ui.getAboutPanel()->getBounds()),
+               "in the middle of the window");
+        snapshot ("about");
+        {
+            std::vector<std::string> urls;
+            std::vector<std::string> texts;
+            for (auto* child : ui.getAboutPanel()->getChildren())
+                if (auto* link = dynamic_cast<juce::HyperlinkButton*> (child))
+                {
+                    urls.push_back (link->getURL().toString (true).toStdString());
+                    texts.push_back (link->getButtonText().toStdString());
+                }
+            check (urls == std::vector<std::string> ({ "https://music.henrikjuhl.dk", "https://github.com/travisdk/Progrezzor" }), "the two links go to the right places");
+            check (texts == std::vector<std::string> ({ "music.henrikjuhl.dk", "github.com/travisdk/Progrezzor" }), "and show their addresses");
+        }
+        ui.showAbout();
+        check (ui.isAboutOpen(), "opening it again changes nothing");
+
+        // Esc, a click outside, and the cross close it
+        ui.keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+        check (! ui.isAboutOpen(), "Esc closes it");
+        ui.showAbout();
+        settle (30);
+        {
+            const auto where = juce::Point<float> (6.0f, 6.0f);
+            ui.mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), where, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                            0.0f, 0.0f, 0.0f, 0.0f, 0.0f, &ui, &ui, juce::Time::getCurrentTime(), where, juce::Time::getCurrentTime(), 1, false));
+        }
+        check (! ui.isAboutOpen(), "a click outside closes it");
+        ui.showAbout();
+        settle (30);
+        {
+            auto* panel = ui.getAboutPanel();
+            const auto where = juce::Point<float> ((float) panel->getWidth() - 26.0f, 26.0f); // the cross
+            panel->mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), where, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                                0.0f, 0.0f, 0.0f, 0.0f, 0.0f, panel, panel, juce::Time::getCurrentTime(), where, juce::Time::getCurrentTime(), 1, false));
+        }
+        settle (30);
+        check (! ui.isAboutOpen(), "the cross closes it");
+        // A click inside it does not close it
+        ui.showAbout();
+        settle (30);
+        {
+            auto* panel = ui.getAboutPanel();
+            const auto where = juce::Point<float> (100.0f, 100.0f);
+            ui.mouseDown (juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), where, juce::ModifierKeys (juce::ModifierKeys::leftButtonModifier),
+                                            0.0f, 0.0f, 0.0f, 0.0f, 0.0f, panel, panel, juce::Time::getCurrentTime(), where, juce::Time::getCurrentTime(), 1, false));
+        }
+        check (ui.isAboutOpen(), "a click inside the panel leaves it open");
+        ui.closeAbout();
+        check (! ui.isAboutOpen() && processor.soundingNotes() == 0, "closed again, and nothing was changed");
+    }
     processor.setPlayHead (nullptr);
 
     std::printf ("same chord twice\n");

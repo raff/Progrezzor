@@ -2883,12 +2883,19 @@ void ProgressionBar::showSettingsMenu()
     menu.addSectionHeader ("Sound");
     menu.addItem (22, "Bass note", true, processor.bassParam->get());
     menu.addItem (23, "Preview sound", true, processor.voiceParam->getIndex() != PadSynth::Off);
+    menu.addSeparator();
+    menu.addItem (50, juce::String::fromUTF8 ("About Progrezzor\xe2\x80\xa6"));
 
     juce::Component::SafePointer<ProgressionBar> safe (this);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (settingsButton).withMinimumWidth (260),
                         [safe] (int result)
                         {
-                            if (safe != nullptr && result >= 1 && result <= 5)
+                            if (safe != nullptr && result == 50)
+                            {
+                                if (safe->onAbout)
+                                    safe->onAbout();
+                            }
+                            else if (safe != nullptr && result >= 1 && result <= 5)
                                 safe->chooseHomeOctave (result - 3);
                             else if (safe != nullptr && (result == 30 || result == 31))
                             {
@@ -3837,6 +3844,7 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     addAndMakeVisible (restPad);
 
     bar.setEditing (true); // Play only plays: the bar can be edited at any time
+    bar.onAbout = [this] { showAbout(); };
     updateNames();
 
     setWantsKeyboardFocus (true);
@@ -3888,6 +3896,122 @@ private:
     std::unique_ptr<ChordWheel> wheel;
 };
 
+// About Progrezzor: a small panel inside the window (no dialog box), in the same style as the chord wheel. It is closed by its cross,
+// by Esc or by a click anywhere outside it.
+class AboutPanel : public juce::Component
+{
+public:
+    explicit AboutPanel (std::function<void()> closeIt) : onClose (std::move (closeIt))
+    {
+        const auto link = [this] (juce::HyperlinkButton& button, const char* text, const char* url)
+        {
+            button.setButtonText (text);
+            button.setURL (juce::URL (url));
+            button.setColour (juce::HyperlinkButton::textColourId, theme::accent);
+            button.setTooltip (url);
+            addAndMakeVisible (button);
+        };
+        link (homepage, "music.henrikjuhl.dk", "https://music.henrikjuhl.dk");
+        link (source, "github.com/travisdk/Progrezzor", "https://github.com/travisdk/Progrezzor");
+        setSize (460, 362);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto r = getLocalBounds().toFloat().reduced (1.5f);
+        g.setColour (juce::Colours::black.withAlpha (0.35f));
+        g.fillRoundedRectangle (r.translated (0.0f, 3.0f), 14.0f);
+        g.setColour (theme::popup);
+        g.fillRoundedRectangle (r, 14.0f);
+        g.setColour (theme::accent.withAlpha (0.8f));
+        g.drawRoundedRectangle (r, 14.0f, 1.5f);
+
+        auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel());
+        if (l == nullptr)
+            return;
+
+        // The cross
+        const auto crossBox = crossArea().toFloat();
+        g.setColour (theme::dimText.brighter (0.3f));
+        const auto c = crossBox.getCentre();
+        g.drawLine (c.x - 6.0f, c.y - 6.0f, c.x + 6.0f, c.y + 6.0f, 2.2f);
+        g.drawLine (c.x - 6.0f, c.y + 6.0f, c.x + 6.0f, c.y - 6.0f, 2.2f);
+
+        auto area = getLocalBounds().reduced (28, 22);
+        auto line = [&] (int height) { return area.removeFromTop (height); };
+
+        g.setGradientFill (juce::ColourGradient (theme::accent, 28.0f, 0.0f, theme::hotPink, (float) getWidth() - 100.0f, 0.0f, false));
+        g.setFont (l->titleFont (30.0f));
+        g.drawText ("Progrezzor", line (38), juce::Justification::centredLeft);
+
+        g.setColour (theme::dimText.brighter (0.2f));
+        g.setFont (l->labelFont (15.0f));
+        g.drawText ("Version " JucePlugin_VersionString, line (22), juce::Justification::centredLeft);
+        g.setColour (theme::text);
+        g.drawText ("Jam. Build. Drag. Done.", line (24), juce::Justification::centredLeft);
+        line (6);
+        g.drawText ("by Henrik Juhl (travisdk)", line (22), juce::Justification::centredLeft);
+        g.drawText ("Free software under the GNU AGPLv3", line (22), juce::Justification::centredLeft);
+        line (8 + 2 * 24 + 8); // the two links lie here (see resized)
+
+        g.setColour (theme::dimText.brighter (0.2f));
+        g.setFont (l->labelFont (14.0f));
+        g.drawFittedText ("Made with JUCE and clap-juce-extensions. Piano samples from VCSL (CC0). Fonts: Chakra Petch and Inter (SIL OFL).",
+                          line (40), juce::Justification::topLeft, 2);
+        line (4);
+        g.drawText ("See THIRD-PARTY-NOTICES.txt for all licences.", line (20), juce::Justification::centredLeft);
+    }
+
+    void resized() override
+    {
+        // The links: under the licence line
+        const int top = 22 + 38 + 22 + 24 + 6 + 22 + 22 + 8;
+        homepage.setBounds (28, top, getWidth() - 56, 24);
+        source.setBounds (28, top + 24, getWidth() - 56, 24);
+        homepage.setJustificationType (juce::Justification::centredLeft);
+        source.setJustificationType (juce::Justification::centredLeft);
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        if (crossArea().contains (e.getPosition()) && onClose)
+            onClose();
+    }
+
+    juce::Rectangle<int> crossArea() const { return { getWidth() - 44, 8, 36, 36 }; }
+    juce::HyperlinkButton& getHomepage() { return homepage; }
+    juce::HyperlinkButton& getSource() { return source; }
+
+private:
+    std::function<void()> onClose;
+    juce::HyperlinkButton homepage, source;
+};
+
+void ProgrezzorEditor::placeAbout()
+{
+    if (aboutPanel != nullptr)
+        aboutPanel->setCentrePosition (getWidth() / 2, getHeight() / 2);
+}
+
+void ProgrezzorEditor::closeAbout()
+{
+    aboutPanel.reset();
+    grabKeyboardFocus();
+}
+
+void ProgrezzorEditor::showAbout()
+{
+    if (aboutPanel != nullptr)
+        return;
+    closeWheel();
+    juce::Component::SafePointer<ProgrezzorEditor> safe (this);
+    aboutPanel = std::make_unique<AboutPanel> ([safe] { if (safe != nullptr) safe->closeAbout(); });
+    addAndMakeVisible (*aboutPanel);
+    aboutPanel->toFront (false);
+    placeAbout();
+    grabKeyboardFocus();
+}
+
 void ProgrezzorEditor::placeWheel()
 {
     if (wheelPanel == nullptr)
@@ -3923,6 +4047,10 @@ void ProgrezzorEditor::mouseDown (const juce::MouseEvent& e)
     // A click on bare background (not a block, a pad or a button) lets go of the marked block, and a chord that was tried goes back
     if (e.originalComponent == this || e.originalComponent == &bar)
         bar.clearSelection();
+
+    // A click outside the About panel closes it
+    if (aboutPanel != nullptr && e.originalComponent != aboutPanel.get() && ! aboutPanel->isParentOf (e.originalComponent))
+        closeAbout();
 
     if (wheelPanel == nullptr)
         return;
@@ -4169,6 +4297,12 @@ bool ProgrezzorEditor::keyPressed (const juce::KeyPress& key)
     const auto mods = key.getModifiers();
     const int code = key.getKeyCode();
 
+    if (aboutPanel != nullptr && code == juce::KeyPress::escapeKey)
+    {
+        closeAbout();
+        return true;
+    }
+
     if (wheelPanel != nullptr && code == juce::KeyPress::escapeKey)
     {
         closeWheel();
@@ -4261,6 +4395,12 @@ void ProgrezzorEditor::paint (juce::Graphics& g)
             g.setFont (l->titleFont (30.0f));
             if (area.getWidth() >= 200.0f)
                 g.drawText ("Progrezzor", area.withTrimmedLeft (52.0f).toNearestInt(), juce::Justification::centredLeft);
+
+            // The version, small and dim, under the mark
+            g.setColour (theme::dimText.withAlpha (0.75f));
+            g.setFont (l->labelFont (13.0f));
+            g.drawText (getVersionText(), juce::Rectangle<float> (area.getX() + 2.0f, area.getBottom() - 1.0f, 120.0f, 16.0f).toNearestInt(),
+                        juce::Justification::centredLeft);
         }
 
         g.setFont (l->labelFont (13.0f));
@@ -4322,7 +4462,7 @@ void ProgrezzorEditor::resized()
     top.removeFromLeft (6);
     voiceBox.setBounds (top.removeFromLeft (118));
 
-    area.removeFromTop (8);
+    area.removeFromTop (14); // room for the version number under the logo
     padLabel = area.removeFromTop (18);
 
     // The pads are a quarter lower than before (65 % became 49 %), same width; the bar under them gets the rest, with room for several rows
@@ -4348,4 +4488,5 @@ void ProgrezzorEditor::resized()
         pad.setBounds (left - 5, area.getY(), right - left + 10, area.getHeight());
     }
     placeWheel();
+    placeAbout();
 }
