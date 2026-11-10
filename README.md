@@ -81,4 +81,4 @@ Needs JUCE 8.0.15 and clap-juce-extensions in ~/SDKs. A build puts the plug-ins 
 See CLAUDE.md (the plan and the rules), BACKLOG.md (ideas for later) and TESTLISTE.md (what to test).
 
 The chord library is written from scratch for this project. Third-party licences (fonts and the plug-in libraries) are listed in
-THIRD-PARTY-NOTICES.txt.
+THIRD-PARTY-NOTICES.txt, and the same text is built into the plug-in (About, then Licences).

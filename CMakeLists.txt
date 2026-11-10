@@ -2,7 +2,16 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 cmake_minimum_required(VERSION 3.22)
-project(Progrezzor VERSION 0.9.15 LANGUAGES C CXX)
+project(Progrezzor VERSION 1.0.0 LANGUAGES C CXX)
+
+# A build id shown next to the version (the git commit, "-dirty" if there are local changes). CI and scripts can set it with
+# -DPROGREZZOR_BUILD_ID=... ; without git it is left out.
+if(NOT DEFINED PROGREZZOR_BUILD_ID)
+    execute_process(COMMAND git describe --always --dirty --abbrev=7 --match=NO_TAG_MATCHES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" OUTPUT_VARIABLE PROGREZZOR_BUILD_ID
+        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+endif()
+add_compile_definitions(PROGREZZOR_BUILD_ID="${PROGREZZOR_BUILD_ID}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -71,6 +80,10 @@ file(GLOB PROGREZZOR_PIANO_SAMPLES "${CMAKE_CURRENT_SOURCE_DIR}/resources/piano/
 juce_add_binary_data(ProgrezzorPiano HEADER_NAME PianoData.h NAMESPACE PianoData SOURCES ${PROGREZZOR_PIANO_SAMPLES})
 set_target_properties(ProgrezzorPiano PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# The licence texts, baked into the plug-in for the Licences button in About (LicenceData::THIRDPARTYNOTICES_txt)
+juce_add_binary_data(ProgrezzorLicences HEADER_NAME LicenceData.h NAMESPACE LicenceData SOURCES THIRD-PARTY-NOTICES.txt)
+set_target_properties(ProgrezzorLicences PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # Test branch test/vst3-instrument: the VST3 registers as an instrument (IS_SYNTH TRUE), the CLAP stays a note effect (its
 # type comes from CLAP_FEATURES below, not from IS_SYNTH).
 juce_add_plugin(Progrezzor
@@ -106,6 +119,7 @@ target_link_libraries(Progrezzor
     PRIVATE
         ProgrezzorFonts
         ProgrezzorPiano
+        ProgrezzorLicences
         progrezzor_engine
         juce::juce_audio_utils
     PUBLIC
@@ -175,6 +189,7 @@ if(NOT WIN32) # the editor test sets environment variables the POSIX way
         PRIVATE
             ProgrezzorFonts
             ProgrezzorPiano
+            ProgrezzorLicences
             progrezzor_engine
             juce::juce_audio_utils
         PUBLIC

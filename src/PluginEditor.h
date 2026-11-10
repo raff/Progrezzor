@@ -462,6 +462,12 @@ public:
     juce::Component* getWheelPanel() { return wheelPanel.get(); }
     // The small version number under the logo, and the About panel (a panel inside the window, like the chord wheel)
     static juce::String getVersionText() { return juce::String ("v") + JucePlugin_VersionString; }
+    // " (abc1234)": the git commit of the build (from CMake, or -DPROGREZZOR_BUILD_ID=... on CI); empty without git
+    static juce::String getBuildSuffix()
+    {
+        const juce::String id (PROGREZZOR_BUILD_ID);
+        return id.isEmpty() ? juce::String() : " (" + id + ")";
+    }
     void showAbout();
     void closeAbout();
     bool isAboutOpen() const { return aboutPanel != nullptr; }

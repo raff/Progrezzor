@@ -876,6 +876,33 @@ int main (int argc, char** argv)
             check (urls == std::vector<std::string> ({ "https://music.henrikjuhl.dk", "https://github.com/travisdk/Progrezzor" }), "the two links go to the right places");
             check (texts == std::vector<std::string> ({ "music.henrikjuhl.dk", "github.com/travisdk/Progrezzor" }), "and show their addresses");
         }
+        {
+            // The Licences button shows the licence texts that are baked into the plug-in, in a read-only, scrollable field
+            juce::TextButton* licences = nullptr;
+            juce::TextEditor* text = nullptr;
+            for (auto* child : ui.getAboutPanel()->getChildren())
+            {
+                if (auto* b = dynamic_cast<juce::TextButton*> (child))
+                    licences = b;
+                if (auto* t = dynamic_cast<juce::TextEditor*> (child))
+                    text = t;
+            }
+            check (licences != nullptr && text != nullptr && ! text->isVisible(), "About has a Licences button, and the text is hidden at first");
+            if (licences != nullptr && text != nullptr)
+            {
+                licences->triggerClick();
+                settle (30);
+                const auto all = text->getText();
+                check (text->isVisible() && text->isReadOnly() && ui.getLocalBounds().contains (ui.getAboutPanel()->getBounds()), "Licences opens a read-only text inside the window");
+                check (all.contains ("Paul Walker") && all.contains ("SIL Open Font License") && all.contains ("The Inter Project Authors")
+                           && all.contains ("Chakra Petch Project Authors") && all.contains ("CC0") && all.contains ("GNU AFFERO GENERAL PUBLIC LICENSE"),
+                       "with clap-juce-extensions, the fonts, VCSL and the AGPLv3");
+                snapshot ("licences");
+                licences->triggerClick();
+                settle (30);
+                check (! text->isVisible(), "Back returns to About");
+            }
+        }
         ui.showAbout();
         check (ui.isAboutOpen(), "opening it again changes nothing");
 

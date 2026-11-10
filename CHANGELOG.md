@@ -8,11 +8,14 @@ When releasing: move the entries under "Unreleased" into a new version
 section, raise `project(Progrezzor VERSION …)` in `CMakeLists.txt` to match and
 tag the commit (`vX.Y.Z`).
 
-0.9.x are internal test builds and are never released. Everything since 0.1.0 is listed under "Unreleased" until 1.0.0.
+0.9.x were internal test builds and were never released. Everything since 0.1.0 is listed under 1.0.0.
 
-## [Unreleased]
+## [1.0.0] – 2026-11-10
+
+The first public version. Linux and Windows, as CLAP and VST3 (macOS is not part of it).
 
 ### Fixed
+- **The logo and the name Progrezzor are always shown,** whatever the window size. The other top buttons get a little narrower in a narrow window, and the smallest window is 940 px wide (was 850).
 - **Piano, Keys, Stab and Pluck: a chord change that shares tones sounds as the whole chord.** D to F#m shares F# and A, and those were left ringing while they had almost faded, so only the new tone was heard. These sounds now strike the shared tones again (smoothly, no click). Soft Pad, Strings and Organ still carry shared tones on.
 - **Editing while it plays no longer makes the loop jump.** The loop used to work out its place from the DAW's position modulo the length of the progression, so every change of a length moved the blocks under it. Now the loop keeps track of which block plays and how far it has got (blocks have a lasting identity), and counts on with the DAW's time. A change is heard the next time the loop reaches the changed place. A deleted block plays to its end, then the block after it goes on; a block made shorter than what is played goes on at the next half bar line; Clear, Suggest and Quick-text start from block 1 at the next block line. A stop and start, a jump or a loop in the DAW finds the place from the DAW's position as before.
 - **Keys, Stab and Pluck: no jump when a note rings and is struck again.** The fading bell used to jump back to full strength on the very same sample (the same chord twice, or a tone two chords share). Now the same chord again goes quickly down to nothing and is struck anew, and a shared tone just carries on.
@@ -25,6 +28,8 @@ tag the commit (`vX.Y.Z`).
 - **The DAW's play always starts the progression.** Before, the loop was silent while the DAW played if Play in the plug-in was off. Play now lights by itself while the DAW plays (and cannot be switched off), and goes out when the DAW stops.
 
 ### Added
+- **Licences button in About.** All licence texts (Progrezzor's AGPLv3, JUCE, clap-juce-extensions, Chakra Petch, Inter, the piano samples and the rest) are now built into the plug-in itself and open in a scrollable text inside About, so they travel with every copy. The text there reads "Click Licences for all third-party notices." The release archive still has LICENSE.txt and THIRD-PARTY-NOTICES.txt next to the plug-ins.
+- **Build id next to the version.** The version under the logo and in About also shows the git commit it was built from, like "v0.9.16 (abc1234)" (CMake asks git; CI or a script can set it with -DPROGREZZOR_BUILD_ID=...).
 - **Version and About.** The version number stands small and dim under the logo (taken from CMake, so it always fits). At the bottom of the Settings menu, "About Progrezzor..." opens a small panel inside the window with the name, version, author, licence, two links and the credits. It closes with its cross, Esc or a click outside.
 - **Piano preview sound.** A real concert grand piano (Steinway B), from the CC0 Versilian Community Sample Library (see THIRD-PARTY-NOTICES.txt). It is second in the sound chooser, after Soft Pad. 21 small samples (about 1.5 MB) are built in; the notes between them are the nearest sample, stretched. The MIDI is the same as with the other sounds.
 - **Edit while it plays.** Play only plays, it does not lock. Drag, length, the block menu, delete, Quick-text, Clear, Suggest and Rec work while the progression plays, also when the DAW runs. A change takes effect the next time that block begins, never in the middle of a chord.

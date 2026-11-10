@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "LicenceData.h"
 
 // Small icons, drawn as paths (no emoji fonts needed)
 namespace
@@ -3849,7 +3850,7 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
 
     setWantsKeyboardFocus (true);
     setResizable (true, true);
-    setResizeLimits (850, 400, 1800, 900);
+    setResizeLimits (940, 400, 1800, 900);
     setSize (1000, 560);
     startTimerHz (30);
 }
@@ -3913,8 +3914,45 @@ public:
         };
         link (homepage, "music.henrikjuhl.dk", "https://music.henrikjuhl.dk");
         link (source, "github.com/travisdk/Progrezzor", "https://github.com/travisdk/Progrezzor");
-        setSize (460, 362);
+        licencesButton.setButtonText ("Licences");
+        licencesButton.setTooltip ("Licences and third-party notices.");
+        licencesButton.onClick = [this] { setShowingLicences (! showingLicences); };
+        addAndMakeVisible (licencesButton);
+
+        // The licence texts are baked into the plug-in (LicenceData), so they always travel with the binary
+        licenceText.setMultiLine (true, true);
+        licenceText.setReadOnly (true);
+        licenceText.setCaretVisible (false);
+        licenceText.setScrollbarsShown (true);
+        licenceText.setFont (juce::Font (juce::FontOptions (juce::Font::getDefaultMonospacedFontName(), 13.0f, juce::Font::plain)));
+        licenceText.setColour (juce::TextEditor::backgroundColourId, theme::field);
+        licenceText.setColour (juce::TextEditor::textColourId, theme::text);
+        licenceText.setColour (juce::TextEditor::outlineColourId, theme::outline);
+        licenceText.setColour (juce::TextEditor::focusedOutlineColourId, theme::outline);
+        licenceText.setIndents (12, 10);
+        licenceText.setText (juce::String::fromUTF8 (LicenceData::THIRDPARTYNOTICES_txt, LicenceData::THIRDPARTYNOTICES_txtSize), false);
+        licenceText.moveCaretToTop (false);
+        addChildComponent (licenceText);
+        setShowingLicences (false);
     }
+
+    void setShowingLicences (bool show)
+    {
+        showingLicences = show;
+        licencesButton.setButtonText (show ? "Back" : "Licences");
+        licenceText.setVisible (show);
+        if (show)
+            licenceText.moveCaretToTop (false);
+        homepage.setVisible (! show);
+        source.setVisible (! show);
+        setSize (show ? 700 : 460, show ? 380 : 362);
+        if (auto* parent = getParentComponent())
+            setCentrePosition (parent->getWidth() / 2, parent->getHeight() / 2);
+        resized();
+        repaint();
+    }
+    bool isShowingLicences() const { return showingLicences; }
+    juce::TextEditor& getLicenceText() { return licenceText; }
 
     void paint (juce::Graphics& g) override
     {
@@ -3940,13 +3978,21 @@ public:
         auto area = getLocalBounds().reduced (28, 22);
         auto line = [&] (int height) { return area.removeFromTop (height); };
 
+        if (showingLicences)
+        {
+            g.setColour (theme::text);
+            g.setFont (l->titleFont (22.0f));
+            g.drawText ("Licences", line (32), juce::Justification::centredLeft);
+            return;
+        }
+
         g.setGradientFill (juce::ColourGradient (theme::accent, 28.0f, 0.0f, theme::hotPink, (float) getWidth() - 100.0f, 0.0f, false));
         g.setFont (l->titleFont (30.0f));
         g.drawText ("Progrezzor", line (38), juce::Justification::centredLeft);
 
         g.setColour (theme::dimText.brighter (0.2f));
         g.setFont (l->labelFont (15.0f));
-        g.drawText ("Version " JucePlugin_VersionString, line (22), juce::Justification::centredLeft);
+        g.drawText (juce::String ("Version " JucePlugin_VersionString) + ProgrezzorEditor::getBuildSuffix(), line (22), juce::Justification::centredLeft);
         g.setColour (theme::text);
         g.drawText ("Jam. Build. Drag. Done.", line (24), juce::Justification::centredLeft);
         line (6);
@@ -3959,11 +4005,24 @@ public:
         g.drawFittedText ("Made with JUCE and clap-juce-extensions. Piano samples from VCSL (CC0). Fonts: Chakra Petch and Inter (SIL OFL).",
                           line (40), juce::Justification::topLeft, 2);
         line (4);
-        g.drawText ("See THIRD-PARTY-NOTICES.txt for all licences.", line (20), juce::Justification::centredLeft);
+        g.drawText ("Click Licences for all third-party notices.", line (20).withTrimmedRight (110), juce::Justification::centredLeft);
     }
 
     void resized() override
     {
+        licencesButton.setBounds (getWidth() - 28 - 96, getHeight() - 22 - 28, 96, 28);
+        if (showingLicences)
+        {
+            licencesButton.setBounds (getWidth() - 44 - 80, 10, 80, 28); // Back, left of the cross
+            licenceText.setBounds (getLocalBounds().withTrimmedTop (58).reduced (28, 0).withTrimmedBottom (22));
+            if (! licenceTextAtTop)
+            {
+                licenceTextAtTop = true; // the first time it is shown, start from the top (the field has its size now)
+                licenceText.setCaretPosition (0);
+                licenceText.scrollEditorToPositionCaret (0, 0);
+            }
+            return;
+        }
         // The links: under the licence line
         const int top = 22 + 38 + 22 + 24 + 6 + 22 + 22 + 8;
         homepage.setBounds (28, top, getWidth() - 56, 24);
@@ -3985,6 +4044,9 @@ public:
 private:
     std::function<void()> onClose;
     juce::HyperlinkButton homepage, source;
+    juce::TextButton licencesButton;
+    juce::TextEditor licenceText;
+    bool showingLicences = false, licenceTextAtTop = false;
 };
 
 void ProgrezzorEditor::placeAbout()
@@ -4399,7 +4461,7 @@ void ProgrezzorEditor::paint (juce::Graphics& g)
             // The version, small and dim, under the mark
             g.setColour (theme::dimText.withAlpha (0.75f));
             g.setFont (l->labelFont (13.0f));
-            g.drawText (getVersionText(), juce::Rectangle<float> (area.getX() + 2.0f, area.getBottom() - 1.0f, 120.0f, 16.0f).toNearestInt(),
+            g.drawText (getVersionText() + getBuildSuffix(), juce::Rectangle<float> (area.getX() + 2.0f, area.getBottom() - 1.0f, 190.0f, 16.0f).toNearestInt(),
                         juce::Justification::centredLeft);
         }
 
@@ -4434,33 +4496,33 @@ void ProgrezzorEditor::resized()
     auto area = getLocalBounds().reduced (16);
 
     auto top = area.removeFromTop (38);
-    // The right side first; the title gives way if the window is narrow
-    suggestButton.setBounds (top.removeFromRight (132));
-    top.removeFromRight (12);
-    folderButton.setBounds (top.removeFromRight (104));
-    top.removeFromRight (6);
-    saveButton.setBounds (top.removeFromRight (92));
-    top.removeFromRight (8);
+    // The logo and the name always have their place (never hidden, whatever the window size). The other controls
+    // share what is left and get a little narrower in a narrow window.
+    constexpr int logoWidth = 200, controlsAtFullSize = 354 + 502;
+    const float s = juce::jlimit (0.6f, 1.0f, (float) (top.getWidth() - logoWidth - 8) / (float) controlsAtFullSize);
+    auto w = [s] (int x) { return juce::roundToInt ((float) x * s); };
 
-    const int leftOfTitle = 8 + 76 + 6 + 28 + 6 + 96 + 6 + 38 + 6 + 116 + 6 + 118;
-    const int titleWidth = top.getWidth() - leftOfTitle;
-    title.setVisible (titleWidth >= 40);
-    if (titleWidth >= 40)
-    {
-        title.setBounds (top.removeFromLeft (std::min (230, titleWidth)));
-        top.removeFromLeft (8);
-    }
-    keyBox.setBounds (top.removeFromLeft (76));
-    top.removeFromLeft (6);
-    wheelButton.setBounds (top.removeFromLeft (28));
-    top.removeFromLeft (6);
-    scaleBox.setBounds (top.removeFromLeft (96));
-    top.removeFromLeft (6);
-    lockButton.setBounds (top.removeFromLeft (38));
-    top.removeFromLeft (6);
-    moodBox.setBounds (top.removeFromLeft (116));
-    top.removeFromLeft (6);
-    voiceBox.setBounds (top.removeFromLeft (118));
+    suggestButton.setBounds (top.removeFromRight (w (132)));
+    top.removeFromRight (w (12));
+    folderButton.setBounds (top.removeFromRight (w (104)));
+    top.removeFromRight (w (6));
+    saveButton.setBounds (top.removeFromRight (w (92)));
+    top.removeFromRight (w (8));
+
+    title.setVisible (true);
+    title.setBounds (top.removeFromLeft (logoWidth));
+    top.removeFromLeft (8);
+    keyBox.setBounds (top.removeFromLeft (w (76)));
+    top.removeFromLeft (w (6));
+    wheelButton.setBounds (top.removeFromLeft (w (28)));
+    top.removeFromLeft (w (6));
+    scaleBox.setBounds (top.removeFromLeft (w (96)));
+    top.removeFromLeft (w (6));
+    lockButton.setBounds (top.removeFromLeft (w (38)));
+    top.removeFromLeft (w (6));
+    moodBox.setBounds (top.removeFromLeft (w (116)));
+    top.removeFromLeft (w (6));
+    voiceBox.setBounds (top.removeFromLeft (w (118)));
 
     area.removeFromTop (14); // room for the version number under the logo
     padLabel = area.removeFromTop (18);

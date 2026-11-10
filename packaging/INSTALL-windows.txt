@@ -41,6 +41,6 @@ Progrezzor is free software: you can redistribute it and/or modify it under
 the terms of the GNU Affero General Public License, version 3 (LICENSE.txt).
 It comes with no warranty.
 
-Third-party licences are listed in THIRD-PARTY-NOTICES.txt.
+Third-party licences are listed in THIRD-PARTY-NOTICES.txt (also inside the plug-in: About, then Licences).
 
 VST is a registered trademark of Steinberg Media Technologies GmbH.

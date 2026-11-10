@@ -2,13 +2,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 # Builds Progrezzor (CLAP + VST3) on Linux and Windows, runs the tests and uploads the archives as workflow artifacts.
-# Set up like SubForge's. Progrezzor 0.9.x are internal test builds: nothing here makes a tag or a release.
+# Set up like SubForge's. A tag like v1.0.0 also makes a GitHub release with the archives (see the last step).
 # Runs on GitHub only after a push; nothing here is needed for local builds.
 name: Build
 
 on:
   push:
     branches: ["**"]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -26,6 +27,8 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write   # only used by the release step, which runs on version tags
     strategy:
       fail-fast: false
       matrix:
@@ -89,3 +92,14 @@ jobs:
           name: Progrezzor-${{ matrix.name }}
           path: dist/*
           if-no-files-found: error
+
+      # On a tag (v1.0.0): make the release if it is not there yet (the Linux and Windows jobs both get here) and add the archive
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Progrezzor ${TAG#v}" --notes "See CHANGELOG.md inside the archive. Free software under the GNU AGPLv3." || true
+          gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
