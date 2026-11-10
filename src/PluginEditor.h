@@ -120,15 +120,15 @@ public:
     BarButton (const juce::String& name, Icon i) : juce::Button (name), icon (i) {}
     void paintButton (juce::Graphics&, bool isMouseOver, bool isButtonDown) override;
     void setAccented (bool nowAccented) { accented = nowAccented; } // filled with the accent colour: the one thing to press
-    // A button that stays down (Rec): filled with the accent colour while it is on
+    // A button that stays down (Add): filled with the accent colour while it is on
     void setToggle() { setClickingTogglesState (true); }
-    void setRecordDot() { recordDot = true; } // a red dot before the label, like a record button
+    void setPlusMark() { plusMark = true; } // a red dot before the label, like a record button
 
 
 private:
     Icon icon;
     bool accented = false;
-    bool recordDot = false;
+    bool plusMark = false;
 };
 
 // The Drag tile: a small MIDI file. Drag it into the DAW (the file is written when the drag starts). It is the operating
@@ -269,7 +269,7 @@ public:
     bool keepTrial(); // Enter: the chord that is being tried stays in the block (one step for Undo). False if nothing is tried.
     bool replaceBlock (int index, const engine::Chord&); // false if there is no such block
     bool replaceBlockWithRest (int index);                // the block becomes a pause
-    void addRestWhileRecording();                         // Rec is on and the blank pad was pressed: a pause at the end
+    void addRestWhileAdding();                         // Add is on and the blank pad was pressed: a pause at the end
     bool deleteSelected();
 
     // ChordPro import (Settings > Import ChordPro..., or a file dragged onto the bar): the chords of the file become Quick-text
@@ -327,8 +327,8 @@ public:
     void showBlockMenu (int index); // right-click or the gear on a block
     void showArpPanel();
     void toggleLearn();
-    bool isRecOn() const { return recOn; }
-    BarButton& getRecButton() { return recButton; }
+    bool isAddOn() const { return addOn; }
+    BarButton& getAddButton() { return addButton; }
     PlayToggle& getPlayButton() { return playButton; }
     std::unique_ptr<juce::Component> makeArpPanel(); // the panel behind the Arp button (also for the tests)
     void toggleArp();
@@ -401,12 +401,12 @@ private:
     BarButton settingsButton { "Settings", BarButton::Icon::Gear };
     ArpToggle arpButton;
     LearnToggle learnButton;
-    BarButton recButton { "Rec", BarButton::Icon::None };
-    bool recOn = false;
-    unsigned recSeen = 0; // how many played chords had been played when Rec went on, or were last taken
-    void setRec (bool on);
+    BarButton addButton { "Add", BarButton::Icon::None };
+    bool addOn = false;
+    unsigned addSeen = 0; // how many played chords had been played when Add went on, or were last taken
+    void setAdd (bool on);
     void takePlayedChords();
-    int recVersion = -1; // the version of the bar right after Rec last added something
+    int addVersion = -1; // the version of the bar right after Add last added something
     BarButton arpOptionsButton { "Arp options", BarButton::Icon::Dots };
     BarButton octaveDownButton { "Oct-", BarButton::Icon::Minus };
     BarButton octaveUpButton { "Oct+", BarButton::Icon::Plus };

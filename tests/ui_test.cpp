@@ -1117,20 +1117,22 @@ int main (int argc, char** argv)
             check (processor.getProgression() == mine, "and Undo brings everything back in one step");
         }
 
-        // Rec is a switch: while it is on, every chord played goes at the end of the bar as one bar
+        // Add is a switch: while it is on, every chord played goes at the end of the bar as one bar
         {
             const auto barBefore = processor.getProgression();
-            check (! bar.isRecOn(), "Rec starts off");
+            check (! bar.isAddOn(), "Add starts off");
+            check (bar.getAddButton().getName() == "Add" && bar.getAddButton().getTooltip() == "Add every chord you play to the end of the progression.",
+                   "the button is called Add, with its tooltip");
             processor.pressPad (4);
             runBlock (processor);
             processor.releasePad (4);
             runBlock (processor);
             bar.updateButtons();
-            check (processor.getProgression() == barBefore, "a chord played while Rec is off adds nothing");
+            check (processor.getProgression() == barBefore, "a chord played while Add is off adds nothing");
 
-            bar.getRecButton().triggerClick();
+            bar.getAddButton().triggerClick();
             settle (50);
-            check (bar.isRecOn() && bar.getRecButton().getToggleState(), "the Rec button switches it on");
+            check (bar.isAddOn() && bar.getAddButton().getToggleState(), "the Add button switches it on");
             snapshot ("rec_on");
             for (int pad : { 1, 3, 3 })
             {
@@ -1151,7 +1153,7 @@ int main (int argc, char** argv)
             check (processor.getProgression().size() == now.size() - 1, "Undo takes the last one away");
             processor.redo();
 
-            // A pad pulled into the bar while Rec is on counts once (the press that starts the drag is not added too)
+            // A pad pulled into the bar while Add is on counts once (the press that starts the drag is not added too)
             {
                 const auto sizeBefore = processor.getProgression().size();
                 processor.pressPad (2);
@@ -1163,15 +1165,15 @@ int main (int argc, char** argv)
                 ui.getPad (2).onDragEnd (bar.localPointToGlobal (juce::Point<int> (bar.getBlock (0)->getBounds().getRight() + 2, bar.getBlock (0)->getBounds().getCentreY())));
                 settle (50);
                 bar.updateButtons();
-                check (processor.getProgression().size() == sizeBefore + 1, "a pad dragged in while Rec is on is added once");
+                check (processor.getProgression().size() == sizeBefore + 1, "a pad dragged in while Add is on is added once");
                 check (processor.getProgression()[1].chord == processor.getPadChord (2), "and it is where it was let go");
                 processor.undo(); // the drop
                 settle (50);
             }
 
-            bar.getRecButton().triggerClick();
+            bar.getAddButton().triggerClick();
             settle (50);
-            check (! bar.isRecOn(), "the Rec button switches it off");
+            check (! bar.isAddOn(), "the Add button switches it off");
             processor.pressPad (5);
             runBlock (processor);
             processor.releasePad (5);
@@ -1179,13 +1181,13 @@ int main (int argc, char** argv)
             bar.updateButtons();
             check (processor.getProgression() == now, "and then nothing more is added");
 
-            bar.getRecButton().triggerClick();
+            bar.getAddButton().triggerClick();
             settle (50);
-            check (bar.isRecOn(), "Rec on again");
+            check (bar.isAddOn(), "Add on again");
             processor.togglePlay();
             settle (80);
             bar.updateButtons();
-            check (bar.isRecOn() && bar.getRecButton().isEnabled(), "Rec stays on while Play is lit");
+            check (bar.isAddOn() && bar.getAddButton().isEnabled(), "Add stays on while Play is lit");
             {
                 const auto sizeBefore = processor.getProgression().size();
                 processor.pressPad (4);
@@ -1195,7 +1197,7 @@ int main (int argc, char** argv)
                 bar.updateButtons();
                 check (processor.getProgression().size() == sizeBefore + 1, "a chord played while the progression plays is added");
             }
-            bar.getRecButton().triggerClick();
+            bar.getAddButton().triggerClick();
             settle (50);
             processor.togglePlay();
             settle (80);
@@ -1295,21 +1297,21 @@ int main (int argc, char** argv)
             other.setStateInformation (saved.getData(), (int) saved.getSize());
             check (other.getProgression() == processor.getProgression() && other.getProgression()[0].rest, "a pause is saved and comes back with the project");
 
-            // With Rec on, a click on the blank pad adds a pause at the end, and a drag into the bar adds it once
+            // With Add on, a click on the blank pad adds a pause at the end, and a drag into the bar adds it once
             processor.setProgression (barBefore);
             settle (50);
-            bar.getRecButton().triggerClick();
+            bar.getAddButton().triggerClick();
             settle (50);
-            check (bar.isRecOn(), "Rec is on");
+            check (bar.isAddOn(), "Add is on");
             restPad.onPress();
             settle (50);
-            check (processor.getProgression().size() == barBefore.size() + 1 && processor.getProgression().back().rest, "with Rec on a click adds a pause at the end");
+            check (processor.getProgression().size() == barBefore.size() + 1 && processor.getProgression().back().rest, "with Add on a click adds a pause at the end");
             restPad.onPress();
             restPad.onDragStart();
             restPad.onDragEnd (screenAt (0, true));
             settle (50);
-            check (processor.getProgression().size() == barBefore.size() + 2 && processor.getProgression()[1].rest, "a pause dragged in with Rec on is added once, where it lands");
-            bar.getRecButton().triggerClick();
+            check (processor.getProgression().size() == barBefore.size() + 2 && processor.getProgression()[1].rest, "a pause dragged in with Add on is added once, where it lands");
+            bar.getAddButton().triggerClick();
             settle (50);
             processor.setProgression (barBefore);
             settle (50);

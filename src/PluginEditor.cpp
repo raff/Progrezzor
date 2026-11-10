@@ -511,15 +511,18 @@ void BarButton::paintButton (juce::Graphics& g, bool isMouseOver, bool isButtonD
                 g.setFont (l->titleFont (15.0f));
             {
                 auto labelArea = bounds.toNearestInt();
-                if (recordDot)
+                if (plusMark)
                 {
+                    // A plus before the word: Add puts what you play at the end
                     const auto label = getButtonText().isEmpty() ? getName() : getButtonText();
                     const float textWidth = (float) juce::GlyphArrangement::getStringWidthInt (g.getCurrentFont(), label);
-                    const float dot = 9.0f, gap = 6.0f;
-                    const float x = bounds.getCentreX() - (textWidth + gap + dot) * 0.5f;
-                    g.setColour (getToggleState() ? juce::Colour (0xffe0202a) : juce::Colour (0xffe0202a).withAlpha (enabled ? 0.75f : 0.3f));
-                    g.fillEllipse (juce::Rectangle<float> (dot, dot).withCentre ({ x + dot * 0.5f, bounds.getCentreY() }));
-                    labelArea = labelArea.withTrimmedLeft ((int) (dot + gap));
+                    const float arm = 5.5f, gap = 7.0f, mark = arm * 2.0f;
+                    const float x = bounds.getCentreX() - (textWidth + gap + mark) * 0.5f;
+                    const auto c = juce::Point<float> (x + arm, bounds.getCentreY());
+                    g.setColour (getToggleState() ? colour : colour.withAlpha (enabled ? 0.9f : 0.4f));
+                    g.drawLine (c.x - arm, c.y, c.x + arm, c.y, 2.4f);
+                    g.drawLine (c.x, c.y - arm, c.x, c.y + arm, 2.4f);
+                    labelArea = labelArea.withTrimmedLeft ((int) (mark + gap));
                 }
                 g.setColour (theme::shade.withAlpha (accented ? 0.0f : 0.35f));
                 theme::drawFitted (g, getButtonText().isEmpty() ? getName() : getButtonText(), labelArea.translated (0, 1), juce::Justification::centred, 10);
@@ -1949,33 +1952,33 @@ public:
     }
 };
 
-// Rec: while it is on, every chord you play (on a pad with the mouse, or from the MIDI keyboard) is put at the end of the
+// Add: while it is on, every chord you play (on a pad with the mouse, or from the MIDI keyboard) is put at the end of the
 // bar as a chord of one bar. It is a switch, so it is clear when it is on. Undo takes the chords away again.
-void ProgressionBar::setRec (bool on)
+void ProgressionBar::setAdd (bool on)
 {
-    recOn = on && ! textMode && ! processor.isLearning(); // also while Play is lit: chords you play are added while the progression plays
-    if (recOn)
-        clearSelection(); // with Rec on, pads add chords to the bar instead of trying chords on a block
-    recButton.setToggleState (recOn, juce::dontSendNotification);
-    recSeen = processor.getPlayedCount();
+    addOn = on && ! textMode && ! processor.isLearning(); // also while Play is lit: chords you play are added while the progression plays
+    if (addOn)
+        clearSelection(); // with Add on, pads add chords to the bar instead of trying chords on a block
+    addButton.setToggleState (addOn, juce::dontSendNotification);
+    addSeen = processor.getPlayedCount();
     repaint (trayBounds);
 }
 
 void ProgressionBar::takePlayedChords()
 {
-    if (! recOn)
+    if (! addOn)
         return;
     if (textMode || processor.isLearning()) // Quick-text and Learn switch it off (Play does not)
     {
-        setRec (false);
+        setAdd (false);
         return;
     }
-    const auto played = processor.chordsPlayedSince (recSeen);
-    recSeen = processor.getPlayedCount();
+    const auto played = processor.chordsPlayedSince (addSeen);
+    addSeen = processor.getPlayedCount();
     for (const auto& chord : played)
         processor.editProgression (engine::withInserted (processor.getProgression(), (int) processor.getProgression().size(), chord, processor.getHostBarBeats()));
     if (! played.empty())
-        recVersion = processor.getProgressionVersion();
+        addVersion = processor.getProgressionVersion();
 }
 
 void ProgressionBar::toggleLearn()
@@ -2051,12 +2054,12 @@ ProgressionBar::ProgressionBar (ProgrezzorProcessor& p) : processor (p)
     learnButton.onClick = [this] { toggleLearn(); };
     addAndMakeVisible (learnButton);
 
-    recButton.setToggle();
-    recButton.setRecordDot();
-    recButton.setTooltip ("Rec: while it is on, every chord you play is added to the end of the bar, one bar each. Undo takes them away");
-    recButton.setComponentID ("rec");
-    recButton.onClick = [this] { setRec (recButton.getToggleState()); };
-    addAndMakeVisible (recButton);
+    addButton.setToggle();
+    addButton.setPlusMark();
+    addButton.setTooltip ("Add every chord you play to the end of the progression.");
+    addButton.setComponentID ("add");
+    addButton.onClick = [this] { setAdd (addButton.getToggleState()); };
+    addAndMakeVisible (addButton);
 
     arpButton.setTooltip ("Arp: play everything one note at a time (the MIDI file follows)");
     arpButton.setComponentID ("arp");
@@ -2530,7 +2533,7 @@ void ProgressionBar::updateButtons()
     arpButton.setToggleState (processor.arpOnParam->get(), juce::dontSendNotification);
     learnButton.setToggleState (processor.isLearning(), juce::dontSendNotification);
     takePlayedChords();
-    recButton.setEnabled (! textMode && ! processor.isLearning());
+    addButton.setEnabled (! textMode && ! processor.isLearning());
     clearButton.setEnabled (editing && ! textMode && ! processor.getProgression().empty());
 
     // Which register we are in: Oct 0 is the usual place (around middle C), +1 an octave higher
@@ -2968,7 +2971,7 @@ void ProgressionBar::cancelAsk()
 }
 
 // A click on a block marks it; a click on the marked block again lets go of it and keeps a chord that is being tried on it.
-// Another block: the old chord is put back and the new block is marked. (Rec is on: pads add chords, so nothing is marked.)
+// Another block: the old chord is put back and the new block is marked. (Add is on: pads add chords, so nothing is marked.)
 void ProgressionBar::select (int index)
 {
     if (index == selected)
@@ -2977,7 +2980,7 @@ void ProgressionBar::select (int index)
         selected = -1;
     }
     else
-        selected = recOn ? -1 : index;
+        selected = addOn ? -1 : index;
     processor.setSelectedBlock (selected);
     for (int i = 0; i < blocks.size(); ++i)
         blocks[i]->setSelected (i == selected);
@@ -3014,12 +3017,12 @@ int ProgressionBar::blockAtScreenPoint (juce::Point<int> screen) const
 
 void ProgressionBar::setDragActive (bool nowActive)
 {
-    if (nowActive && ! dragActive && recOn)
+    if (nowActive && ! dragActive && addOn)
     {
-        // A pad that is pulled down into the bar was pressed first, and Rec has already taken that press. The drop is the
-        // one that counts, so the chord is not in the bar twice: take the one Rec added back.
+        // A pad that is pulled down into the bar was pressed first, and Add has already taken that press. The drop is the
+        // one that counts, so the chord is not in the bar twice: take the one Add added back.
         takePlayedChords();
-        if (processor.getProgressionVersion() == recVersion && processor.canUndo())
+        if (processor.getProgressionVersion() == addVersion && processor.canUndo())
             processor.undo();
     }
     if (nowActive != dragActive)
@@ -3055,15 +3058,15 @@ bool ProgressionBar::replaceBlockWithRest (int index)
     return true;
 }
 
-// Rec is on and the blank pad was pressed: a pause of one bar goes at the end. (If the pad is pulled into the bar instead,
+// Add is on and the blank pad was pressed: a pause of one bar goes at the end. (If the pad is pulled into the bar instead,
 // setDragActive takes this one back, as it does for a chord.)
-void ProgressionBar::addRestWhileRecording()
+void ProgressionBar::addRestWhileAdding()
 {
-    if (! recOn || textMode)
+    if (! addOn || textMode)
         return;
     takePlayedChords(); // chords played before the pad was pressed come first
     processor.editProgression (engine::withInsertedRest (processor.getProgression(), (int) processor.getProgression().size(), processor.getHostBarBeats()));
-    recVersion = processor.getProgressionVersion();
+    addVersion = processor.getProgressionVersion();
 }
 
 bool ProgressionBar::deleteSelected()
@@ -3366,7 +3369,7 @@ void ProgressionBar::paint (juce::Graphics& g)
         g.setColour (theme::dimText);
         if (auto* l = dynamic_cast<theme::LookAndFeel*> (&getLookAndFeel()))
             g.setFont (l->labelFont (16.0f));
-        g.drawText (editing ? "Drag a chord down here, or press Suggest" : recOn ? "Rec is on: play a chord and it lands here" : "Press Suggest, or switch Rec on and play",
+        g.drawText (editing ? "Drag a chord down here, or press Suggest" : addOn ? "Add is on: play a chord and it lands here" : "Press Suggest, or switch Add on and play",
                     trayBounds, juce::Justification::centred);
     }
 
@@ -3527,10 +3530,10 @@ void ProgressionBar::resized()
     dragTile.setBounds (upper.removeFromRight (std::min (68, std::max (56, upper.getHeight()))));
     upper.removeFromRight (10);
     auto right = upper;
-    auto recRow = right.removeFromTop (rowHeight);
-    settingsButton.setBounds (recRow.removeFromRight ((right.getWidth() - 12) / 3));
-    recRow.removeFromRight (6);
-    recButton.setBounds (recRow);
+    auto addRow = right.removeFromTop (rowHeight);
+    settingsButton.setBounds (addRow.removeFromRight ((right.getWidth() - 12) / 3));
+    addRow.removeFromRight (6);
+    addButton.setBounds (addRow);
     right.removeFromTop (5);
     auto smallRow = right.removeFromTop (rowHeight);
     const int smallWidth = (smallRow.getWidth() - 12) / 3;
@@ -3812,10 +3815,10 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     }
 
     // The blank pad: a pause. It makes no sound. Pulled into the bar it adds a pause (or turns the block it lands on into one);
-    // with Rec on, a click adds a pause at the end.
+    // with Add on, a click adds a pause at the end.
     restPad.setRestPad();
-    restPad.setTooltip ("Rest: a pause. Drag it into the bar. With Rec on, a click adds a pause");
-    restPad.onPress = [this] { bar.addRestWhileRecording(); };
+    restPad.setTooltip ("Rest: a pause. Drag it into the bar. With Add on, a click adds a pause");
+    restPad.onPress = [this] { bar.addRestWhileAdding(); };
     restPad.onDragStart = [this]
     {
         bar.setDragActive (true);

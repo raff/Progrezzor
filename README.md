@@ -21,7 +21,7 @@ CLAP and VST3. Windows has not been tried yet.
 - **The progression bar.** Drag a pad down to add a chord, or onto a block to replace it. Drag the right edge to change the
   length, drag a block to move it (hold Ctrl to copy it) and lock the ones you like. Right-click a block, or use its small gear,
   to change its chord type, inversion, octave and length, to lock, duplicate or delete it. Undo and redo work everywhere.
-- **Rec.** Switch it on and every chord you play lands at the end of the bar as one block, from the mouse or from a MIDI keyboard.
+- **Add.** Switch it on and every chord you play is added to the end of the progression as one block, from the mouse or from a MIDI keyboard.
 - **Quick-text.** Type the chords, like `Am F C G:2`, and press Enter. `*` is how many, `:` is how long, `R` is a pause.
 - **Learn.** Hold the right keys on a MIDI keyboard, chord after chord. The next chord is marked, and a keyboard shows the keys if
   you need a hint.
