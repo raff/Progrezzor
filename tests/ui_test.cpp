@@ -850,7 +850,7 @@ int main (int argc, char** argv)
     std::printf ("version and about\n");
     {
         auto& ui = *static_cast<ProgrezzorEditor*> (editor.get());
-        check (ProgrezzorEditor::getVersionText() == juce::String ("v") + JucePlugin_VersionString && ProgrezzorEditor::getVersionText().startsWith ("v0."),
+        check (ProgrezzorEditor::getVersionText() == juce::String ("v") + JucePlugin_VersionString && ProgrezzorEditor::getVersionText().startsWith ("v1."),
                "the version under the logo comes from CMake: " + ProgrezzorEditor::getVersionText().toStdString());
         check (juce::String (JucePlugin_VersionString) == juce::String (CMAKE_PROJECT_VERSION_FOR_TEST), "and it is the version of the project");
         settle (30);
