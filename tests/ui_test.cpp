@@ -1823,6 +1823,27 @@ int main (int argc, char** argv)
             check (box != nullptr && box->getNumItems() == 8 && box->getItemText (0) == "Soft Pad" && box->getItemText (1) == "Piano"
                        && box->getItemText (2) == "Strings" && box->getItemText (7) == "Off",
                    "the sound chooser lists Piano after Soft Pad and Off last");
+            // Choosing an item gives the sound that its name says (and the other way round: the chooser follows the parameter)
+            bool namesFit = box != nullptr;
+            for (int i = 0; box != nullptr && i < box->getNumItems(); ++i)
+            {
+                const int id = box->getItemId (i);
+                *processor.voiceParam = 0;
+                settle (20);
+                box->setSelectedId (id, juce::sendNotificationSync);
+                namesFit &= processor.voiceParam->getCurrentChoiceName() == box->getItemText (i);
+                *processor.voiceParam = PadSynth::Strings;
+                *processor.voiceParam = id - 1;
+                settle (20);
+                namesFit &= box->getText() == processor.voiceParam->getCurrentChoiceName();
+            }
+            check (namesFit, "every item in the sound chooser gives the sound of its name, and the chooser follows the parameter");
+            if (box != nullptr)
+            {
+                box->setSelectedId (PadSynth::Piano + 1, juce::sendNotificationSync);
+                check (processor.voiceParam->getIndex() == PadSynth::Piano && processor.voiceParam->getCurrentChoiceName() == "Piano", "choosing Piano in the chooser gives Piano");
+            }
+            *processor.voiceParam = 0;
         }
     }
 

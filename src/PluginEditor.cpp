@@ -3659,7 +3659,16 @@ ProgrezzorEditor::ProgrezzorEditor (ProgrezzorProcessor& p)
     voiceBox.addSeparator();
     voiceBox.addItem (processor.voiceParam->choices[PadSynth::Off], PadSynth::Off + 1);
     moodAttachment = std::make_unique<juce::ComboBoxParameterAttachment> (*processor.moodParam, moodBox);
-    voiceAttachment = std::make_unique<juce::ComboBoxParameterAttachment> (*processor.voiceParam, voiceBox);
+    voiceAttachment = std::make_unique<juce::ParameterAttachment> (*processor.voiceParam, [this] (float value)
+    {
+        voiceBox.setSelectedId ((int) std::lround (value) + 1, juce::dontSendNotification);
+    });
+    voiceBox.onChange = [this]
+    {
+        if (voiceBox.getSelectedId() > 0)
+            voiceAttachment->setValueAsCompleteGesture ((float) (voiceBox.getSelectedId() - 1));
+    };
+    voiceAttachment->sendInitialUpdate();
     moodBox.setTooltip ("Mood: the feeling of the progressions Suggest gives");
     voiceBox.setTooltip ("Preview sound. Choose Off when Progrezzor plays another instrument.");
     moodBox.setComponentID ("mood");

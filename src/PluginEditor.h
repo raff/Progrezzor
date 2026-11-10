@@ -472,7 +472,10 @@ private:
 
     juce::Label title;
     juce::ComboBox keyBox, scaleBox, moodBox, voiceBox;
-    std::unique_ptr<juce::ComboBoxParameterAttachment> keyAttachment, scaleAttachment, moodAttachment, voiceAttachment;
+    std::unique_ptr<juce::ComboBoxParameterAttachment> keyAttachment, scaleAttachment, moodAttachment;
+    // The sound chooser lists the sounds in another order than the parameter's numbers (Piano second), so it is not a
+    // ComboBoxParameterAttachment (that goes by the position in the list). The item numbers are the parameter's numbers plus one.
+    std::unique_ptr<juce::ParameterAttachment> voiceAttachment;
 
     WheelToggle wheelButton;
     std::unique_ptr<juce::Component> wheelPanel; // the chord wheel, a panel inside the window (open or not is kept while the window lives)
