@@ -1,71 +1,86 @@
 # Progrezzor
 
-Jam. Build. Drag. Done.
+**Jam. Build. Drag. Done.**
 
-A very easy MIDI chord tool for every kind of music. Jam on the pads, find a progression, drag the MIDI out. You do not
-need to know any music theory.
+A very easy MIDI chord tool for every kind of music. Jam on the pads, find a progression you like, and drag it into your DAW as
+MIDI. You do not need to know any music theory.
 
-This is version 0.9.0, an internal test build that is never released (the first public release will be 1.0.0). See CHANGELOG.md. Free software (GNU AGPLv3). Built and tested on Linux, as
-CLAP and VST3. Windows has not been tried yet.
+Version 1.0.0. Free and open source (GNU AGPLv3). CLAP and VST3 for Linux and Windows.
+
+## Quick start
+
+1. Put Progrezzor on a MIDI track with a synth after it (see [Getting the notes to your synth](#getting-the-notes-to-your-synth)).
+2. Click the big pads, or play the white keys of a MIDI keyboard. Every pad is a chord that fits the key.
+3. Press **Suggest** for a whole progression, or drag pads down into the progression bar to build your own.
+4. Press **Play** (or start your DAW) to hear the progression loop.
+5. Drag the **MIDI** tile into your DAW. Done.
 
 ## What it does
 
-- **Seven big pads** with the chords of your key and scale (Minor, Major, Dorian, Phrygian). Each chord has its own colour and
-  shows where it sits in the key (I, ii, III ...). Click them, or play the white keys of a MIDI keyboard. The gear on a pad gives
-  other kinds of the same chord (7, maj7, sus, add9 and more) and inversions. A blank pad on the right is a pause (Rest).
-- **Lock to scale.** On as standard, so the pads, Suggest and the chord menus stay in the key. When you want a chord from outside,
-  the menus end with "More chords outside the key...", which switches the lock off and shows every chord.
+- **Seven big pads** with the chords of your key and scale (Major, Minor, Dorian, Phrygian). Each chord has its own colour and
+  shows its place in the key (I, ii, iii ...). The gear on a pad gives other kinds of the same chord (7, maj7, sus, add9 and
+  more) and inversions. The blank pad on the right is a pause (Rest).
+- **Lock to scale.** On as standard, so pads, Suggest and the chord menus stay in the key. Need a chord from outside? The menus
+  end with "More chords outside the key...".
 - **Mood and Suggest.** Pick one of eight moods (Bright, Warm, Dreamy, Melancholic, Dark, Deep, Driving, Soulful) and press
-  Suggest for a whole progression. Locked blocks stay. Suggest can use inversions for a smoother bass line (G/B), and you can
-  switch that off in Settings.
-- **The progression bar.** Drag a pad down to add a chord, or onto a block to replace it. Drag the right edge to change the
-  length, drag a block to move it (hold Ctrl to copy it) and lock the ones you like. Right-click a block, or use its small gear,
-  to change its chord type, inversion, octave and length, to lock, duplicate or delete it. Undo and redo work everywhere.
-- **Add.** Switch it on and every chord you play is added to the end of the progression as one block, from the mouse or from a MIDI keyboard.
-- **Quick-text.** Type the chords, like `Am F C G:2`, and press Enter. `*` is how many, `:` is how long, `R` is a pause.
-- **Learn.** Hold the right keys on a MIDI keyboard, chord after chord. The next chord is marked, and a keyboard shows the keys if
-  you need a hint.
-- **Arp and Rhythm.** The arp panel has a Hold | Arp | Rhythm switch. Arp plays the chord one note at a time (up, down, up and
-  down, random) with a speed and a rhythm ring. Rhythm strikes the whole chord in one of 12 patterns (Offbeat, Stab, Double stab,
-  Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse, Euclid) at 1/8 or 1/16, short, medium or long. Both start
-  again in every block and follow the DAW's timeline, and the MIDI file has the same notes.
-- **Chord wheel.** The small wheel beside the key opens the circle of fifths. The chords of the seven pads have the pad colours;
-  click a chord to hear it, double-click to use it as the key.
-- **Bass note.** Settings has "Bass note": one low note under every chord. With the arp or rhythm on, it lies as one long note
-  under it.
-- **Preview sound.** A few built-in sounds (Soft Pad, a real Piano, Strings, Keys, Organ, Stab, Pluck) let you hear what you play with no
-  other synth. Choose **Off** when another synth plays the MIDI, or switch "Preview sound" off in Settings.
-- **MIDI export.** Drag the MIDI tile into your DAW, or use Save MIDI and Open Folder. The file has the notes you hear: the chords,
-  inversions, octaves, lengths, pauses, arp or rhythm and the bass note.
-- **Play.** With the DAW running, the progression always plays with it (also over loops and jumps in time); Play is lit and grey and
-  cannot be pressed. With the DAW stopped, Play starts and stops the progression on its own clock, from block 1. Chord changes land
-  exactly on the bar line. Notes never hang.
-- **Edit while it plays.** Play only plays. Change the bar at any time; a change comes in when that block next begins, never in the
-  middle of a chord. Click a block to mark it, then press a pad to try that chord on the block's place (dashed edge). Enter or a new
+  Suggest for a whole progression. Locked blocks stay where they are.
+- **The progression bar.** Drag a pad down to add a chord, or onto a block to replace it. Drag a block's right edge to change
+  its length, drag a block to move it (hold Ctrl to copy it). Right-click a block, or use its small gear, to change its chord,
+  inversion, octave and length, or to lock, duplicate or delete it. Undo and redo work everywhere.
+- **Edit while it plays.** Change the bar at any time. A change is heard when the loop next reaches that block, never in the
+  middle of a chord. Click a block to mark it, then press a pad to try that chord in its place (dashed edge). Enter or a new
   click on the block keeps it, Esc puts the old chord back.
+- **Add.** Switch it on, and every chord you play is added to the end of the progression, from the mouse or a MIDI keyboard.
+- **Quick-text.** Type the chords and press Enter: `Am F C G:2`. `*` is how many (`Am*2`), `:` is how long in bars (`Am:2`),
+  `R` is a pause. Chord charts with bars work too: `| C | Am | F G |`.
+- **Import and export.** Import a ChordPro file (`.cho`) or a plain chord sheet from Settings. The chords are shown in
+  Quick-text first, so you can check them before they go in. Progrezzor can guess the key and asks before it changes it.
+  Export the progression as ChordPro, or copy it as text.
+- **Learn.** Play the chords of the progression on a MIDI keyboard, one after the other. The next chord is marked, and a small
+  keyboard shows the keys if you need a hint.
+- **Arp and Rhythm.** Hold plays the chord as it is. Arp plays it one note at a time. Rhythm strikes the whole chord in one of
+  12 patterns (Offbeat, Stab, Double stab, Skank, Eighths, Push, Gallop, Charleston, Tresillo, Clave, Pulse, Euclid). Both
+  follow your DAW's timeline, and the MIDI file has the same notes.
+- **Chord wheel.** The wheel beside the key opens the circle of fifths, with the pad chords in their colours. Click a chord to
+  hear it.
+- **Voicing and bass note.** In Settings, "Nearest inversion" keeps each chord close to the home chord, like a keyboard player
+  keeping the hand in one place. "Bass note" adds one low root note under every chord.
+- **Preview sound.** Built-in sounds (Soft Pad, Piano, Strings, Keys, Organ, Stab, Pluck) let you hear what you play with no
+  other synth. Choose **Off** when another synth plays the MIDI.
+- **MIDI export.** Drag the MIDI tile into your DAW, or use Save MIDI and Open Folder. The file has exactly the notes you hear.
 
-## Formats
+## Good to know
 
-- **CLAP** is a MIDI effect (note effect): it sits before a synth and sends it notes.
-- **VST3** is an instrument: it makes MIDI (and its small preview sound) and sends the MIDI on to a synth.
-
-Both are installed from `packaging/INSTALL-linux.txt`, or by a build (see below).
+- **Play.** When your DAW plays, the progression plays with it, always. When your DAW is stopped, Play starts and stops the
+  progression on its own clock, from the first block.
+- **Two blocks, two strikes.** Two blocks with the same chord strike it twice. For one long chord, make one longer block.
+- **Keyboard.** The white keys play pad 1 to 7 (C to B) in every octave. The black keys do nothing, except in Learn.
 
 ## Getting the notes to your synth
 
-Progrezzor makes MIDI. A synth has to play it. If the synth plays the sound, set Progrezzor's **Preview sound to Off**
-(the sound chooser in the top row), or you will hear both.
+Progrezzor makes MIDI, and a synth plays it. When your synth plays, set Progrezzor's sound to **Off** (the sound menu in the top
+row), or you will hear both.
 
-- **Bitwig Studio:** use the CLAP version. Put Progrezzor on an instrument track *before* the synth in the device chain, so the
-  notes go through Progrezzor into the synth.
-- **REAPER:** put Progrezzor first in the track's FX chain and the synth after it. Progrezzor's MIDI goes on to the synth.
-- **FL Studio:** FL only tells a plug-in that it is playing when the track has something in the playlist. Put any clip on the
-  track (an empty one is enough), and Progrezzor follows FL's play. With nothing on the track, use Progrezzor's own Play button.
-- **Ableton Live:** (not tried yet on our side) put Progrezzor (VST3) on its own MIDI track, and on the synth's MIDI track set
-  *MIDI From* to the Progrezzor track.
+- **Bitwig Studio:** use the CLAP version. Put Progrezzor before the synth on the same track.
+- **REAPER:** put Progrezzor first in the track's FX chain and the synth after it.
+- **Ableton Live:** put Progrezzor (VST3) on its own MIDI track. On the synth's track, set *MIDI From* to the Progrezzor track
+  and Monitor to *In*.
+- **FL Studio:** FL only tells a plug-in that it is playing when the track has a clip in the playlist. Put any clip on it (an
+  empty one is enough). Otherwise use Progrezzor's own Play button.
 
-You can also drag the MIDI file from the Drag tile onto any MIDI track and play it from there.
-If you dragged the MIDI into your DAW, bypass Progrezzor so the progression does not play twice.
+**After you drag the MIDI into your DAW,** bypass Progrezzor on that track. Otherwise the clip's notes play Progrezzor's pads,
+and the progression plays twice.
+
+## Install
+
+Download the archive for your system from the
+[Releases page](https://github.com/travisdk/Progrezzor/releases/latest) and follow `INSTALL-linux.txt` or
+`INSTALL-windows.txt` inside it.
+
+- **Linux:** copy `Progrezzor.clap` to `~/.clap/` and `Progrezzor.vst3` to `~/.vst3/`.
+- **Windows:** copy them to `%LOCALAPPDATA%\Programs\Common\CLAP\` and `%LOCALAPPDATA%\Programs\Common\VST3\`.
+
+Then restart your DAW or rescan plug-ins.
 
 ## Build (Linux)
 
@@ -73,12 +88,17 @@ If you dragged the MIDI into your DAW, bypass Progrezzor so the progression does
     cmake --build build --target Progrezzor_VST3 Progrezzor_CLAP clap_test_host
     ctest --test-dir build --output-on-failure
 
-Needs JUCE 8.0.15 and clap-juce-extensions in ~/SDKs. A build puts the plug-ins in
-`~/.clap` and `~/.vst3`.
+Needs JUCE 8.0.15 and clap-juce-extensions in `~/SDKs`. A build puts the plug-ins in `~/.clap` and `~/.vst3`.
 
-## Notes for development
+## Licence and credits
 
-See CLAUDE.md (the plan and the rules), BACKLOG.md (ideas for later) and TESTLISTE.md (what to test).
+Progrezzor is free software under the GNU Affero General Public License v3 (see LICENSE). It comes with no warranty.
 
-The chord library is written from scratch for this project. Third-party licences (fonts and the plug-in libraries) are listed in
-THIRD-PARTY-NOTICES.txt, and the same text is built into the plug-in (About, then Licences).
+- Built with JUCE (AGPLv3) and clap-juce-extensions.
+- The Piano sound uses samples from the Versilian Community Sample Library (CC0) by Versilian Studios.
+- Fonts: Chakra Petch and Inter (SIL Open Font License).
+- The chord library is written from scratch for this project.
+
+All third-party licences are in THIRD-PARTY-NOTICES.txt. VST is a registered trademark of Steinberg Media Technologies GmbH.
+
+For development notes, see CLAUDE.md, BACKLOG.md and TESTLISTE.md.

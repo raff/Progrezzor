@@ -1,9 +1,8 @@
-Progrezzor – installation on Windows (internal test build)
-==========================================================
+Progrezzor – installation on Windows
+====================================
 
 The archive contains Progrezzor in two plug-in formats, CLAP and VST®3.
-Install the one your DAW uses, or both. Progrezzor has so far only been
-built and tested on Linux, so on Windows it is not tried yet.
+Install the one your DAW uses, or both.
 
 For your user only (no administrator rights needed):
 
