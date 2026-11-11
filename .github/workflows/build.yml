@@ -40,7 +40,7 @@ jobs:
             # The headless CLAP host and the editor test run on Linux only
             targets: Progrezzor_CLAP Progrezzor_VST3 clap_test_host engine_test ProgrezzorUiTest
           - name: macOS
-            os: macos-14
+            os: macos-15
             generator: -G Ninja
             package: package-macos
             targets: Progrezzor_CLAP Progrezzor_VST3 clap_test_host engine_test ProgrezzorUiTest
