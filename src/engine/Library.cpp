@@ -33,7 +33,6 @@ constexpr ChordType M9 = ChordType::Min9;
 constexpr ChordType S2 = ChordType::Sus2;
 constexpr ChordType S4 = ChordType::Sus4;
 constexpr ChordType P5 = ChordType::Power5;
-constexpr ChordType Di = ChordType::Dim;
 
 // Inversions in the lists below: the last number of a step. 1 = first inversion (G/B), 2 = second (C/G).
 

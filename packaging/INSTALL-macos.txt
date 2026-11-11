@@ -1,0 +1,45 @@
+Progrezzor – installation on macOS
+==================================
+
+The archive contains Progrezzor in two plug-in formats, CLAP and VST3, for
+both Apple silicon and Intel Macs (macOS 11 or newer).
+Install the one your DAW uses, or both.
+
+CLAP:
+
+    mkdir -p ~/Library/Audio/Plug-Ins/CLAP
+    cp -r Progrezzor.clap ~/Library/Audio/Plug-Ins/CLAP/
+
+VST3:
+
+    mkdir -p ~/Library/Audio/Plug-Ins/VST3
+    cp -r Progrezzor.vst3 ~/Library/Audio/Plug-Ins/VST3/
+
+(Use /Library/Audio/Plug-Ins/ instead to install for all users.)
+
+The Mac build is not signed. macOS may say it cannot check the plug-in. Remove
+the download mark once, then restart your DAW or rescan plug-ins:
+
+    xattr -cr ~/Library/Audio/Plug-Ins/CLAP/Progrezzor.clap
+    xattr -cr ~/Library/Audio/Plug-Ins/VST3/Progrezzor.vst3
+
+How to use it:
+
+  - Put Progrezzor on a MIDI track and a synth after it. The notes come out
+    of Progrezzor and go on to the synth. Progrezzor also has a small sound
+    of its own, so you can hear what you play. Turn it off with the Sound menu
+    (Off) when your synth plays the notes.
+  - Click the pads, or play the white keys of a MIDI keyboard.
+  - Drag a MIDI file out of the Drag tile into your DAW. The same file is
+    saved in the Progrezzor folder in your music folder (Open Folder).
+
+Your own settings are saved in ~/Library/Application Support/Progrezzor/.
+Removing the plug-in leaves them in place.
+
+Progrezzor is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License, version 3 (LICENSE).
+It comes with no warranty.
+
+Third-party licences are listed in THIRD-PARTY-NOTICES.txt (also inside the plug-in: About, then Licences).
+
+VST is a registered trademark of Steinberg Media Technologies GmbH.

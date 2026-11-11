@@ -2,6 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 cmake_minimum_required(VERSION 3.22)
+# macOS: one binary for Apple silicon and Intel, with the same minimum system for both. Must be set before project().
+if(APPLE)
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "")
+endif()
 project(Progrezzor VERSION 1.0.0 LANGUAGES C CXX)
 
 # A build id shown next to the version (the git commit, "-dirty" if there are local changes). CI and scripts can set it with
@@ -39,6 +44,9 @@ if(WIN32)
     file(TO_CMAKE_PATH "$ENV{LOCALAPPDATA}" PROGREZZOR_LOCALAPPDATA)
     set(PROGREZZOR_DEFAULT_CLAP_DIR "${PROGREZZOR_LOCALAPPDATA}/Programs/Common/CLAP")
     set(PROGREZZOR_DEFAULT_VST3_DIR "${PROGREZZOR_LOCALAPPDATA}/Programs/Common/VST3")
+elseif(APPLE)
+    set(PROGREZZOR_DEFAULT_CLAP_DIR "${PROGREZZOR_HOME}/Library/Audio/Plug-Ins/CLAP")
+    set(PROGREZZOR_DEFAULT_VST3_DIR "${PROGREZZOR_HOME}/Library/Audio/Plug-Ins/VST3")
 else()
     set(PROGREZZOR_DEFAULT_CLAP_DIR "${PROGREZZOR_HOME}/.clap")
     set(PROGREZZOR_DEFAULT_VST3_DIR "${PROGREZZOR_HOME}/.vst3")
@@ -93,6 +101,7 @@ juce_add_plugin(Progrezzor
     FORMATS VST3
     COPY_PLUGIN_AFTER_BUILD ${PROGREZZOR_INSTALL_AFTER_BUILD}   # VST3 (the CLAP is copied by the command further down)
     VST3_COPY_DIR "${VST3_INSTALL_DIR}"
+    BUNDLE_ID com.henrikjuhl.progrezzor
     PRODUCT_NAME "Progrezzor"
     IS_SYNTH TRUE
     IS_MIDI_EFFECT FALSE
@@ -131,11 +140,22 @@ clap_juce_extensions_plugin(TARGET Progrezzor
     CLAP_FEATURES note-effect utility
     CLAP_USE_JUCE_PARAMETER_RANGES ALL)
 
+# On macOS the .clap is a bundle folder (copied whole); elsewhere a single file.
+if(APPLE)
+    set(PROGREZZOR_CLAP_COPY copy_directory)
+    set(PROGREZZOR_CLAP_ARTEFACT "$<TARGET_BUNDLE_DIR:Progrezzor_CLAP>")
+    set(PROGREZZOR_CLAP_DEST "/Progrezzor.clap")
+else()
+    set(PROGREZZOR_CLAP_COPY copy_if_different)
+    set(PROGREZZOR_CLAP_ARTEFACT "$<TARGET_FILE:Progrezzor_CLAP>")
+    set(PROGREZZOR_CLAP_DEST "/")
+endif()
+
 # Every build puts the finished plugin in the user's own plugin folders (unless PROGREZZOR_INSTALL_AFTER_BUILD is OFF, as on CI)
 if(PROGREZZOR_INSTALL_AFTER_BUILD)
     add_custom_command(TARGET Progrezzor_CLAP POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "${CLAP_INSTALL_DIR}"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:Progrezzor_CLAP>" "${CLAP_INSTALL_DIR}/"
+        COMMAND ${CMAKE_COMMAND} -E ${PROGREZZOR_CLAP_COPY} "${PROGREZZOR_CLAP_ARTEFACT}" "${CLAP_INSTALL_DIR}${PROGREZZOR_CLAP_DEST}"
         COMMENT "Installing Progrezzor.clap into ${CLAP_INSTALL_DIR}"
         VERBATIM)
 endif()
@@ -209,6 +229,13 @@ if(WIN32)
     set(PROGREZZOR_TAR_FLAGS cf)
     set(PROGREZZOR_PACKAGE_FORMAT --format=zip)
     set(PROGREZZOR_INSTALL_NOTES "${CMAKE_SOURCE_DIR}/packaging/INSTALL-windows.txt")
+elseif(APPLE)
+    set(PROGREZZOR_PACKAGE_TARGET package-macos)
+    set(PROGREZZOR_PACKAGE_NAME "Progrezzor-${PROJECT_VERSION}-macos")
+    set(PROGREZZOR_PACKAGE_FILE "Progrezzor-macos.zip")
+    set(PROGREZZOR_TAR_FLAGS cf)
+    set(PROGREZZOR_PACKAGE_FORMAT --format=zip)
+    set(PROGREZZOR_INSTALL_NOTES "${CMAKE_SOURCE_DIR}/packaging/INSTALL-macos.txt")
 else()
     set(PROGREZZOR_PACKAGE_TARGET package-linux)
     set(PROGREZZOR_PACKAGE_NAME "Progrezzor-${PROJECT_VERSION}-linux-x86_64")
@@ -217,11 +244,18 @@ else()
     set(PROGREZZOR_PACKAGE_FORMAT --format=gnutar)
     set(PROGREZZOR_INSTALL_NOTES "${CMAKE_SOURCE_DIR}/packaging/INSTALL-linux.txt")
 endif()
+if(APPLE)
+    set(PROGREZZOR_CLAP_PACKAGE_COPY copy_directory)
+    set(PROGREZZOR_CLAP_PACKAGE_DEST "/Progrezzor.clap")
+else()
+    set(PROGREZZOR_CLAP_PACKAGE_COPY copy)
+    set(PROGREZZOR_CLAP_PACKAGE_DEST "/")
+endif()
 set(PROGREZZOR_PACKAGE_DIR "${CMAKE_BINARY_DIR}/package/${PROGREZZOR_PACKAGE_NAME}")
 add_custom_target(${PROGREZZOR_PACKAGE_TARGET}
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${PROGREZZOR_PACKAGE_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PROGREZZOR_PACKAGE_DIR}
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:Progrezzor_CLAP> ${PROGREZZOR_PACKAGE_DIR}/
+    COMMAND ${CMAKE_COMMAND} -E ${PROGREZZOR_CLAP_PACKAGE_COPY} ${PROGREZZOR_CLAP_ARTEFACT} ${PROGREZZOR_PACKAGE_DIR}${PROGREZZOR_CLAP_PACKAGE_DEST}
     COMMAND ${CMAKE_COMMAND} -E copy_directory $<TARGET_FILE_DIR:Progrezzor_VST3>/../.. ${PROGREZZOR_PACKAGE_DIR}/Progrezzor.vst3
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/LICENSE ${PROGREZZOR_PACKAGE_DIR}/LICENSE.txt
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/CHANGELOG.md ${PROGREZZOR_PACKAGE_DIR}/

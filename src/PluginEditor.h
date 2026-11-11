@@ -437,6 +437,11 @@ private:
     engine::Progression beforeGesture;          // the progression when a drag started, for one single Undo step
 };
 
+// Our own "processor" (the right type) hides the one in JUCE's AudioProcessorEditor; Clang warns about that at the end of the class.
+#if defined (__clang__)
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wshadow-field"
+#endif
 class ProgrezzorEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
@@ -517,3 +522,6 @@ private:
     bool wasLearning = false;
     bool voiceShownOff = false;
 };
+#if defined (__clang__)
+ #pragma clang diagnostic pop
+#endif
