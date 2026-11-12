@@ -63,6 +63,14 @@ void settle (int milliseconds = 120)
 {
     juce::MessageManager::getInstance()->runDispatchLoopUntil (milliseconds);
 }
+
+// Waits until the condition holds, at most this long. The editor judges Learn on its timer, which can be slow on a busy CI machine.
+template <typename Condition>
+void settleUntil (Condition condition, int maxMilliseconds = 3000)
+{
+    for (int waited = 0; waited < maxMilliseconds && ! condition(); waited += 20)
+        settle (20);
+}
 }
 
 int main (int argc, char** argv)
@@ -2207,13 +2215,14 @@ int main (int argc, char** argv)
         pressKeys ({ 67 }, {}, 120);
         check (learnBar.getLearnTarget() == 1, "the three keys of C move on to the next chord");
         check (soundingKeys() == 3, "the keys play their own notes");
-        pressKeys ({}, { 60, 64, 67 }, 80);
+        pressKeys ({}, { 60, 64, 67 }, 300); // long enough for the editor to see that they were let go
         check (soundingKeys() == 0, "and let go of them again");
 
         // F in another octave and order, with a doubled note: right
         pressKeys ({ 69, 53, 60, 65 }, {}, 120);
+        settleUntil ([&] { return learnBar.getLearnTarget() == 2; });
         check (learnBar.getLearnTarget() == 2, "F in another octave and order is right");
-        pressKeys ({}, { 69, 53, 60, 65 }, 80);
+        pressKeys ({}, { 69, 53, 60, 65 }, 300);
 
         // The wrong chord, held: red, and after two wrong tries the hint
         pressKeys ({ 60, 64, 67 }, {}, 700);
@@ -2225,7 +2234,7 @@ int main (int argc, char** argv)
         settle (60);
         snapshot ("learn_hint");
         pressKeys ({ 57, 60, 64 }, {}, 120); // Am
-        settle (120);
+        settleUntil ([&] { return learnBar.getLearnTarget() == -1; });
         check (learnBar.getLearnTarget() == -1, "the last chord finishes it");
         snapshot ("learn_done");
         pressKeys ({}, { 57, 60, 64 }, 80);
