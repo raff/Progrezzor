@@ -79,6 +79,7 @@ Download the archive for your system from the
 
 - **Linux:** copy `Progrezzor.clap` to `~/.clap/` and `Progrezzor.vst3` to `~/.vst3/`.
 - **Windows:** copy them to `%LOCALAPPDATA%\Programs\Common\CLAP\` and `%LOCALAPPDATA%\Programs\Common\VST3\`.
+- **macOS:** copy them to `~/Library/Audio/Plug-Ins/CLAP/` and `~/Library/Audio/Plug-Ins/VST3/` (see `INSTALL-macos.txt`).
 
 Then restart your DAW or rescan plug-ins.
 
@@ -89,6 +90,35 @@ Then restart your DAW or rescan plug-ins.
     ctest --test-dir build --output-on-failure
 
 Needs JUCE 8.0.15 and clap-juce-extensions in `~/SDKs`. A build puts the plug-ins in `~/.clap` and `~/.vst3`.
+
+## Build (macOS)
+
+You need Xcode's command line tools, CMake and Ninja:
+
+    xcode-select --install
+    brew install cmake ninja
+
+Fetch the two SDKs into `~/SDKs` (the folder names matter):
+
+    mkdir -p ~/SDKs && cd ~/SDKs
+    git clone --depth 1 --branch 8.0.15 https://github.com/juce-framework/JUCE.git JUCE-8.0.15
+    git clone https://github.com/free-audio/clap-juce-extensions.git clap-juce-extensions-main
+    git -C clap-juce-extensions-main checkout 7adee3a1bd4684d4caa5601100e364abccff4b4d
+    git -C clap-juce-extensions-main submodule update --init --recursive
+
+Then, from the Progrezzor folder:
+
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --build build --target Progrezzor_VST3 Progrezzor_CLAP engine_test clap_test_host ProgrezzorUiTest
+    ctest --test-dir build --output-on-failure
+
+The build is universal (Apple silicon and Intel, macOS 11 or newer). It copies the plug-ins to
+`~/Library/Audio/Plug-Ins/CLAP` and `~/Library/Audio/Plug-Ins/VST3`. Add `-DPROGREZZOR_INSTALL_AFTER_BUILD=OFF` to
+skip the copy, or `-DJUCE_DIR=...` / `-DCLAP_JUCE_EXTENSIONS_DIR=...` to use SDKs somewhere else. To make the release
+archive, build the target `package-macos`.
+
+The Mac build is not signed. If macOS refuses to load a plug-in, run `xattr -cr` on the `.clap` and `.vst3` once, then
+restart your DAW or rescan plug-ins.
 
 ## Licence and credits
 
