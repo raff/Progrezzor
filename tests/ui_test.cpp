@@ -1156,10 +1156,10 @@ int main (int argc, char** argv)
             const auto mine = processor.getProgression();
             check (! mine.empty() && bar.getClearButton().isEnabled(), "Clear is there when the bar has chords and can be edited");
             bar.getClearButton().triggerClick();
-            settle (50);
+            settleUntil ([&] { return processor.getProgression().empty() && ! bar.getClearButton().isEnabled(); });
             check (processor.getProgression().empty() && ! bar.getClearButton().isEnabled(), "Clear empties the bar");
             processor.undo();
-            settle (50);
+            settleUntil ([&] { return processor.getProgression() == mine; });
             check (processor.getProgression() == mine, "and Undo brings everything back in one step");
         }
 
